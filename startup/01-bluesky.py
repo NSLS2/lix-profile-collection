@@ -39,6 +39,6 @@ checklist = partial(basic_checklist,
 		    )
 
 # Set up the logbook.
-sessionmgr['olog_client'] = olog_client
+session_mgr['olog_client'] = olog_client
 gs.RE.logbook = olog_wrapper(olog_client, ['Data Acquisition'])
 

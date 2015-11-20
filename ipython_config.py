@@ -1,7 +1,5 @@
 # Configuration file for ipython.
 
-
-import dataportal
 c = get_config()
 
 #------------------------------------------------------------------------------
