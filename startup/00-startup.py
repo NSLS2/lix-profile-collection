@@ -13,8 +13,7 @@ fmt = logging.Formatter("%(asctime)-15s [%(name)5s:%(levelname)s] %(message)s")
 handler.setFormatter(fmt)
 
 from ophyd.commands import *
-#from dataportal import (DataBroker as db,
-#                        StepScan as ss,
-#                        DataBroker, StepScan,
-#                        DataMuxer)
+
+from databroker import DataBroker as db
+from datamuxer import DataMuxer
 
