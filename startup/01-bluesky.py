@@ -19,7 +19,7 @@ abort = RE.abort
 resume = RE.resume
 stop = RE.stop
 
-RE.md['group'] = ''
+RE.md['group'] = 'lix'
 RE.md['beamline_id'] = 'LIX'
 # RE.ignore_callback_exceptions = False
 
