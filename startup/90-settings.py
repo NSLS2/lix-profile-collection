@@ -3,8 +3,8 @@ def print_scanid(name, doc):
     global last_scan_uid
     global last_scan_id
     if name == 'start':
+        last_scan_id = doc['scan_id']
         last_scan_uid = doc['uid']
-        last_scan_id = doc['id']  
         print('Scan ID:', doc['scan_id'])
         print('Unique ID:', doc['uid'])
 
