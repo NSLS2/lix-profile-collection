@@ -1,5 +1,5 @@
 from ophyd import (SingleTrigger, TIFFPlugin,
-                   ImagePlugin, StatsPlugin, DetectorBase, HDF5Plugin,
+                   ImagePlugin, StatsPlugin, ROIPlugin, DetectorBase, HDF5Plugin,
                    AreaDetector)
 
 import ophyd.areadetector.cam as cam
@@ -18,6 +18,11 @@ class StandardProsilica(SingleTrigger, LixProsilicaDetector):
     #           suffix='TIFF1:',
     #           write_path_template='/XF16ID/data/')
     image = Cpt(ImagePlugin, 'image1:')
+    roi1 = Cpt(ROIPlugin, 'ROI1:')
+    roi2 = Cpt(ROIPlugin, 'ROI2:')
+    roi3 = Cpt(ROIPlugin, 'ROI3:')
+    roi4 = Cpt(ROIPlugin, 'ROI4:')
+    roi5 = Cpt(ROIPlugin, 'ROI5:')
     stats1 = Cpt(StatsPlugin, 'Stats1:')
     stats2 = Cpt(StatsPlugin, 'Stats2:')
     stats3 = Cpt(StatsPlugin, 'Stats3:')

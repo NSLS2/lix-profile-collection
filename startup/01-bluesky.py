@@ -7,9 +7,6 @@ from bluesky.broker_callbacks import *
 from bluesky.callbacks.olog import logbook_cb_factory
 from bluesky.hardware_checklist import *
 from bluesky.qt_kicker import install_qt_kicker
-from pyOlog import SimpleOlogClient
-
-
 
 # The following line allows bluesky and pyqt4 GUIs to play nicely together:
 install_qt_kicker()
@@ -40,18 +37,4 @@ checklist = partial(basic_checklist,
                     # 		   ('XF:23IDA-PPS:1{PSh}Pos-Sts', 'upstream shutter is open', assert_pv_equal, 0),
                     #                ('XF:23ID1-PPS{PSh}Pos-Sts', 'downstream shutter is open', assert_pv_equal, 0)],
 		    )
-
-# Set up the logbook. This configured bluesky's summaries of
-# data acquisition (scan type, ID, etc.). It does NOT affect the
-# convenience functions in ophyd (log_pos, etc.) or the IPython
-# magics (%logit, %grabit). Those are configured in ~/.pyOlog.conf
-# or wherever the pyOlog configuration file is stored.
-
-LOGBOOKS = ['Commissioning']  # list of logbook names to publish to
-simple_olog_client = SimpleOlogClient()
-generic_logbook_func = simple_olog_client.log
-configured_logbook_func = partial(generic_logbook_func, logbooks=LOGBOOKS)
-
-cb = logbook_cb_factory(configured_logbook_func)
-RE.subscribe('start', cb)
 
