@@ -18,7 +18,7 @@ stop = RE.stop
 
 RE.md['group'] = 'lix'
 RE.md['beamline_id'] = 'LIX'
-RE.ignore_callback_exceptions = False
+# RE.ignore_callback_exceptions = False
 
 loop = asyncio.get_event_loop()
 loop.set_debug(False)
