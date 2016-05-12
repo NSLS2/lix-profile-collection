@@ -1,0 +1,82 @@
+from ophyd import ( Component as Cpt, ADComponent,
+                    EpicsSignal, EpicsSignalRO,
+                    StatsPlugin, ImagePlugin,
+                    SingleTrigger, PilatusDetector)
+
+from ophyd.areadetector.filestore_mixins import FileStoreBulkWrite
+
+from ophyd.utils import set_and_wait
+import filestore.api as fs
+from filestore.handlers_base import HandlerBase
+import fabio
+
+class PilatusFilePlugin(Device, FileStoreBulkWrite):
+    file_path = ADComponent(EpicsSignalWithRBV, 'FilePath', string=True)
+    file_number = ADComponent(EpicsSignalWithRBV, 'FileNumber')
+    file_name = ADComponent(EpicsSignalWithRBV, 'FileName', string=True)
+    file_template = ADComponent(EpicsSignalWithRBV, 'FileTemplate', string=True)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._datum_kwargs_map = dict()  # store kwargs for each uid
+
+    def stage(self):
+        global proposal_id
+        global run_id
+
+        set_and_wait(self.file_template, '%s%s_%6.6d_'+self.parent.detector_id+'.cbf')
+        set_and_wait(self.file_number, 1)
+        path = '/GPFS/xf16id/exp_path/'
+        fpath = path+str(proposal_id)+"/"+str(run_id)+"/"
+        makedirs(fpath)
+        set_and_wait(self.file_path, fpath)
+        super().stage()
+        res_kwargs = {'template': self.file_template.get(),
+                      'fpath': self.file_path.get(),
+                      'filename': self.file_name.get(),
+                      'frame_per_point': self.get_frames_per_point()}        
+        self._resource = fs.insert_resource('AD_CBF', path, res_kwargs)
+
+    def get_frames_per_point(self):
+        return 1
+
+class PilatusCBFHandler(HandlerBase):
+    specs = {'AD_CBF'} | HandlerBase.specs
+
+    def __init__(self, rpath, template, fpath, filename, frame_per_point=1):
+        self._path = fpath
+        self._fpp = frame_per_point
+        self._template = template
+        self._filename = filename
+
+    def __call__(self, point_number):
+        start, stop = point_number+1 * self._fpp, (point_number + 2) * self._fpp
+        ret = []
+        for j in range(start, stop):
+            fn = self._template % (self._path, self._filename, j)
+            img = fabio.open(fn)
+            ret.append(img.data)
+        return np.array(ret).squeeze()
+
+
+class LIXPilatus(SingleTrigger, PilatusDetector):
+    file = Cpt(PilatusFilePlugin, suffix="cam1:",
+               write_path_template="")
+    #stats1 = Cpt(StatsPlugin, 'Stats1:')
+
+    def __init__(self, *args, **kwargs):
+        self.detector_id = kwargs.pop('detector_id')
+        super().__init__(*args, **kwargs)
+
+fs.register_handler('AD_CBF', PilatusCBFHandler)
+
+pil1M = LIXPilatus("XF:16IDC-DT{Det:SAXS}", name="pil1M", detector_id="SAXS")
+pil300k1 = LIXPilatus("XF:16IDC-DT{Det:WAXS1}", name="pilW1", detector_id="WAXS1")
+pil300k2 = LIXPilatus("XF:16IDC-DT{Det:WAXS2}", name="pilW2", detector_id="WAXS2")
+
+pilatus_detectors = [pil1M, pil300k1, pil300k2]
+
+for det in pilatus_detectors:
+   det.read_attrs = ['file']
+
+
