@@ -27,15 +27,15 @@ class PilatusFilePlugin(Device, FileStoreBulkWrite):
         set_and_wait(self.file_template, '%s%s_%6.6d_'+self.parent.detector_id+'.cbf')
         set_and_wait(self.file_number, 1)
         path = '/GPFS/xf16id/exp_path/'
-        fpath = path+str(proposal_id)+"/"+str(run_id)+"/"
+        rpath = str(proposal_id)+"/"+str(run_id)+"/"
+        fpath = path + rpath
         makedirs(fpath)
         set_and_wait(self.file_path, fpath)
         super().stage()
         res_kwargs = {'template': self.file_template.get(),
-                      'fpath': self.file_path.get(),
                       'filename': self.file_name.get(),
                       'frame_per_point': self.get_frames_per_point()}        
-        self._resource = fs.insert_resource('AD_CBF', path, res_kwargs)
+        self._resource = fs.insert_resource('AD_CBF', rpath, res_kwargs, root=path)
 
     def get_frames_per_point(self):
         return 1
@@ -43,8 +43,8 @@ class PilatusFilePlugin(Device, FileStoreBulkWrite):
 class PilatusCBFHandler(HandlerBase):
     specs = {'AD_CBF'} | HandlerBase.specs
 
-    def __init__(self, rpath, template, fpath, filename, frame_per_point=1):
-        self._path = fpath
+    def __init__(self, rpath, template, filename, frame_per_point=1):
+        self._path = rpath
         self._fpp = frame_per_point
         self._template = template
         self._filename = filename
@@ -57,6 +57,19 @@ class PilatusCBFHandler(HandlerBase):
             img = fabio.open(fn)
             ret.append(img.data)
         return np.array(ret).squeeze()
+
+
+    def get_file_list(self, datum_kwargs_gen):
+        file_list = []
+        for dk in datum_kwargs_gen:
+            point_number = dk['point_number']
+            start, stop = point_number+1 * self._fpp, (point_number + 2) * self._fpp
+            ret = []
+            for j in range(start, stop):
+                fn = self._template % (self._path, self._filename, j)
+                file_list.append(fn)
+        return file_list
+
 
 
 class LIXPilatus(SingleTrigger, PilatusDetector):
