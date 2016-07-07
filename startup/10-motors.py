@@ -210,3 +210,7 @@ saxs = XYZMotor('XF:16IDC-ES{Stg:SAXS', name='saxs')
 ## SAXS Beamstop
 sbs = SAXSBeamstop('XF:16IDC-ES{BS:SAXS', name='sbs')
 
+## shutter # TODO: Check with Shirish and Lin and remove it
+#shutter = EpicsMotor('XF:16ID-TS{EVR:C1-Out:FP0}Src:Scale-SP', name='shutter')
+
+

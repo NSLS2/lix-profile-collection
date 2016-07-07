@@ -8,7 +8,6 @@ def test():
 
 def scan(*args):
     bkp_table_cols = gs.TABLE_COLS
-    bkp_plot_y = gs.PLOT_Y
 
     steps = args[-1]
     params = args[:-1]
@@ -17,18 +16,16 @@ def scan(*args):
     devices = [params[i] for i in range(0, len(params), 3)]
 
     gs.TABLE_COLS = list(gs.DETS)+devices
-    #gs.PLOT_Y = detectors[0].name
 
     detectors = gs.DETS
     plan = InnerProductAbsScanPlan(detectors, steps, *params)
+    plan = fast_shutter_decorator(plan)
     RE(plan, [LiveTable(gs.TABLE_COLS)])
 
     gs.TABLE_COLS = bkp_table_cols
-    gs.PLOT_Y = bkp_plot_y
 
 def dscan(*args):
     bkp_table_cols = gs.TABLE_COLS
-    bkp_plot_y = gs.PLOT_Y
 
     steps = args[-1]
     params = args[:-1]
@@ -37,12 +34,12 @@ def dscan(*args):
     devices = [params[i] for i in range(0, len(params), 3)]
 
     gs.TABLE_COLS = list(gs.DETS)+devices
-    #gs.PLOT_Y = detectors[0].name
 
     detectors = gs.DETS
     plan = InnerProductDeltaScanPlan(detectors, steps, *params)
+    plan = fast_shutter_decorator(plan)
     RE(plan, [LiveTable(gs.TABLE_COLS)])
 
     gs.TABLE_COLS = bkp_table_cols
-    gs.PLOT_Y = bkp_plot_y
+
 
