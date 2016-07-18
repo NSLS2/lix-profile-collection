@@ -7,7 +7,7 @@ class FastShutter(Device):
     SETTLE_TIME = 0.1  # seconds
     delay = Cpt(EpicsSignal, '-DlyGen:0}Delay-SP')
     width = Cpt(EpicsSignal, '-DlyGen:0}Width-SP')
-    output = Cpt(EpicsSignal,'-Out:FP0}Src:Scale-SP', string=True)
+    output = Cpt(EpicsSignal,'-Out:FP0}Src:Scale-SP', string=True, put_complete=True)
 
     
     def open(self):
