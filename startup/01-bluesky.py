@@ -3,8 +3,6 @@ from traitlets import HasTraits, TraitType, Unicode, List, Float, Bool, link
 from bluesky.utils import get_history
 from functools import partial
 from bluesky.run_engine import RunEngine
-from bluesky.plans import InnerProductAbsScanPlan, InnerProductDeltaScanPlan, Count, count
-from bluesky.spec_api import ct
 from bluesky.callbacks import *
 from bluesky.callbacks.olog import logbook_cb_factory
 

@@ -11,5 +11,4 @@ def fast_shutter_wrapper(plan):
 
 fast_shutter_decorator = bsp.make_decorator(fast_shutter_wrapper)
 
-ct = fast_shutter_decorator(ct)
 

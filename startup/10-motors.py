@@ -167,6 +167,9 @@ bimy = EpicsMotor('XF:16IDC-BI{BPM:2-Ax:Y}Mtr', name='bimy')
 ## Guard Slits 1
 sg1 = SlitsCenterAndGap('XF:16IDC-OP{Slt:G1', name='sg1')
 
+## Guard Slits 2
+sg2 = SlitsCenterAndGap('XF:16IDC-OP{Slt:G2', name='sg2')
+
 #########################################
 ## In-air transmission measurement module
 #########################################
@@ -180,15 +183,14 @@ smf = StageScan('XF:16IDC-ES:InAir{Stg:ScanF', name='smf')
 ## Microscope
 microscope = Microscope('XF:16IDC-ES:InAir{Mscp:1', name='microscope')
 
-
 #########################################
 ## In-vaccum GISAXS/GID module
 #########################################
 
 ## Guard Slits 2 in VAC
 # TODO: Review this motor
-sg2dx = EpicsMotor('XF:16IDC-ES:GI{Slt:G2-Ax:X}Mtr', name='sg2dx')
-sg2dy = EpicsMotor('XF:16IDC-ES:GI{Slt:G2-Ax:dX}Mtr', name='sg2dy')
+#sg2dx = EpicsMotor('XF:16IDC-ES:GI{Slt:G2-Ax:X}Mtr', name='sg2dx')
+#sg2dy = EpicsMotor('XF:16IDC-ES:GI{Slt:G2-Ax:dX}Mtr', name='sg2dy')
 
 
 #########################################
@@ -212,5 +214,7 @@ sbs = SAXSBeamstop('XF:16IDC-ES{BS:SAXS', name='sbs')
 
 ## shutter # TODO: Check with Shirish and Lin and remove it
 #shutter = EpicsMotor('XF:16ID-TS{EVR:C1-Out:FP0}Src:Scale-SP', name='shutter')
+
+sh=EpicsMotor('XF:16IDC-ES:Sol{Enc-Ax:XL}Mtr', name='hand_low_encl')
 
 

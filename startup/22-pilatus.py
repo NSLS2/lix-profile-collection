@@ -23,6 +23,7 @@ class PilatusFilePlugin(Device, FileStoreBulkWrite):
     def stage(self):
         global proposal_id
         global run_id
+        global current_sample
 
         set_and_wait(self.file_template, '%s%s_%6.6d_'+self.parent.detector_id+'.cbf')
         set_and_wait(self.file_number, 1)
@@ -31,6 +32,7 @@ class PilatusFilePlugin(Device, FileStoreBulkWrite):
         fpath = path + rpath
         makedirs(fpath)
         set_and_wait(self.file_path, fpath)
+        set_and_wait(self.file_name, current_sample)
         super().stage()
         res_kwargs = {'template': self.file_template.get(),
                       'filename': self.file_name.get(),

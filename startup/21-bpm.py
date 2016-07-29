@@ -1,5 +1,5 @@
 from ophyd import Device, EpicsSignal, Signal, Component as Cpt
-from ophyd import QuadEM
+from ophyd.quadem import NSLS_EM, TetrAMM
 from ophyd import DeviceStatus
 import numpy as np
 
@@ -25,8 +25,13 @@ class Best(Device):
         _status._finished(success=True)
         return _status
 
+
+class TetrAMM(QuadEM):
+    port_name = Cpt(Signal, value='TetrAMM')
+
+
 best = Best('XF:16IDB-CT{Best}',name='best')
 
-em1 = QuadEM('XF:16IDC-ES{NSLS_EM:1}', name='em1')
-em2 = QuadEM('XF:16IDC-ES{NSLS_EM:2}', name='em2')
-tetramm = QuadEM('XF:16IDC-ES{TETRAMM:1}', name='tetramm')
+em1 = NSLS_EM('XF:16IDC-ES{NSLS_EM:1}', name='em1')
+em2 = NSLS_EM('XF:16IDC-ES{NSLS_EM:2}', name='em2')
+tetramm = TetrAMM('XF:16IDC-ES{TETRAMM:1}', name='tetramm')
