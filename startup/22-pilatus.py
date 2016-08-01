@@ -1,6 +1,6 @@
 from ophyd import ( Component as Cpt, ADComponent,
                     EpicsSignal, EpicsSignalRO,
-                    StatsPlugin, ImagePlugin,
+                    ROIPlugin, StatsPlugin, ImagePlugin,
                     SingleTrigger, PilatusDetector)
 
 from ophyd.areadetector.filestore_mixins import FileStoreBulkWrite
@@ -77,7 +77,16 @@ class PilatusCBFHandler(HandlerBase):
 class LIXPilatus(SingleTrigger, PilatusDetector):
     file = Cpt(PilatusFilePlugin, suffix="cam1:",
                write_path_template="")
-    #stats1 = Cpt(StatsPlugin, 'Stats1:')
+
+    roi1 = Cpt(ROIPlugin, 'ROI1:')
+    roi2 = Cpt(ROIPlugin, 'ROI2:')
+    roi3 = Cpt(ROIPlugin, 'ROI3:')
+    roi4 = Cpt(ROIPlugin, 'ROI4:')
+
+    stats1 = Cpt(StatsPlugin, 'Stats1:')
+    stats2 = Cpt(StatsPlugin, 'Stats2:')
+    stats3 = Cpt(StatsPlugin, 'Stats3:')
+    stats4 = Cpt(StatsPlugin, 'Stats4:')
 
     def __init__(self, *args, **kwargs):
         self.detector_id = kwargs.pop('detector_id')
@@ -86,10 +95,10 @@ class LIXPilatus(SingleTrigger, PilatusDetector):
 fs.register_handler('AD_CBF', PilatusCBFHandler)
 
 pil1M = LIXPilatus("XF:16IDC-DT{Det:SAXS}", name="pil1M", detector_id="SAXS")
-pil300k1 = LIXPilatus("XF:16IDC-DT{Det:WAXS1}", name="pilW1", detector_id="WAXS1")
-pil300k2 = LIXPilatus("XF:16IDC-DT{Det:WAXS2}", name="pilW2", detector_id="WAXS2")
+pilW1 = LIXPilatus("XF:16IDC-DT{Det:WAXS1}", name="pilW1", detector_id="WAXS1")
+pilW2 = LIXPilatus("XF:16IDC-DT{Det:WAXS2}", name="pilW2", detector_id="WAXS2")
 
-pilatus_detectors = [pil1M, pil300k1, pil300k2]
+pilatus_detectors = [pil1M, pilW1, pilW2]
 
 for det in pilatus_detectors:
    det.read_attrs = ['file']
