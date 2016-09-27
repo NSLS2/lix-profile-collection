@@ -88,7 +88,12 @@ class SAXSBeamstop(XYMotor):
 	r3 = Cpt(EpicsMotor, '-Ax:R3}Mtr')
 	tilt1 = Cpt(EpicsMotor, '-Ax:T1}Mtr')
 	tilt2 = Cpt(EpicsMotor, '-Ax:T2}Mtr')
-
+    
+class SolutionScatteringEnclosure(Device):
+    y = Cpt(EpicsMotor, '-Ax:Y}Mtr')
+    # xu: upper horizontal stage
+    # xl: lower horizontal stage
+    
 #######################################################
 ### LIX First Optical Enclosure FOE Optics Hutch A
 #######################################################
@@ -184,6 +189,14 @@ smf = StageScan('XF:16IDC-ES:InAir{Stg:ScanF', name='smf')
 microscope = Microscope('XF:16IDC-ES:InAir{Mscp:1', name='microscope')
 
 #########################################
+## Solution scattering 
+#########################################
+
+sol_en = SolutionScatteringEnclosure('XF:16IDC-ES:Sol{Enc', name='sol_en')
+
+# SolHdl
+        
+#########################################
 ## In-vaccum GISAXS/GID module
 #########################################
 
@@ -216,5 +229,4 @@ sbs = SAXSBeamstop('XF:16IDC-ES{BS:SAXS', name='sbs')
 #shutter = EpicsMotor('XF:16ID-TS{EVR:C1-Out:FP0}Src:Scale-SP', name='shutter')
 
 sh=EpicsMotor('XF:16IDC-ES:Sol{Enc-Ax:XL}Mtr', name='hand_low_encl')
-
-
+SolExU=EpicsMotor('XF:16IDC-ES:Sol{Enc-Ax:XU}Mtr', name='Sol_Up_encl')

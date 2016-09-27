@@ -15,6 +15,7 @@ class PilatusFilePlugin(Device, FileStoreBulkWrite):
     file_number = ADComponent(EpicsSignalWithRBV, 'FileNumber')
     file_name = ADComponent(EpicsSignalWithRBV, 'FileName', string=True)
     file_template = ADComponent(EpicsSignalWithRBV, 'FileTemplate', string=True)
+    reset_file_number = Cpt(Signal, name='reset_file_number', value=1)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -26,7 +27,8 @@ class PilatusFilePlugin(Device, FileStoreBulkWrite):
         global current_sample
 
         set_and_wait(self.file_template, '%s%s_%6.6d_'+self.parent.detector_id+'.cbf')
-        set_and_wait(self.file_number, 1)
+        if self.reset_file_number.get() == 1:
+            set_and_wait(self.file_number, 1)
         path = '/GPFS/xf16id/exp_path/'
         rpath = str(proposal_id)+"/"+str(run_id)+"/"
         fpath = path + rpath
@@ -36,7 +38,8 @@ class PilatusFilePlugin(Device, FileStoreBulkWrite):
         super().stage()
         res_kwargs = {'template': self.file_template.get(),
                       'filename': self.file_name.get(),
-                      'frame_per_point': self.get_frames_per_point()}        
+                      'frame_per_point': self.get_frames_per_point(),
+                      'initial_number': self.file_number.get()}        
         self._resource = fs.insert_resource('AD_CBF', rpath, res_kwargs, root=path)
 
     def get_frames_per_point(self):
@@ -45,14 +48,15 @@ class PilatusFilePlugin(Device, FileStoreBulkWrite):
 class PilatusCBFHandler(HandlerBase):
     specs = {'AD_CBF'} | HandlerBase.specs
 
-    def __init__(self, rpath, template, filename, frame_per_point=1):
+    def __init__(self, rpath, template, filename, frame_per_point=1, initial_number=1):
         self._path = rpath
         self._fpp = frame_per_point
         self._template = template
         self._filename = filename
+        self._initial_number = initial_number
 
     def __call__(self, point_number):
-        start, stop = point_number+1 * self._fpp, (point_number + 2) * self._fpp
+        start, stop = self._initial_number + point_number * self._fpp, (point_number + 2) * self._fpp
         ret = []
         for j in range(start, stop):
             fn = self._template % (self._path, self._filename, j)
@@ -65,7 +69,7 @@ class PilatusCBFHandler(HandlerBase):
         file_list = []
         for dk in datum_kwargs_gen:
             point_number = dk['point_number']
-            start, stop = point_number+1 * self._fpp, (point_number + 2) * self._fpp
+            start, stop = self._initial_number + point_number * self._fpp, (point_number + 2) * self._fpp
             ret = []
             for j in range(start, stop):
                 fn = self._template % (self._path, self._filename, j)
@@ -91,6 +95,13 @@ class LIXPilatus(SingleTrigger, PilatusDetector):
     def __init__(self, *args, **kwargs):
         self.detector_id = kwargs.pop('detector_id')
         super().__init__(*args, **kwargs)
+
+
+def pilatus_number_reset(status):
+    for det in pilatus_detectors:
+        val = 1 if status else 0
+        det.file.reset_file_number.put(val)
+
 
 fs.register_handler('AD_CBF', PilatusCBFHandler)
 

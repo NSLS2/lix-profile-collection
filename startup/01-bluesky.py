@@ -19,7 +19,7 @@ class CustomRunEngine(RunEngine):
 
         if username is None or proposal_id is None or run_id is None:
             login()
-        
+
         return super().__call__(*args, **kwargs)
 
 RE = CustomRunEngine()
