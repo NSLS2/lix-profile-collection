@@ -1,7 +1,16 @@
-from ophyd.mca import Saturn, SoftDXPTrigger
+from ophyd.mca import EpicsMCA, EpicsDXP
 
-class LIXSaturn(Saturn, SoftDXPTrigger):
-    pass
+# Vortex MCA
 
-vortex = LIXSaturn('XF:16IDC-ES{Det:Sat}:', name='vortex')
+class Vortex(Device):
+    mca = Cpt(EpicsMCA, 'mca1')
+    vortex = Cpt(EpicsDXP, 'dxp1:')
+
+    @property
+    def trigger_signals(self):
+        return [self.mca.erase_start]
+
+# Saturn interface for Vortex MCA detector
+vortex = Vortex('XF:16IDC-ES{Det:Sat}:', name='vortex')
+vortex.read_attrs = ['mca.spectrum', 'mca.preset_live_time']
 

@@ -7,13 +7,6 @@ import bluesky
 from ophyd import *
 from ophyd.commands import *
 
-from databroker import DataBroker as db, get_table, get_images, get_events
-from datamuxer import DataMuxer
-
-#from filestore.utils import install_sentinels
-#import filestore.conf
-#install_sentinels(filestore.conf.connection_config, 1)
-
 def reload_macros(file='~/.ipython/profile_collection/startup/99-macros.py'):
     ipy = get_ipython()
     ipy.magic('run -i '+file)

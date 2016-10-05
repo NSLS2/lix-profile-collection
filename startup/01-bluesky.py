@@ -8,8 +8,13 @@ from bluesky.callbacks.olog import logbook_cb_factory
 
 # Subscribe metadatastore to documents.
 # If this is removed, data is not saved to metadatastore.
-import metadatastore.commands
+from metadatastore.mds import MDS
+from databroker import Broker
+from databroker.core import register_builtin_handlers
+from filestore.fs import FileStore
+
 from bluesky.global_state import gs
+
 
 class CustomRunEngine(RunEngine):
     def __call__(self, *args, **kwargs):
@@ -24,7 +29,18 @@ class CustomRunEngine(RunEngine):
 
 RE = CustomRunEngine()
 gs.RE = RE
-gs.RE.subscribe_lossless('all', metadatastore.commands.insert)
+
+mds = MDS({'host': 'xf16idc-ca',
+           'database': 'metadatastore_production_v1',
+           'port': 27017,
+           'timezone': 'US/Eastern'}, auth=False)
+
+db = Broker(mds, FileStore({'host': 'xf16idc-ca',
+                            'database': 'filestore',
+                            'port': 27017}))
+
+register_builtin_handlers(db.fs)
+RE.subscribe('all', mds.insert)
 
 # Import matplotlib and put it in interactive mode.
 import matplotlib.pyplot as plt
@@ -41,10 +57,4 @@ stop = RE.stop
 
 RE.md['group'] = 'lix'
 RE.md['beamline_id'] = 'LIX'
-# RE.verbose = True
-
-# sr_shutter_status = EpicsSignal('SR-EPS{PLC:1}Sts:MstrSh-Sts', rw=False,
-#                                 name='sr_shutter_status')
-# sr_beam_current = EpicsSignal('SR:C03-BI{DCCT:1}I:Real-I', rw=False,
-#                               name='sr_beam_current')
 
