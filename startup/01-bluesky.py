@@ -9,7 +9,7 @@ from bluesky.callbacks.olog import logbook_cb_factory
 # Subscribe metadatastore to documents.
 # If this is removed, data is not saved to metadatastore.
 from metadatastore.mds import MDS
-from databroker import Broker
+from databroker import Broker, get_table, get_events
 from databroker.core import register_builtin_handlers
 from filestore.fs import FileStore
 
@@ -42,13 +42,17 @@ db = Broker(mds, FileStore({'host': 'xf16idc-ca',
 register_builtin_handlers(db.fs)
 RE.subscribe('all', mds.insert)
 
-# Import matplotlib and put it in interactive mode.
-import matplotlib.pyplot as plt
-plt.ion()
+if is_ipython():
+    # Import matplotlib and put it in interactive mode.
+    import matplotlib.pyplot as plt
+    plt.ion()
 
-# Make plots update live while scans run.
-from bluesky.utils import install_qt_kicker
-install_qt_kicker()
+    # Make plots update live while scans run.
+    from bluesky.utils import install_qt_kicker
+    install_qt_kicker()
+else:
+    from bluesky.utils import install_nb_kicker
+    install_nb_kicker()
 
 RE = gs.RE
 abort = RE.abort

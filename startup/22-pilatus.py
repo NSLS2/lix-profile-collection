@@ -6,8 +6,8 @@ from ophyd import ( Component as Cpt, ADComponent,
 from ophyd.areadetector.filestore_mixins import FileStoreBulkWrite
 
 from ophyd.utils import set_and_wait
-import filestore.api as fs
 from filestore.handlers_base import HandlerBase
+import filestore.api as fs
 import fabio
 
 class PilatusFilePlugin(Device, FileStoreBulkWrite):
@@ -60,6 +60,7 @@ class PilatusCBFHandler(HandlerBase):
         ret = []
         for j in range(start, stop):
             fn = self._template % (self._path, self._filename, j)
+            #print("call Open File: ", fn)
             img = fabio.open(fn)
             ret.append(img.data)
         return np.array(ret).squeeze()
@@ -73,6 +74,7 @@ class PilatusCBFHandler(HandlerBase):
             ret = []
             for j in range(start, stop):
                 fn = self._template % (self._path, self._filename, j)
+                #print("Will open file: ", fn)
                 file_list.append(fn)
         return file_list
 
@@ -103,7 +105,7 @@ def pilatus_number_reset(status):
         det.file.reset_file_number.put(val)
 
 
-fs.register_handler('AD_CBF', PilatusCBFHandler)
+db.fs.register_handler('AD_CBF', PilatusCBFHandler)
 
 pil1M = LIXPilatus("XF:16IDC-DT{Det:SAXS}", name="pil1M", detector_id="SAXS")
 pilW1 = LIXPilatus("XF:16IDC-DT{Det:WAXS1}", name="pilW1", detector_id="WAXS1")
