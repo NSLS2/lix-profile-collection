@@ -43,6 +43,15 @@ register_builtin_handlers(db.fs)
 RE.subscribe('all', mds.insert)
 
 if is_ipython():
+    # FIXME: Remove this once we migrate to PYTHON 3.5
+    from IPython import get_ipython
+    from IPython.core.pylabtools import backend2gui
+    from matplotlib import get_backend
+    ip = get_ipython()
+    ipython_gui_name = backend2gui.get(get_backend())
+    if ipython_gui_name:
+        ip.enable_gui(ipython_gui_name)
+
     # Import matplotlib and put it in interactive mode.
     import matplotlib.pyplot as plt
     plt.ion()
@@ -50,6 +59,7 @@ if is_ipython():
     # Make plots update live while scans run.
     from bluesky.utils import install_qt_kicker
     install_qt_kicker()
+    print("Installing Qt Kicker...")
 else:
     from bluesky.utils import install_nb_kicker
     install_nb_kicker()

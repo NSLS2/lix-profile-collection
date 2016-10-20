@@ -93,6 +93,12 @@ class SolutionScatteringEnclosure(Device):
     y = Cpt(EpicsMotor, '-Ax:Y}Mtr')
     # xu: upper horizontal stage
     # xl: lower horizontal stage
+
+class ScanningStack2(Device):
+    x = Cpt(EpicsMotor, '{Ax:X}Mtr')
+    y = Cpt(EpicsMotor, '{Ax:Y}Mtr')
+    rx = Cpt(EpicsMotor, '{Ax:RX}Mtr')
+    ry = Cpt(EpicsMotor, '{Ax:RY}Mtr')    
     
 #######################################################
 ### LIX First Optical Enclosure FOE Optics Hutch A
@@ -189,10 +195,19 @@ smf = StageScan('XF:16IDC-ES:InAir{Stg:ScanF', name='smf')
 microscope = Microscope('XF:16IDC-ES:InAir{Mscp:1', name='microscope')
 
 #########################################
+## Scanning probe stack with Newport stages 
+#########################################
+ss2 = ScanningStack2('XF:16IDC-ES:Scan2', name='ss2')
+
+#########################################
 ## Solution scattering 
 #########################################
 
 sol_en = SolutionScatteringEnclosure('XF:16IDC-ES:Sol{Enc', name='sol_en')
+
+# test ss2.rx
+
+#ss2.rx=EpicsMotor('XF:16IDC-ES:Scan2{Ax:RX}Mtr', name='ss2.rx')
 
 # SolHdl
         
