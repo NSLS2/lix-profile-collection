@@ -14,5 +14,5 @@ def install_beam_suspender():
 def uninstall_beam_suspender():
     RE.remove_suspender(beam_current_sus)
 
-install_beam_suspender()
+#install_beam_suspender()
 

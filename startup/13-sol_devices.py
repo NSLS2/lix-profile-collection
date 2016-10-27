@@ -6,6 +6,7 @@ class SolutionScatteringControlUnit(Device):
     halt_pump = Cpt(EpicsSignal, 'pp1c_halt')
     piston_pos = Cpt(EpicsSignal, 'pp1c_piston_pos')
     valve_pos = Cpt(EpicsSignal, 'pp1c_valve_pos')
+    pump_spd = Cpt(EpicsSignal, 'pp1c_spd')
     status = Cpt(EpicsSignal, 'pp1c_status')
     water_pump = Cpt(EpicsSignal, "sv_water")
     sv_sel = Cpt(EpicsSignal, "sv_sel")
@@ -39,7 +40,7 @@ class SolutionScatteringControlUnit(Device):
 
     def pump_mvR(self, dV):
         cur = self.piston_pos.get()
-        slef.piston_pos.set(cur+dV)
+        self.piston_pos.set(cur+dV)
     
     
 sol_ctrl = SolutionScatteringControlUnit('XF:16IDC-ES:Sol{ctrl}', name='sol_ctrl')

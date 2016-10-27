@@ -61,6 +61,10 @@ if is_ipython():
     install_qt_kicker()
     print("Installing Qt Kicker...")
 else:
+    # Import matplotlib and put it in interactive mode.
+    import matplotlib.pyplot as plt
+    plt.ion()
+
     from bluesky.utils import install_nb_kicker
     install_nb_kicker()
 
