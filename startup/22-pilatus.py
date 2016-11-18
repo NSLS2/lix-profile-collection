@@ -26,20 +26,20 @@ class PilatusFilePlugin(Device, FileStoreBulkWrite):
         global run_id
         global current_sample
 
-        set_and_wait(self.file_template, '%s%s_%6.6d_'+self.parent.detector_id+'.cbf')
+        set_and_wait(self.file_template, '%s%s_%6.6d_'+self.parent.detector_id+'.cbf', timeout=99999)
         if self.reset_file_number.get() == 1:
-            set_and_wait(self.file_number, 1)
+            set_and_wait(self.file_number, 1, timeout=99999)
         path = '/GPFS/xf16id/exp_path/'
         rpath = str(proposal_id)+"/"+str(run_id)+"/"
         fpath = path + rpath
         makedirs(fpath)
-        set_and_wait(self.file_path, fpath)
-        set_and_wait(self.file_name, current_sample)
+        set_and_wait(self.file_path, fpath, timeout=99999)
+        set_and_wait(self.file_name, current_sample, timeout=99999)
         super().stage()
         res_kwargs = {'template': self.file_template.get(),
                       'filename': self.file_name.get(),
                       'frame_per_point': self.get_frames_per_point(),
-                      'initial_number': self.file_number.get()}        
+                      'initial_number': self.file_number.get()}
         self._resource = fs.insert_resource('AD_CBF', rpath, res_kwargs, root=path)
 
     def get_frames_per_point(self):

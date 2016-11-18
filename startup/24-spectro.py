@@ -37,9 +37,9 @@ class USB4000(Device):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._acquiring_status = None
-        self.stage_sigs[self.acquire] = 0 # Stop
-        self.stage_sigs[self.acquisition_mode] = 0 # Single
-        self.stage_sigs[self.time_resolution] = 2 # Seconds
+        #self.stage_sigs[self.acquire] = 0 # Stop
+        #self.stage_sigs[self.acquisition_mode] = 0 # Single
+        #self.stage_sigs[self.time_resolution] = 1 # mSeconds
 
     def stage(self):
         super().stage()
@@ -53,7 +53,7 @@ class USB4000(Device):
         self._acquiring_status = None
 
     def trigger(self):
-        self.acquire.set(1)
+        self.acquire.put(1, use_complete=True)
         self._acquiring_status = DeviceStatus(self.progress_bar)
         return self._acquiring_status
 

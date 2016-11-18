@@ -127,10 +127,10 @@ def sam_flow_cell(pos=None):
     if not(pos):
         print(flow_pos.__doc__)
     else:
-        fps_ref=-0.3
+        fps_ref=8
         spac=-4.6
         pos_fps=np.linspace(fps_ref, fps_ref+2*spac,3)
-        sc2.set(SC5_SH,0)
+        sol_ctrl.sv_pcr_tubes.set(0)
         SolExU.move(0)
         sol_en.y.move(pos_fps[pos-1])
         if pos < 0 and pos > 3:
@@ -144,11 +144,11 @@ def sam_8cell(pos=None):
         print(opencell_pos.__doc__)
     else:
         spac=9
-        opencell_ref=-34
+        opencell_ref=-43
         pos_opencell=np.linspace(opencell_ref, opencell_ref+7*-spac,8)
         sc2.set(SC5_SH,0) # move sample handler down
         if pos % 2 == 0:
-            sol_en.y.move(-5.25)
+            sol_en.y.move(-3.355)
             SolExU.move(pos_opencell[pos-1])
             if pos>8:
                 print("invalid position")
@@ -158,7 +158,48 @@ def sam_8cell(pos=None):
             if pos>8:
                 print("invalid position")
         print("done moving")
+        
+def sam_9cell(pos=None):
+    '''1 argument accepted: 
+        position 1 to 9 from inboard to outboard.'''
+    if not(pos):
+        print(opencell_pos.__doc__)
+    else:
+        spac=9.5
+        opencell_ref=-35.5
+        sol_ctrl.sv_pcr_tubes.set(0)
+        pos_opencell=np.linspace(opencell_ref, opencell_ref+8*-spac,9)
+        SolExU.move(pos_opencell[pos-1])
+        sol_en.y.move(10.9)
+        print("done moving")
 
+def meas_9cell(exp,pos,times):
+    '''3 arguments accepted:
+    exp --> exposure time
+    pos = open cell position (1 to 8 from inboard to outboard)
+    times = no of measurments'''
+    if not(exp or pos or times):
+        print(meas_9cell.__doc__)
+    else:
+        #print(meas_8cell.__doc__)
+        pil1M.cam.acquire_time.put(exp)
+        pilW1.cam.acquire_time.put(exp)
+        pilW2.cam.acquire_time.put(exp)
+        pilatus_number_reset(False)
+        sam_9cell(pos)
+        d=-4
+        a=8
+        movr(SolExU,2)
+        for n in range(times):
+            SolExU.velocity.put(a/(exp+0.5))
+            mov_all(SolExU,d,wait=False,relative=True)
+            RE(ct(num=1))
+            d=-d
+        SolExU.velocity.put(0)
+        sam_9cell(pos)
+        pilatus_number_reset(True)        
+        
+        
 #upstream needle (row 1) (middle sample cell)
 def wash_row(row=None,t2=None,loop=None):
     ''' arguments accepted:
@@ -169,8 +210,8 @@ def wash_row(row=None,t2=None,loop=None):
         print(wash_row.__doc__)
     else:
         if row==1:
-            sol_ctrl.pump_mvA(75) ## push the sample back in the pcr tube
-            sleep(7)
+            sol_ctrl.pump_mvA(80) ## push the sample back in the pcr tube
+            sol_ctrl.wait()
             sol_ctrl.sv_pcr_tubes.set(0) ## move  sample handler down
             sh.move(0) # position the needle on drain location
             sol_ctrl.vc_4port.set(1) # selects position 4 port on VICI
@@ -184,7 +225,7 @@ def wash_row(row=None,t2=None,loop=None):
                 sol_ctrl.water_pump.set("on") # start washing
                 sleep(0.9) # washing time
                 sol_ctrl.sv_drain1.set("on") # vaccum pump on drain1 selected
-                sleep(1)
+                sleep(2)
                 sol_ctrl.water_pump.set("off")    # stop washing
                 sleep(1)
                 sol_ctrl.sv_sel.set("N2") # select dry nitrogen port
@@ -192,10 +233,11 @@ def wash_row(row=None,t2=None,loop=None):
                 sol_ctrl.sv_N2.set("on") # start drying
                 sleep(t2) # drying time
                 sol_ctrl.sv_N2.set("off") # turn dry nitrogen off
-                sleep(1)
+                sleep(2)
                 sol_ctrl.sv_drain1.set("off") # turn off drain
                 sleep(1)
                 sol_ctrl.sv_sel.set("water") # back to water port
+                sleep(2)
             sol_ctrl.sv_pcr_tubes.set(0) ## move  sample handler down        
             sleep(1)
         if row==2:
@@ -214,7 +256,7 @@ def wash_row(row=None,t2=None,loop=None):
                 sol_ctrl.water_pump.set("on") # start washing
                 sleep(0.9) # washing time
                 sol_ctrl.water_pump.set("off")    # stop washing
-                sleep(1)
+                sleep(2)
                 sol_ctrl.sv_drain2.set("on") # vaccum pump on drain1 selected
                 sleep(1)
                 sol_ctrl.sv_sel.set("N2") # select dry nitrogen port
@@ -222,7 +264,7 @@ def wash_row(row=None,t2=None,loop=None):
                 sol_ctrl.sv_N2.set("on") # start drying
                 sleep(t2) # drying time
                 sol_ctrl.sv_N2.set("off") # turn dry nitrogen off
-                sleep(1)
+                sleep(2)
                 sol_ctrl.sv_drain2.set("off") # turn off drain
                 sleep(1)
                 sol_ctrl.sv_sel.set("water") # back to water port
@@ -241,48 +283,54 @@ def load_sample(row=None,pos=None):
         print(load_sample.__doc__)
     else:
         if row==1:
+            mov(sol_en.y,8)
             sp=9 # pcr tube spacing#
             pos_sh=np.linspace(-70, -70-5*sp,6)
             sol_ctrl.sv_pcr_tubes.set(0) ## move the sample loader down before moving sh in x direction
             sleep(1)
             sh.move(0) # keep the needle at drain position and fill the needle upto the flow cell
             sol_ctrl.vc_4port.set(0) ## cell connected to no 4 on 4 port valve
-            sleep(1)
+            sleep(2)
             sol_ctrl.valve_pos.set("res")
-            sleep(1)
+            sleep(3)
             sol_ctrl.pump_mvA(150)
-            sleep(7)
+            sol_ctrl.wait()
             sol_ctrl.valve_pos.set("sam")
-            sleep(1)
-            sol_ctrl.pump_mvA(75) ## fill the tubing with water only upto the end of the flow channel
-            sleep(7)
+            sleep(4)
+            sol_ctrl.pump_mvA(80) ## fill the tubing with water only upto the end of the flow channel
+            sol_ctrl.wait()
+            sleep(3)
             #move the needle to the sample position
             sh.move(pos_sh[pos-1])
             sol_ctrl.sv_pcr_tubes.set(1) ## move the sample loader up
-            sleep(1)
-            sol_ctrl.pump_mvA(170)
+            sleep(2)
+            sol_ctrl.pump_mvA(180)
+            sol_ctrl.wait()
 #            pp.umvA(160) ## fill the tubing with water only upto the end of the flow channel
         if row==2:
+            mov(sol_en.y,-1.0)
             sp=9 # pcr tube spacing#
             pos_sh=np.linspace(-16, -16-5*sp,6)
             sol_ctrl.sv_pcr_tubes.set(0) ## move the sample loader down before moving sh in x direction
             sleep(1)
             sh.move(0) # keep the needle at drain position and fill the needle upto the flow cell
             sol_ctrl.vc_4port.set(1) ## switch port to select row 2 sample pickup
-            sleep(1)
+            sleep(2)
             sol_ctrl.valve_pos.set("res")
-            sleep(1)
-            sol_ctrl.pump_mvA(150)
-            sleep(7)
+            sleep(2)
+            sol_ctrl.pump_mvA(140)
+            sol_ctrl.wait()
             sol_ctrl.valve_pos.set("sam")
-            sleep(1)
-            sol_ctrl.pump_mvA(75) ## fill the tubing with water only upto the end of the flow channel
-            sleep(7)
+            sleep(2)
+            sol_ctrl.pump_mvA(80) ## fill the tubing with water only upto the end of the flow channel
+            sol_ctrl.wait()
+            sleep(3)
             #move the needle to the sample position
             sh.move(pos_sh[pos-1])
             sol_ctrl.sv_pcr_tubes.set(1) ## move the sample loader up
-            sleep(1)
+            sleep(2)
             sol_ctrl.pump_mvA(170)    
+            sol_ctrl.wait()
 
 
 def load_wash(row=None,pos=None,t1=None,t2=None,loop=None):
@@ -307,14 +355,13 @@ def load_wash(row=None,pos=None,t1=None,t2=None,loop=None):
 
 def sam_out():
     sol_ctrl.sv_pcr_tubes.set(0)## move  sample handler down
-    sh.move(50) # move sample handler close to the loadlock door
-    sol_ctrl.sv_door_lower.set(1) ## open loadlock door
-    sh.move(78.5) # move sample handler out
+    SolExU.move(92.5) # move sample handler close to the loadlock door
+    
 
 def sam_in():
-    sh.move(50) # move sample handler close to the loadlock door
-    sol_ctrl.sv_door_lower.set(0) ## open loadlock door
-    sh.move(0) # move sample handler out
+    #SolExU.move(50) # move sample handler close to the loadlock door
+    #sol_ctrl.sv_door_lower.set(0) ## open loadlock door
+    SolExU.move(0) # move sample handler out
 
 def sam_flowcell_in():
     sc2.set(SC5_SH,0) ## move  sample handler down
@@ -332,6 +379,12 @@ def sh_in():
     sol_ctrl.sv_door_lower.set(0) ## open loadlock door
     sh.move(0) # move sample handler out
 
+def sh_up():
+    sol_ctrl.sv_pcr_tubes.set(1)# move handler up
+    
+def sh_down():
+    sol_ctrl.sv_pcr_tubes.set(0) # move handler down
+
 def meas_8cell(exp,pos,times):
     '''3 arguments accepted:
     exp --> exposure time
@@ -339,11 +392,11 @@ def meas_8cell(exp,pos,times):
     times = no of measurments'''
     if not(exp or pos or times):
         print(meas_8cell.__doc__)
-    else:
         pil1M.cam.acquire_time.put(exp)
         pilW1.cam.acquire_time.put(exp)
         pilW2.cam.acquire_time.put(exp)
         pilatus_number_reset(False)
+    else:
         sam_8cell(pos)
         d=-8
         a=8
@@ -393,13 +446,14 @@ def meas_SOL(exp, v, times):
         pilatus_number_reset(False)
         sol_ctrl.pump_spd.set(v*60/exp)
         for n in range(times):
-            sleep(exp)
+            sol_ctrl.wait()
             sol_ctrl.pump_mvR(v)
             RE(ct(num=1))
             v=-v
         pilatus_number_reset(True)
         sol_ctrl.pump_spd.set(1500)
         sol_ctrl.pump_mvA(170)
+        sol_ctrl.wait()
 
 def meas_flowcell(exp, times, v):
     '''3 arguments accepted:
@@ -422,4 +476,158 @@ def ct_time(exp):
     pilW1.cam.acquire_time.put(exp)
     pilW2.cam.acquire_time.put(exp)
 
+def meas_ALL(exp=None,vol=None, times=None, t2=None,cycle=None):
+    for n in range(6):
+        s=gs.SAMPLE[n]
+        change_sample(s)
+        wash_row(1,t2,cycle)
+        sleep(2)
+        load_sample(1,n+1)
+        sleep(2)
+        meas_SOL(exp,vol,times)
+        sleep(2)
+    print("run complete")
+    
+def load_next(row=None,pos=None):
+    '''2 arguments accepted:
+        row --> 1, upstream needle (middle flow cell): 2, downstream needle (top flow cell)
+        pos --> 1 to 6 from inboard to outboard.'''
+    if not(row and pos):
+        print(load_sample.__doc__)
+    else:
+        if row==1:
+            move(sol_en.y,8)
+            sp=9 # pcr tube spacing#
+            sol_ctrl.pump_mvA(70) ## push the sample back in the pcr tube
+            sol_ctrl.wait()
+            sleep(2)
+            sol_ctrl.sv_pcr_tubes.set(0) ## move the sample loader down before moving sh in x direction
+            pos_sh=np.linspace(-70, -70-5*sp,6)
+            sleep(1)
+            sol_ctrl.valve_pos.set("sam")
+            sleep(2)
+            sol_ctrl.pump_mvA(80) ## fill the tubing with water only upto the end of the flow channel
+            sol_ctrl.wait()
+            #move the needle to the sample position
+            sh.move(pos_sh[pos-1])
+            sol_ctrl.sv_pcr_tubes.set(1) ## move the sample loader up
+            sleep(1)
+            sol_ctrl.pump_mvA(180)
+            sol_ctrl.wait()
+#            pp.umvA(160) ## fill the tubing with water only upto the end of the flow channel
+        if row==2:
+            move(sol_en.y,-1.0)
+            sp=9 # pcr tube spacing#
+            pos_sh=np.linspace(-16, -16-5*sp,6)
+            sol_ctrl.pump_mvA(75) ## push the sample back in the pcr tube
+            sol_ctrl.wait()
+            sol_ctrl.sv_pcr_tubes.set(0)
+            sol_ctrl.sv_pcr_tubes.set(0) ## move the sample loader down before moving sh in x direction
+            sleep(1)
+            sh.move(0) # keep the needle at drain position and fill the needle upto the flow cell
+            sol_ctrl.vc_4port.set(1) ## switch port to select row 2 sample pickup
+            sleep(1)
+            sol_ctrl.valve_pos.set("res")
+            sleep(1)
+            sol_ctrl.pump_mvA(150)
+            sleep(7)
+            sol_ctrl.valve_pos.set("sam")
+            sleep(1)
+            sol_ctrl.pump_mvA(70) ## fill the tubing with water only upto the end of the flow channel
+            sleep(7)
+            #move the needle to the sample position
+            sh.move(pos_sh[pos-1])
+            sol_ctrl.sv_pcr_tubes.set(1) ## move the sample loader up
+            sleep(1)
+            sol_ctrl.pump_mvA(170)  
         
+#upstream needle (row 1) (middle sample cell)
+def load_water(row=None,):
+    ''' arguments accepted:
+        row --> 1, upstream needle (middle flow cell): 2, downstream needle (top flow cell)
+        '''
+    if not(row):
+        print(load_water.__doc__)
+    else:
+        if row==1:
+            sol_ctrl.pump_mvA(80) ## push the sample back in the pcr tube
+            sol_ctrl.wait()
+            sol_ctrl.sv_pcr_tubes.set(0) ## move  sample handler down
+            sh.move(0) # position the needle on drain location
+            sol_ctrl.vc_4port.set(1) # selects position 4 port on VICI
+            sleep(1)
+            sol_ctrl.sv_pcr_tubes.set(1) ## move  sample handler up
+            sleep(1)
+            sol_ctrl.sv_sel.set("water") # select water port
+            sleep(1)
+            sol_ctrl.water_pump.set("on") # start washing
+            sleep(1) # washing time
+            sol_ctrl.water_pump.set("off")
+        if row==2:
+            sol_ctrl.pump_mvA(75) ## push the sample back in the pcr tube
+            sleep(7)
+            sol_ctrl.sv_pcr_tubes.set(0) ## move  sample handler down
+            sh.move(0) # position the needle on drain location
+            sol_ctrl.vc_4port.set(0) # selects position 4 port on VICI -- drain 2
+            sleep(1)
+            sol_ctrl.sv_pcr_tubes.set(1) ## move  sample handler down
+            sleep(1)
+            sol_ctrl.sv_sel.set("water") # select water port
+            sleep(1)
+            sol_ctrl.water_pump.set("on") # start washing
+            sleep(1) # washing time
+            sol_ctrl.water_pump.set("off")
+            
+#upstream needle (row 1) (middle sample cell)
+def dry_row(row=None,t2=None):
+    ''' arguments accepted:
+        row --> 1, upstream needle (middle flow cell): 2, downstream needle (top flow cell)
+        drying time (s)
+        '''
+    if not(row and t2):
+        print(dry_row.__doc__)
+    else:
+        if row==1:
+            sol_ctrl.sv_pcr_tubes.set(0) ## move  sample handler down
+            sh.move(0) # position the needle on drain location
+            sol_ctrl.vc_4port.set(1) # selects position 4 port on VICI
+            sleep(1)
+            sol_ctrl.sv_pcr_tubes.set(1) ## move  sample handler up
+            sleep(1)
+            sol_ctrl.sv_drain1.set("on") # vaccum pump on drain1 selected
+            sleep(1)
+            sol_ctrl.sv_sel.set("N2") # select dry nitrogen port
+            sleep(1)
+            sol_ctrl.sv_N2.set("on") # start drying
+            sleep(t2) # drying time
+            sol_ctrl.sv_N2.set("off") # turn dry nitrogen off
+            sleep(1)
+            sol_ctrl.sv_drain1.set("off") # turn off drain
+            sleep(1)
+            sol_ctrl.sv_pcr_tubes.set(0) ## move  sample handler down        
+            sleep(1)
+        if row==2:
+            sol_ctrl.pump_mvA(75) ## push the sample back in the pcr tube
+            sleep(7)
+            sol_ctrl.sv_pcr_tubes.set(0) ## move  sample handler down
+            sh.move(0) # position the needle on drain location
+            sol_ctrl.vc_4port.set(0) # selects position 4 port on VICI -- drain 2
+            sleep(1)
+            sol_ctrl.sv_pcr_tubes.set(1) ## move  sample handler down
+            sleep(1)
+            sol_ctrl.sv_drain2.set("on") # vaccum pump on drain1 selected
+            sleep(1)
+            sol_ctrl.sv_sel.set("N2") # select dry nitrogen port
+            sleep(1)
+            sol_ctrl.sv_N2.set("on") # start drying
+            sleep(t2) # drying time
+            sol_ctrl.sv_N2.set("off") # turn dry nitrogen off
+            sleep(1)
+            sol_ctrl.sv_drain2.set("off") # turn off drain
+            sleep(1)
+            sol_ctrl.sv_sel.set("water") # back to water port
+            sleep(1)
+            sol_ctrl.sv_pcr_tubes.set(0) ## move  sample handler down        
+            sleep(1)
+
+                      

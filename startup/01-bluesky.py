@@ -9,7 +9,7 @@ from bluesky.callbacks.olog import logbook_cb_factory
 # Subscribe metadatastore to documents.
 # If this is removed, data is not saved to metadatastore.
 from metadatastore.mds import MDS
-from databroker import Broker, get_table, get_events
+from databroker import Broker
 from databroker.core import register_builtin_handlers
 from filestore.fs import FileStore
 
