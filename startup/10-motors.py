@@ -47,14 +47,6 @@ class SlitsCenterAndGap(Device):
 	y = Cpt(EpicsMotor, '-Ax:Y}Mtr')
 	dy = Cpt(EpicsMotor, '-Ax:dY}Mtr')
 
-class Transfocator(Device):
-	za = Cpt(EpicsMotor,'-Ax:Z}Mtr')
-	zv = Cpt(EpicsMotor,'-Ax:Z1}Mtr')
-	x1 = Cpt(EpicsMotor,'-Ax:UX}Mtr')
-	y1 = Cpt(EpicsMotor,'-Ax:UY}Mtr')
-	x2 = Cpt(EpicsMotor,'-Ax:DX}Mtr')
-	y2 = Cpt(EpicsMotor,'-Ax:DY}Mtr')
-
 class HRM1(Device):
 	y = Cpt(EpicsMotor, '-Ax:Y}Mtr')
 	pitch = Cpt(EpicsMotor, '-Ax:Th}Mtr')
@@ -70,7 +62,7 @@ class HRM2(Device):
 class StageScan(Device):
 	x = Cpt(EpicsMotor, '-Ax:X}Mtr')
 	y = Cpt(EpicsMotor, '-Ax:Y}Mtr')
-	r = x = Cpt(EpicsMotor, '-Ax:Rot}Mtr')
+	r = Cpt(EpicsMotor, '-Ax:Rot}Mtr')
 
 class Microscope(Device):
 	x = Cpt(EpicsMotor, '-Ax:X}Mtr')
@@ -91,15 +83,31 @@ class SAXSBeamstop(XYMotor):
     
 class SolutionScatteringEnclosure(Device):
     y = Cpt(EpicsMotor, '-Ax:Y}Mtr')
+    yu = Cpt(EpicsMotor, '-Ax:YU}Mtr')
     # xu: upper horizontal stage
     # xl: lower horizontal stage
+
+class ScanningStack1(Device):
+    x = Cpt(EpicsMotor, 'Ax:X}Mtr')
+    y = Cpt(EpicsMotor, 'Ax:Y}Mtr')
+
 
 class ScanningStack2(Device):
     x = Cpt(EpicsMotor, '{Ax:X}Mtr')
     y = Cpt(EpicsMotor, '{Ax:Y}Mtr')
     rx = Cpt(EpicsMotor, '{Ax:RX}Mtr')
     ry = Cpt(EpicsMotor, '{Ax:RY}Mtr')    
-    
+
+class WAXS1(Device):
+    x=Cpt(EpicsMotor, 'Ax:X}Mtr')
+    y=Cpt(EpicsMotor, 'Ax:Y}Mtr')
+    z=Cpt(EpicsMotor, 'Ax:Z}Mtr')      
+          
+class WAXS2(Device):
+    x=Cpt(EpicsMotor, 'Ax:X}Mtr')
+    y=Cpt(EpicsMotor, 'Ax:Y}Mtr')
+    z=Cpt(EpicsMotor, 'Ax:Z}Mtr')      
+   
 #######################################################
 ### LIX First Optical Enclosure FOE Optics Hutch A
 #######################################################
@@ -133,6 +141,8 @@ mps = Blades('XF:16IDA-OP{Slt:1', name='mps')
 ## Beam Position Monitor
 bpm_pos = XYMotor('XF:16IDB-BI{BPM:1', name='bpm_pos')
 
+bpm2 = EpicsMotor('XF:16IDC-BI{BPM:2-Ax:Y}Mtr', name='bpm2')
+
 ## Secondary Source Aperture (SSA)
 ssa = XYMotor('XF:16IDB-OP{Slt:SSA-', name='ssa')
 
@@ -158,10 +168,6 @@ vbm_zoom = EpicsMotor('XF:16IDB-BI{FS:VBM-Ax:Zm}Mtr', name='vbm_zoom')
 #######################################################
 ### LIX Experimental End Station Enclosure EESE Hutch C
 #######################################################
-
-
-## Transfocator CRLs 
-crl = Transfocator('XF:16IDC-OP{CRL', name='crl')
 
 ## Harmonic Rejection Mirror HRM1
 hrm1 = HRM1('XF:16IDC-OP{Mir:HRM1', name='hrm1')
@@ -193,6 +199,12 @@ smf = StageScan('XF:16IDC-ES:InAir{Stg:ScanF', name='smf')
 
 ## Microscope
 microscope = Microscope('XF:16IDC-ES:InAir{Mscp:1', name='microscope')
+
+#########################################
+## Scanning Stack 1--Coarse Stage
+#########################################
+ss1 = ScanningStack1('XF:16IDC-ES:InAir{Stg:ScanC-', name='ss1')
+
 
 #########################################
 ## Scanning probe stack with Newport stages 
@@ -229,7 +241,7 @@ sol_en = SolutionScatteringEnclosure('XF:16IDC-ES:Sol{Enc', name='sol_en')
 waxs1 = XYZMotor('XF:16IDC-ES{Stg:WAXS1', name='waxs1')
 
 ## WAXS Detector Positioning Stage 2
-waxs1 = XYZMotor('XF:16IDC-ES{Stg:WAXS2', name='waxs2')
+waxs2 = XYZMotor('XF:16IDC-ES{Stg:WAXS2', name='waxs2')
 
 ## WAXS Beamstop
 wbs = WAXSBeamstop('XF:16IDC-ES{BS:WAXS', name='wbs')
@@ -237,11 +249,16 @@ wbs = WAXSBeamstop('XF:16IDC-ES{BS:WAXS', name='wbs')
 ## SAXS Detector Positioning Stage
 saxs = XYZMotor('XF:16IDC-ES{Stg:SAXS', name='saxs')
 
+## WAXS Detector Positioning Stage
+waxs1 = WAXS1('XF:16IDC-ES{Stg:WAXS1-', name='waxs1')
+waxs2 = WAXS2('XF:16IDC-ES{Stg:WAXS2-', name='waxs2')
+
 ## SAXS Beamstop
 sbs = SAXSBeamstop('XF:16IDC-ES{BS:SAXS', name='sbs')
 
 ## shutter # TODO: Check with Shirish and Lin and remove it
 #shutter = EpicsMotor('XF:16ID-TS{EVR:C1-Out:FP0}Src:Scale-SP', name='shutter')
 
+focus = EpicsMotor('XF:16IDC-ES:InAir{Mscp:1-Ax:F}Mtr', name='focus')
 sh=EpicsMotor('XF:16IDC-ES:Sol{Enc-Ax:XL}Mtr', name='hand_low_encl')
-SolExU=EpicsMotor('XF:16IDC-ES:Sol{Enc-Ax:XU}Mtr', name='Sol_Up_encl')
+#SolExU=EpicsMotor('XF:16IDC-ES:Sol{Enc-Ax:XU}Mtr', name='Sol_Up_encl')

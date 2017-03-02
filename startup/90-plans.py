@@ -43,7 +43,8 @@ def hplc_scan(detectors, monitors, *, md=None):
 
     return (yield from inner())
 
-def collect_hplc():
+def collect_hplc(sample_name):
+    change_sample(sample_name)
     #RE(hplc_scan(detectors=[pil1M, pilW1, pilW2, em2, usb4000], monitors=[]))
-    RE(hplc_scan(detectors=[pil1M, pilW1, pilW2, em2], monitors=[]))
+    RE(hplc_scan(detectors=[pil1M, pilW1, pilW2, em1, em2], monitors=[]))
 

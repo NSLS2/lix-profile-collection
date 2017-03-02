@@ -66,13 +66,14 @@ class LIXMicroscopeCamera(StandardProsilica):
 
     over1 = Cpt(OverlayPlugin, 'Over1:')
 
+cam01 = StandardProsilica("XF:16IDA-BI{FS:1-Cam:1}", name="cam01")
 cam02 = StandardProsilica("XF:16IDA-BI{FS:2-Cam:1}", name="cam02")
 cam03 = StandardProsilica("XF:16IDA-BI{FS:3-Cam:1}", name="cam03")
 cam04 = StandardProsilica("XF:16IDA-BI{FS:4-Cam:1}", name="cam04")
 cam05 = StandardProsilica("XF:16IDB-BI{FS:5-Cam:1}", name="cam05")
-cam06 = StandardProsilica("XF:16IDC-ES:InAir{Mscp:1-Cam:1}", name="cam06")
+cam06 = LIXMicroscopeCamera("XF:16IDC-ES:InAir{Mscp:1-Cam:1}", name="cam06")
 
-all_standard_pros = [cam02, cam03, cam04, cam05, cam06]
+all_standard_pros = [cam01, cam02, cam03, cam04, cam05, cam06]
 for camera in all_standard_pros:
     camera.read_attrs= ['stats1', 'stats2','stats3'] #, 'tiff']
     camera.stats1.read_attrs = ['total', 'centroid']
