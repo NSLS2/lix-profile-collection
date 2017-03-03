@@ -38,7 +38,7 @@ def login():
     RE.md['data_path'] = data_path
     
     dw,mo,da,tt,yr = time.asctime().split()
-    logfile = ("log-%s." % username)+yr+mo+("%02d_" % int(da))+tt
+    logfile = data_path+("log-%s." % username)+yr+mo+("%02d_" % int(da))+tt
     ip = get_ipython()
     ip.magic("logstop")
     ip.magic("logstart -ort %s" % logfile)

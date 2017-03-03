@@ -108,3 +108,55 @@ class HPLC(Device):
         self.bypass.set(0)
 
 hplc = HPLC('XF:16IDC-ES:Sol{ctrl}HPLC', name='hplc', fs=None, read_filepath=None, write_filepath=None)
+
+def read_Shimadzu_section(section):
+    """ the chromtographic data section starts with a header
+        followed by 2-column data
+        the input is a collection of strings
+    """
+    xdata = []
+    ydata = []
+    for line in section:
+        tt = line.split()
+        if len(tt)==2:
+            try:
+                x=float(tt[0])
+            except ValueError:
+                continue
+            try:
+                y=float(tt[1])
+            except ValueError:
+                continue
+            xdata.append(x)
+            ydata.append(y)
+    return xdata,ydata
+
+def read_Shimadzu_datafile(fn):
+    """ read the ascii data from Shimadzu Lab Solutions software
+        the file appear to be split in to multiple sections, each starts with [section name], 
+        and ends with a empty line
+        returns the data in the sections titled 
+            [LC Chromatogram(Detector A-Ch1)] and [LC Chromatogram(Detector B-Ch1)]
+    """
+    fd = open(fn, "r")
+    lines = fd.read().split('\n')
+    fd.close()
+    
+    sections = []
+    while True:
+        try:
+            idx = lines.index('')
+        except ValueError:
+            break
+        if idx>0:
+            sections.append(lines[:idx])
+        lines = lines[idx+1:]
+    
+    data = []
+    for s in sections:
+        if s[0][:16]=="[LC Chromatogram":
+            x,y = read_Shimadzu_section(s)
+            data.append([s[0],x,y])
+    
+    return data
+
