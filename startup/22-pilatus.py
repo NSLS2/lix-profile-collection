@@ -6,9 +6,8 @@ from ophyd import ( Component as Cpt, ADComponent,
 from ophyd.areadetector.filestore_mixins import FileStoreBulkWrite
 
 from ophyd.utils import set_and_wait
-from filestore.handlers_base import HandlerBase
+from filestore.handlers_base import PilatusCBFHandler
 import filestore.api as fs
-import fabio
 import os
 
 
@@ -81,40 +80,6 @@ class PilatusFilePlugin(Device, FileStoreBulkWrite):
         
     def get_frames_per_point(self):
         return 1
-
-class PilatusCBFHandler(HandlerBase):
-    specs = {'AD_CBF'} | HandlerBase.specs
-
-    def __init__(self, rpath, template, filename, frame_per_point=1, initial_number=1):
-        self._path = rpath
-        self._fpp = frame_per_point
-        self._template = template
-        self._filename = filename
-        self._initial_number = initial_number
-
-    def __call__(self, point_number):
-        start, stop = self._initial_number + point_number * self._fpp, (point_number + 2) * self._fpp
-        ret = []
-        # commented out by LY to test scan speed imperovement, 2017-01-24
-        for j in range(start, stop):
-            fn = self._template % (self._path, self._filename, j)
-            #print("call Open File: ", fn)
-            img = fabio.open(fn)
-            ret.append(img.data)
-        return np.array(ret).squeeze()
-
-    def get_file_list(self, datum_kwargs_gen):
-        file_list = []
-        for dk in datum_kwargs_gen:
-            point_number = dk['point_number']
-            start, stop = self._initial_number + point_number * self._fpp, (point_number + 2) * self._fpp
-            ret = []
-            for j in range(start, stop):
-                fn = self._template % (self._path, self._filename, j)
-                #print("Will open file: ", fn)
-                file_list.append(fn)
-        return file_list
-
 
 
 class LIXPilatus(SingleTrigger, PilatusDetector):
