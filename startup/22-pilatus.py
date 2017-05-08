@@ -83,6 +83,7 @@ class PilatusFilePlugin(Device, FileStoreBulkWrite):
 
 
 class LIXPilatus(SingleTrigger, PilatusDetector):
+    # this does not get root is input because it is hardcoded above
     file = Cpt(PilatusFilePlugin, suffix="cam1:",
                write_path_template="")
 
@@ -96,8 +97,8 @@ class LIXPilatus(SingleTrigger, PilatusDetector):
     stats3 = Cpt(StatsPlugin, 'Stats3:')
     stats4 = Cpt(StatsPlugin, 'Stats4:')
 
-    def __init__(self, *args, **kwargs):
-        self.detector_id = kwargs.pop('detector_id')
+    def __init__(self, *args, detector_id, **kwargs):
+        self.detector_id = detector_id
         super().__init__(*args, **kwargs)
 
 
@@ -105,6 +106,7 @@ def pilatus_number_reset(status):
     for det in pilatus_detectors:
         val = 1 if status else 0
         det.file.reset_file_number.put(val)
+
 
 def pilatus_ct_time(exp):
     pil1M.cam.acquire_time.put(exp)
@@ -122,4 +124,4 @@ pilW2 = LIXPilatus("XF:16IDC-DT{Det:WAXS2}", name="pilW2", detector_id="WAXS2")
 pilatus_detectors = [pil1M, pilW1, pilW2]
 
 for det in pilatus_detectors:
-   det.read_attrs = ['file']
+    det.read_attrs = ['file']
