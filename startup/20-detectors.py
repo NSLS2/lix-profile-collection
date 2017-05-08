@@ -1,4 +1,4 @@
-from ophyd import (SingleTrigger, TIFFPlugin, 
+from ophyd import (SingleTrigger, TIFFPlugin,
                    ImagePlugin, StatsPlugin, DetectorBase, HDF5Plugin,
                    ROIPlugin, OverlayPlugin, AreaDetector)
 
@@ -8,6 +8,7 @@ from ophyd.areadetector.filestore_mixins import (FileStoreTIFFIterativeWrite,
                                                  FileStoreHDF5IterativeWrite)
 
 from ophyd import Component as Cpt
+
 
 class TIFFPluginWithFileStore(TIFFPlugin, FileStoreTIFFIterativeWrite):
     def make_filename(self):
@@ -25,9 +26,11 @@ class TIFFPluginWithFileStore(TIFFPlugin, FileStoreTIFFIterativeWrite):
         self.write_path_template = path+rpath
         super().stage()
 
+
 class LixProsilicaDetector(DetectorBase):
     _html_docs = ['prosilicaDoc.html']
     cam = Cpt(cam.ProsilicaDetectorCam, '')
+
 
 class StandardProsilica(SingleTrigger, LixProsilicaDetector):
     #tiff = Cpt(TIFFPluginWithFileStore,
@@ -56,13 +59,15 @@ class StandardProsilica(SingleTrigger, LixProsilicaDetector):
 class StandardProsilicaWithTIFF(StandardProsilica):
     tiff = Cpt(TIFFPluginWithFileStore,
                suffix='TIFF1:',
-               write_path_template='/GPFS/xf16id/exp_path/')
+               write_path_template='/GPFS/xf16id/exp_path/',
+               root='/GPFS')
 
 
 class LIXMicroscopeCamera(StandardProsilica):
     tiff = Cpt(TIFFPluginWithFileStore,
                suffix='TIFF1:',
-               write_path_template='/GPFS/xf16id/exp_path/')
+               write_path_template='/GPFS/xf16id/exp_path/',
+               root='/GPFS')
 
     over1 = Cpt(OverlayPlugin, 'Over1:')
 
