@@ -48,7 +48,7 @@ class PilatusFilePlugin(Device, FileStoreBulkWrite):
         #rpath = str(proposal_id)+"/"+str(run_id)+"/"
         #fpath = path + rpath
         #makedirs(fpath)
-        
+
         # modified by LY
         # camserver saves data to the local ramdisk, a background process then move them to data_path
         # interesting to note that camserver saves the data to filename.tmp, then rename it filename after done writing
@@ -57,11 +57,11 @@ class PilatusFilePlugin(Device, FileStoreBulkWrite):
         if self.parent.name == first_Pilatus():
             #print("first Pilatus is %s" % self.parent.name)
             change_path()
-        
+
         #set_and_wait(self.file_path, "/ramdisk/", timeout=99999)
         set_and_wait(self.file_path, data_path, timeout=99999)
         set_and_wait(self.file_name, current_sample, timeout=99999)
-        
+
         super().stage()
         res_kwargs = {'template': self.file_template.get(),
                       'filename': self.file_name.get(),
@@ -69,15 +69,15 @@ class PilatusFilePlugin(Device, FileStoreBulkWrite):
                       'initial_number': self.file_number.get()}
         #self._resource = fs.insert_resource('AD_CBF', rpath, res_kwargs, root=path)
         self._resource = fs.insert_resource('AD_CBF', data_path, res_kwargs, root="/")
-        
+
         if self.parent.name == first_Pilatus():
             caput("XF:16IDC-ES:Sol{ctrl}ready", 1)
 
-    def unstage(self):        
+    def unstage(self):
         super().unstage()
         #if self.parent.name == first_Pilatus():
         #    release_lock()
-        
+
     def get_frames_per_point(self):
         return 1
 
@@ -111,7 +111,9 @@ def pilatus_ct_time(exp):
     pilW1.cam.acquire_time.put(exp)
     pilW2.cam.acquire_time.put(exp)
 
+
 db.fs.register_handler('AD_CBF', PilatusCBFHandler)
+
 
 pil1M = LIXPilatus("XF:16IDC-DT{Det:SAXS}", name="pil1M", detector_id="SAXS")
 pilW1 = LIXPilatus("XF:16IDC-DT{Det:WAXS1}", name="pilW1", detector_id="WAXS1")
@@ -121,5 +123,3 @@ pilatus_detectors = [pil1M, pilW1, pilW2]
 
 for det in pilatus_detectors:
    det.read_attrs = ['file']
-
-
