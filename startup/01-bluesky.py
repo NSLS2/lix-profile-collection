@@ -5,6 +5,7 @@ from functools import partial
 from bluesky.run_engine import RunEngine
 from bluesky.callbacks import *
 from bluesky.callbacks.olog import logbook_cb_factory
+from bluesky.spec_api import setup_livetable
 
 # Subscribe metadatastore to documents.
 # If this is removed, data is not saved to metadatastore.
@@ -76,3 +77,10 @@ stop = RE.stop
 RE.md['group'] = 'lix'
 RE.md['beamline_id'] = 'LIX'
 
+# this should get rid of the the live plots but keep the live table
+gs.SUB_FACTORIES['dscan'] = [setup_livetable]
+gs.SUB_FACTORIES['ascan'] = [setup_livetable]
+gs.SUB_FACTORIES['d2scan'] = [setup_livetable]
+gs.SUB_FACTORIES['a2scan'] = [setup_livetable]
+gs.SUB_FACTORIES['ct'] = [setup_livetable]
+gs.SUB_FACTORIES['mesh'] = [setup_livetable]

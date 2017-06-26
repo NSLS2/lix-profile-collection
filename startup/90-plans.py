@@ -43,8 +43,14 @@ def hplc_scan(detectors, monitors, *, md=None):
 
     return (yield from inner())
 
-def collect_hplc(sample_name):
+def collect_hplc(sample_name,exp):#, CV=24, flowrate=0.5)
     change_sample(sample_name)
+    #time = CV/flowrate
+    #no_of_cts = time * 60/exp
+    #set_pil_num_images(no_of_cts)
+    pilatus_set_Nimage(1)
+    pilatus_ct_time(exp)
     #RE(hplc_scan(detectors=[pil1M, pilW1, pilW2, em2, usb4000], monitors=[]))
+    #RE(hplc_scan(detectors=[pil1M_ext, pilW1_ext, pilW2_ext, em1, em2], monitors=[]))
     RE(hplc_scan(detectors=[pil1M, pilW1, pilW2, em1, em2], monitors=[]))
 

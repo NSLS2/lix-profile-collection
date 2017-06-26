@@ -67,6 +67,8 @@ class StageScan(Device):
 class Microscope(Device):
 	x = Cpt(EpicsMotor, '-Ax:X}Mtr')
 	y = Cpt(EpicsMotor, '-Ax:Y}Mtr')
+	rx = Cpt(EpicsMotor, '-Ax:Rx}Mtr')
+	ry = Cpt(EpicsMotor, '-Ax:Ry}Mtr')
 	focus = Cpt(EpicsMotor, '-Ax:F}Mtr')
 	polarizer = Cpt(EpicsMotor, '-Ax:Pol}Mtr')
 	zoom = Cpt(EpicsMotor, '-Ax:Zm}Mtr')
@@ -81,22 +83,9 @@ class SAXSBeamstop(XYMotor):
 	tilt1 = Cpt(EpicsMotor, '-Ax:T1}Mtr')
 	tilt2 = Cpt(EpicsMotor, '-Ax:T2}Mtr')
     
-class SolutionScatteringEnclosure(Device):
-    y = Cpt(EpicsMotor, '-Ax:Y}Mtr')
-    yu = Cpt(EpicsMotor, '-Ax:YU}Mtr')
-    # xu: upper horizontal stage
-    # xl: lower horizontal stage
-
 class ScanningStack1(Device):
     x = Cpt(EpicsMotor, 'Ax:X}Mtr')
     y = Cpt(EpicsMotor, 'Ax:Y}Mtr')
-
-
-class ScanningStack2(Device):
-    x = Cpt(EpicsMotor, '{Ax:X}Mtr')
-    y = Cpt(EpicsMotor, '{Ax:Y}Mtr')
-    rx = Cpt(EpicsMotor, '{Ax:RX}Mtr')
-    ry = Cpt(EpicsMotor, '{Ax:RY}Mtr')    
 
 class WAXS1(Device):
     x=Cpt(EpicsMotor, 'Ax:X}Mtr')
@@ -106,7 +95,11 @@ class WAXS1(Device):
 class WAXS2(Device):
     x=Cpt(EpicsMotor, 'Ax:X}Mtr')
     y=Cpt(EpicsMotor, 'Ax:Y}Mtr')
-    z=Cpt(EpicsMotor, 'Ax:Z}Mtr')      
+    z=Cpt(EpicsMotor, 'Ax:Z}Mtr')
+ 
+class StageScanF(Device):
+	x = Cpt(EpicsMotor, '-Ax:X}Mtr')
+	y = Cpt(EpicsMotor, '-Ax:Y}Mtr')
    
 #######################################################
 ### LIX First Optical Enclosure FOE Optics Hutch A
@@ -141,7 +134,7 @@ mps = Blades('XF:16IDA-OP{Slt:1', name='mps')
 ## Beam Position Monitor
 bpm_pos = XYMotor('XF:16IDB-BI{BPM:1', name='bpm_pos')
 
-bpm2 = EpicsMotor('XF:16IDC-BI{BPM:2-Ax:Y}Mtr', name='bpm2')
+bpm2 = XYMotor('XF:16IDC-BI{BPM:2', name='bpm2')
 
 ## Secondary Source Aperture (SSA)
 ssa = XYMotor('XF:16IDB-OP{Slt:SSA-', name='ssa')
@@ -179,7 +172,7 @@ hrm2 = HRM2('XF:16IDC-OP{Mir:HRM2', name='hrm2')
 dda = SlitsCenterAndGap('XF:16IDC-OP{Slt:DDA', name='dda')
 
 ## Beam Position Monitor (BPM)
-bimy = EpicsMotor('XF:16IDC-BI{BPM:2-Ax:Y}Mtr', name='bimy')
+#bimy = EpicsMotor('XF:16IDC-BI{BPM:2-Ax:Y}Mtr', name='bimy')
 
 ## Guard Slits 1
 sg1 = SlitsCenterAndGap('XF:16IDC-OP{Slt:G1', name='sg1')
@@ -195,7 +188,7 @@ sg2 = SlitsCenterAndGap('XF:16IDC-OP{Slt:G2', name='sg2')
 smc = XYMotor('XF:16IDC-ES:InAir{Stg:ScanC', name='smc')
 
 ## Fine-resolution scanning
-smf = StageScan('XF:16IDC-ES:InAir{Stg:ScanF', name='smf')
+smf = XYMotor('XF:16IDC-ES:InAir{Stg:ScanF', name='smf')
 
 ## Microscope
 microscope = Microscope('XF:16IDC-ES:InAir{Mscp:1', name='microscope')
@@ -203,26 +196,9 @@ microscope = Microscope('XF:16IDC-ES:InAir{Mscp:1', name='microscope')
 #########################################
 ## Scanning Stack 1--Coarse Stage
 #########################################
-ss1 = ScanningStack1('XF:16IDC-ES:InAir{Stg:ScanC-', name='ss1')
+#ss1 = ScanningStack1('XF:16IDC-ES:InAir{Stg:ScanC-', name='ss1')
 
 
-#########################################
-## Scanning probe stack with Newport stages 
-#########################################
-ss2 = ScanningStack2('XF:16IDC-ES:Scan2', name='ss2')
-
-#########################################
-## Solution scattering 
-#########################################
-
-sol_en = SolutionScatteringEnclosure('XF:16IDC-ES:Sol{Enc', name='sol_en')
-
-# test ss2.rx
-
-#ss2.rx=EpicsMotor('XF:16IDC-ES:Scan2{Ax:RX}Mtr', name='ss2.rx')
-
-# SolHdl
-        
 #########################################
 ## In-vaccum GISAXS/GID module
 #########################################
@@ -259,6 +235,3 @@ sbs = SAXSBeamstop('XF:16IDC-ES{BS:SAXS', name='sbs')
 ## shutter # TODO: Check with Shirish and Lin and remove it
 #shutter = EpicsMotor('XF:16ID-TS{EVR:C1-Out:FP0}Src:Scale-SP', name='shutter')
 
-focus = EpicsMotor('XF:16IDC-ES:InAir{Mscp:1-Ax:F}Mtr', name='focus')
-sh=EpicsMotor('XF:16IDC-ES:Sol{Enc-Ax:XL}Mtr', name='hand_low_encl')
-#SolExU=EpicsMotor('XF:16IDC-ES:Sol{Enc-Ax:XU}Mtr', name='Sol_Up_encl')

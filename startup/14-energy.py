@@ -20,7 +20,8 @@ def getE(bragg=None):
 # Set energy to the given value, if calc_only=false otherwise only calculate
 # when Bragg = 9.6332, Y = -0.1
 # ov is the correction needed to get actual Y value
-def setE(energy, calc_only=True, ov=-10.243):
+# sc ov revised from -10.243 to ov = -28.5609 @ 11th April 2017
+def setE(energy, calc_only=True, ov=-28.5609):
     # Si(111) lattice constant is 5.43095A
     d = 5.43095 
     offset = 20.0
@@ -39,6 +40,10 @@ def setE(energy, calc_only=True, ov=-10.243):
 def XBPM_pos(navg=5):
     xpos = 0.
     ypos = 0.
+    px = PV('SR:C16-BI{XBPM:1}Pos:X-I')
+    py = PV('SR:C16-BI{XBPM:1}Pos:Y-I')
+    if px.connected==False or py.connected==False:
+        return (np.nan, np.nan)
     for i in range(navg):
         xpos += caget('SR:C16-BI{XBPM:1}Pos:X-I')
         ypos += caget('SR:C16-BI{XBPM:1}Pos:Y-I')        
@@ -69,6 +74,7 @@ def move_gap(g1):
         servo_state += caget("SR:C16-ID:G1{IVU:1-Mtr:2}Sw:Serv-On")
         servo_state += caget("SR:C16-ID:G1{IVU:1-Mtr:3}Sw:Serv-On")
         servo_state += caget("SR:C16-ID:G1{IVU:1-Mtr:4}Sw:Serv-On")
+        sleep(1)
         servo_state += caget("SR:C16-ID:G1{IVU:1-Mtr:1}MvSt")
         servo_state += caget("SR:C16-ID:G1{IVU:1-Mtr:2}MvSt")
         servo_state += caget("SR:C16-ID:G1{IVU:1-Mtr:3}MvSt")
@@ -102,7 +108,7 @@ class Energy(PseudoPositioner):
     y = Cpt(EpicsMotor, 'XF:16IDA-OP{Mono:DCM-Ax:Of2}Mtr')
 
     # Variables
-    ov = Cpt(Signal, value=-10.243, 
+    ov = Cpt(Signal, value=-28.5609, 
              doc='ov is the correction needed to get actual Y value')
 
     @pseudo_position_argument

@@ -31,9 +31,11 @@ def login():
     RE.md['run_id'] = run_id
     
     path = '/GPFS/xf16id/exp_path/'
+    #path = '/exp_path/'
     rpath = str(proposal_id)+"/"+str(run_id)+"/"
     data_path = path + rpath
     makedirs(data_path)
+    makedirs(data_path+"processed/")
     
     RE.md['data_path'] = data_path
     
@@ -66,26 +68,33 @@ def get_lock():
         ret = read_lock()
         if ret !=0 and ret!=os.getpid():
             raise RuntimeError("data collection lock exist. you can\'t collect while others are collecting")
+    else:
+        touch(collection_lock_file)
+        os.chmod(collection_lock_file, 0o777)
     
     write_lock(os.getpid())
     
 def release_lock():
+    if os.path.exists(collection_lock_file):
+        ret = read_lock()
+        if ret !=0 and ret!=os.getpid():
+            raise RuntimeError("data collection lock exist. you can\'t release a lock created by others")
+
     write_lock(0)
             
 def change_path():
     global data_path 
     global collection_lock_file
-    link_to_data_path = "/GPFS/xf16id/current_data"
+    #link_to_data_path = "/GPFS/xf16id/current_data"
     
     if username==None or proposal_id==None or run_id==None:
         login()
     
     # to be safe, need to have some kind of lock
     #get_lock()
-    if os.path.exists(link_to_data_path):
-        os.remove(link_to_data_path)
-    os.symlink(data_path, link_to_data_path)
-    os.chmod(link_to_data_path, stat.S_IRWXO | stat.S_IRWXO)
+    #if os.path.exists(link_to_data_path):
+    #    os.remove(link_to_data_path)
+    #os.symlink(data_path, link_to_data_path)
 
     
 def logoff():
