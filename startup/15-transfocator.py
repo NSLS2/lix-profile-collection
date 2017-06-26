@@ -42,14 +42,14 @@ class Transfocator(Device):
         if grp<1 or grp>self.num_lens_group:
             print("invalid lens group: # %d" % grp)
             return
-        self.lens_group[grp-1].set(state_inserted)
+        self.lens_group[grp-1].put(state_inserted)
         self.wait()
         
     def remove_grp(self, grp):
         if grp<1 or grp>self.num_lens_group:
             print("invalid lens group: # %d" % grp)
             return
-        self.lens_group[grp-1].set(state_removed)
+        self.lens_group[grp-1].put(state_removed)
         self.wait()        
         
 
