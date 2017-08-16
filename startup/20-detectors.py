@@ -128,19 +128,13 @@ class StandardProsilicaWithTIFF(StandardProsilica):
     tiff = Cpt(TIFFPluginWithFileStore,
                suffix='TIFF1:',
                write_path_template='/GPFS/xf16id/exp_path/',
-               root='/GPFS')
-
+               fs=db.fs)
 
 class LIXMicroscopeCamera(StandardProsilica):
     tiff = Cpt(TIFFPluginWithFileStore,
                suffix='TIFF1:',
                write_path_template='/GPFS/xf16id/exp_path/',
-<<<<<<< HEAD
                fs=db.fs)
-=======
-               root='/GPFS')
->>>>>>> f6cd9319bc2f1bb0f7f9aceb32be59ca260f49cf
-
     over1 = Cpt(OverlayPlugin, 'Over1:')
 
 def setup_cam(pv, name):
@@ -173,18 +167,18 @@ all_standard_pros = [cam01, cam02, cam03, cam04, cam05, cam06]
 
 for camera in all_standard_pros:
     if camera!=None:
-        camera.read_attrs= ['stats1', 'stats2','stats3'] #, 'tiff']
-        camera.stats1.read_attrs = ['total', 'centroid']
+        camera.read_attrs= ['stats1', 'stats2','stats3']
+        camera.stats1.read_attrs = ['total', 'centroid', 'profile_average']
         camera.stats2.read_attrs = ['total', 'centroid']
         camera.stats3.read_attrs = ['total', 'centroid']
         #camera.tiff.read_attrs = [] # we dont need anything other than the image
         
-#cam_mic = setup_camRGB("XF:16IDC-ES:InAir{Mscp:1-Cam:1}", "cam_mic")
+cam_mic = setup_camRGB("XF:16IDC-ES:InAir{Mscp:1-Cam:1}", "cam_mic")
 cam_sol = setup_camRGB("XF:16IDC-BI{Cam:Sol}", "cam_sol")
 cam_overhead = setup_camRGB("XF:16IDC-BI{FS:9-Cam:1}", "cam_mic")
 cam_spare = setup_camRGB("XF:16IDC-BI{Cam:Spare}", "cam_mic")
     
-all_RGB_cam = [cam_sol, cam_overhead, cam_spare] #, cam_mic]
+all_RGB_cam = [cam_sol, cam_overhead, cam_spare, cam_mic]
     
 for cam in all_RGB_cam:
     if cam!=None:

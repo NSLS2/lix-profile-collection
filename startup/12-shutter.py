@@ -48,21 +48,37 @@ class PhotonShutter(Device):
 photon_shutter = PhotonShutter('XF:16IDA-PPS', name='photon_shutter')
 
 
-class FastShutter2(Device):
-    OPEN_SHUTTER = "Force High"
-    CLOSE_SHUTTER = "Force Low"
-    SETTLE_TIME = 0.1  # seconds
-    delay = Cpt(EpicsSignal, '-DlyGen:0}Delay-SP')
-    width = Cpt(EpicsSignal, '-DlyGen:0}Width-SP')
-    output = Cpt(EpicsSignal,'-Out:FP0}Src:Scale-SP', string=True, put_complete=True)
 
-    
-    def open(self):
-        self.output.set(FastShutter2.OPEN_SHUTTER, settle_time=FastShutter2.SETTLE_TIME)
+def one_nd_step_with_shutter(detectors, step, pos_cache):
+    """
+    Inner loop of an N-dimensional step scan
 
-    def close(self):
-        self.output.set(FastShutter2.CLOSE_SHUTTER, settle_time=FastShutter2.SETTLE_TIME)
+    This is the default function for ``per_step`` param`` in ND plans.
 
+    Parameters
+    ----------
+    detectors : iterable
+        devices to read
+    step : dict
+        mapping motors to positions in this step
+    pos_cache : dict
+        mapping motors to their last-set positions
+    """
+    def move():
+        yield Msg('checkpoint')
+        grp = bp._short_uid('set')
+        for motor, pos in step.items():
+            if pos == pos_cache[motor]:
+                # This step does not move this motor.
+                continue
+            yield Msg('set', motor, pos, group=grp)
+            pos_cache[motor] = pos
+        yield Msg('wait', None, group=grp)
 
-fast_shutter2 = FastShutter2('XF:16ID-TS{EVR:C1', name='fast_shutter2')
-
+    motors = step.keys()
+    yield from move()
+    yield from bp.abs_set(fast_shutter.output, FastShutter.OPEN_SHUTTER, settle_time=FastShutter.SETTLE_TIME, wait=True)
+    yield from trigger_and_read(list(detectors) + list(motors))
+    yield from bp.abs_set(fast_shutter.output, FastShutter.CLOSE_SHUTTER, settle_time=FastShutter.SETTLE_TIME, wait=True)
+        
+        

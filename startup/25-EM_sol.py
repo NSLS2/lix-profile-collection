@@ -73,7 +73,7 @@ class SolutionScatteringExperimentalModule():
     # the flow cells are designated 1 (bottom), 2 and 3
     # needle 1 is connected to the bottom flowcell, needle 2 connected to the top, HPLC middle
     flowcell_nd = {'upstream': 'top', 'downstream': 'bottom'}
-    flowcell_pos = {'top': -6.75, 'middle': -2.25, 'bottom': 2.36} # SC changed bottom from 3.78 07/12/17
+    flowcell_pos = {'top': -6.75, 'middle': -1.6, 'bottom': 3.45} # SC changed bottom from 3.78 07/12/17
     # this is the 4-port valve piosition necessary for the wash the needle
     p4_needle_to_wash = {'upstream': 1, 'downstream': 0}
     # this is the 4-port valve piosition necessary to load throug the needle

@@ -63,6 +63,11 @@ class StageScan(Device):
 	x = Cpt(EpicsMotor, '-Ax:X}Mtr')
 	y = Cpt(EpicsMotor, '-Ax:Y}Mtr')
 	r = Cpt(EpicsMotor, '-Ax:Rot}Mtr')
+    
+class Tilt(Device):
+	rx = Cpt(EpicsMotor, '-Ax:RX}Mtr')
+	ry = Cpt(EpicsMotor, '-Ax:RY}Mtr')
+
 
 class Microscope(Device):
 	x = Cpt(EpicsMotor, '-Ax:X}Mtr')
@@ -80,8 +85,8 @@ class SAXSBeamstop(XYMotor):
 	r1 = Cpt(EpicsMotor, '-Ax:R1}Mtr')
 	r2 = Cpt(EpicsMotor, '-Ax:R2}Mtr')
 	r3 = Cpt(EpicsMotor, '-Ax:R3}Mtr')
-	tilt1 = Cpt(EpicsMotor, '-Ax:T1}Mtr')
-	tilt2 = Cpt(EpicsMotor, '-Ax:T2}Mtr')
+	x = Cpt(EpicsMotor, '-Ax:X}Mtr')
+	y = Cpt(EpicsMotor, '-Ax:Y}Mtr')
     
 class ScanningStack1(Device):
     x = Cpt(EpicsMotor, 'Ax:X}Mtr')
@@ -192,6 +197,9 @@ smf = XYMotor('XF:16IDC-ES:InAir{Stg:ScanF', name='smf')
 
 ## Microscope
 microscope = Microscope('XF:16IDC-ES:InAir{Mscp:1', name='microscope')
+
+## Tilt
+tilt = Tilt('XF:16IDC-ES{Tilt', name='tilt')
 
 #########################################
 ## Scanning Stack 1--Coarse Stage

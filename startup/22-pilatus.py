@@ -22,7 +22,7 @@ def first_Pilatus():
 
 def first_PilatusExt():
     #print("checking first Pialtus")
-    for det in gs.DETS:
+    for det in reversed(gs.DETS):
         if det.__class__ == LIXPilatusExt:
             #print(det.name)
             return det.name
@@ -170,7 +170,7 @@ pilW2 = LIXPilatus("XF:16IDC-DT{Det:WAXS2}", name="pilW2", detector_id="WAXS2")
 pilatus_detectors = [pil1M, pilW1, pilW2]
 
 for det in pilatus_detectors:
-   det.read_attrs = ['file']
+    det.read_attrs = ['file']
 
 def pilatus_set_Nimage(n):
     for det in pilatus_detectors:
@@ -196,6 +196,8 @@ except:
 ############## hardware triggering for Pilatus detectors
 
 class PilatusExtTrigger(PilatusDetector):
+    armed = Cpt(EpicsSignal, "cam1:Armed")
+    
     # Use self._image_name as in SingleTrigger?
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -216,43 +218,44 @@ class PilatusExtTrigger(PilatusDetector):
     def stage(self):
         print(self.name, "stage")
         self.stage_sigs.update([
-            ('cam.trigger_mode', 2),
+            ('cam.trigger_mode', 3), # 2 DOESN'T WORK!
             ('cam.num_images', self._num_images)
         ])
         super().stage()
-        print(self.name, "after super().stage()")
-        self._counter_signal.subscribe(self._counter_changed)
-        print(self.name, "subscribed to counter signal")
+        #self._counter_signal.put(0)
+        #self._counter_signal.subscribe(self._counter_changed)
         self._acquisition_signal.put(1) #, wait=True)
-        print(self.name, "acquisition=1")
+        while self.armed.get() != 1:
+            time.sleep(0.1)
         self.first = True
         
+        print(self.name, "staged")
+        
     def unstage(self):
-        self._counter_signal.clear_sub(self._counter_changed)
+        #self._counter_signal.clear_sub(self._counter_changed)
         self._status = None
         self._acquisition_signal.put(0)
         self.cam.trigger_mode.put(0, wait=True)
         super().unstage()
         
-    def do_trigger(self):
+    def do_trigger2(self):
         print("sending trigger")
         if self.first:
             time.sleep(0.7)       # for some reason this delay is necesary, but only for the first trigger
             #self.first = False
         self._trigger_signal.put(4, wait=True) # Force High
-        time.sleep(0.2)
+        time.sleep(0.05)
         self._trigger_signal.put(3, wait=True) # Force Low
         print("sent trigger")
         
-    def trigger(self):
+    def trigger2(self):
         print(self.name+" trigger")
         if self._staged != Staged.yes:
             raise RuntimeError("This detector is not ready to trigger."
                                "Call the stage() method before triggering.")
         
         self._status = DeviceStatus(self)
-        
-        # Only one Pilatus has to send the trigger
+                # Only one Pilatus has to send the trigger
         if self.name == first_PilatusExt():
         #if "pil1M" in self.name:
             threading.Thread(target=self.do_trigger).start()
@@ -260,12 +263,43 @@ class PilatusExtTrigger(PilatusDetector):
             
         return self._status
         
+  
+    def trigger(self):
+        print(self.name+" trigger")
+        if self._staged != Staged.yes:
+            raise RuntimeError("This detector is not ready to trigger."
+                               "Call the stage() method before triggering.")
+        
+        status = DeviceStatus(self)
+        if self.name == first_PilatusExt():
+            print("triggering")
+            self._trigger_signal.put(4, wait=True) # Force High
+            time.sleep(0.05)
+            self._trigger_signal.put(3, wait=True) # Force Low          
+        
+        # Only one Pilatus has to send the trigger
+        counter_sig = self._counter_signal
+        cur_count = counter_sig.get()
+     
+        
+        def counter_cb(value, **kwargs):
+            if value != cur_count + 1:
+                print(f"!!!!! prev {cur_value} now {value}")
+            status._finished()
+            counter_sig.clear_sub(counter_cb)
+
+            
+        counter_sig.subscribe(counter_cb, run=False)       
+        
+            
+        return status
+        
     def _counter_changed(self, value=None, old_value=None, **kwargs):
         if self._status is None:
             return
         
         if old_value + 1 == value:
-            print(self.name + " finished")
+            print(self.name + " finished [", value, "]")
             self._status._finished()
         else:
             print("Unexpected counter change from", old_value, "to", value)

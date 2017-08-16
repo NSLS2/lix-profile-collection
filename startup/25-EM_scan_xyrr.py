@@ -102,7 +102,28 @@ class ScanningExperimentalModule2():
             cam_mic.saveImg('%s_2.png' % current_sample)
             
             self.mv(x1, y1, 0)
-    
+      
+    def scan1(self, s1, e1, Ny, s2, e2, Nx):
+         
+        RE.md['sample_name'] = sample_name 
+        RE.md['saxs'] = ({'saxs_x':saxs.x.position, 'saxs_y':saxs.y.position, 'saxs_z':saxs.z.position})
+        RE.md['waxs1'] = ({'waxs1_x':waxs1.x.position, 'waxs1_y':waxs1.y.position, 'waxs1_z':waxs1.z.position})
+        RE.md['waxs2'] = ({'waxs2_x':waxs2.x.position, 'waxs1_y':waxs2.y.position, 'waxs1_z':waxs2.z.position}) 
+        RE.md['energy'] = ({'mono_bragg': mono.bragg.position, 'energy': getE(), 'gap': get_gap()})
+        gs.DETS=[em1, em2, pil1M_ext,pilW1_ext,pilW2_ext]
+        set_pil_num_images(Nx*Ny)
+        RE(mesh(ss2.y, s1,e1, Ny, ss2.x, s2, e2, Nx))
+
+    def scan2(self, s1, e1, Ny, s2, e2, Nx):
+         
+        RE.md['sample_name'] = sample_name 
+        RE.md['saxs'] = ({'saxs_x':saxs.x.position, 'saxs_y':saxs.y.position, 'saxs_z':saxs.z.position})
+        RE.md['waxs1'] = ({'waxs1_x':waxs1.x.position, 'waxs1_y':waxs1.y.position, 'waxs1_z':waxs1.z.position})
+        RE.md['waxs2'] = ({'waxs2_x':waxs2.x.position, 'waxs1_y':waxs2.y.position, 'waxs1_z':waxs2.z.position}) 
+        RE.md['energy'] = ({'mono_bragg': mono.bragg.position, 'energy': getE(), 'gap': get_gap()})
+        gs.DETS=[em1, em2, pil1M_ext,pilW1_ext,pilW2_ext]
+        set_pil_num_images(Nx*Ny)
+        RE(mesh(ss2.x, s1,e1, Ny, ss2.y, s2, e2, Nx))
     
 p1 = PV('XF:16IDC-ES:Scan2{Ax:X}Mtr')    
 p2 = PV('XF:16IDC-ES:Scan2{Ax:RX}Mtr')

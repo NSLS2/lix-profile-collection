@@ -8,3 +8,41 @@ def fetch_scan(**kwargs):
     else:
         headers = db(**kwargs)
         return headers, db.get_table(headers, fill=True)
+
+
+# map xv vlaue from range xm1=[min, max] to range xm2
+def x_conv(xm1, xm2, xv):
+    a = (xm2[-1]-xm2[0])/(xm1[-1]-xm1[0])
+    return xm2[0]+a*(xv-xm1[0])
+
+# example: plot_data(data, "cam04_stats1_total", "hfm_x1", "hfm_x2")
+def plot_data(data, ys, xs1, xs2=None, thresh=0.8):
+    yv = data[ys]
+    xv1 = data[xs1]
+
+    fig = plt.figure(figsize=(8,6))
+    ax1 = fig.add_subplot(111)
+    ax1.plot(xv1, yv)
+
+    idx = yv>thresh*yv.max()
+    ax1.plot(xv1[idx],yv[idx],"o")
+    xp = np.average(xv1[idx], weights=yv[idx])
+    xx = xv1[yv==yv.max()]
+    ax1.plot([xp,xp],[yv.min(), yv.max()])
+    ax1.set_xlabel(xs1)
+    ax1.set_ylabel(ys)
+    xm1 = [xv1[1], xv1[len(xv1)]]
+    ax1.set_xlim(xm1)
+
+    if xs2!=None:
+        xv2 = data[xs2]
+        ax2 = ax1.twiny()
+        ax2.set_xlabel(xs2)
+        #xlim1 = ax1.get_xlim()
+        xm2 = [xv2[1], xv2[len(xv2)]]
+        ax2.set_xlim(xm2)
+        print("y max at %s=%f, %s=%f" % (xs1, xx, xs2, x_conv(xm1, xm2, xx)))
+        print("y center at %s=%f, %s=%f" % (xs1, xp, xs2, x_conv(xm1, xm2, xp)))
+    else:
+        print("y max at %s=%f" % (xs1, xx))
+        print("y center at %s=%f" % (xs1, xp))
