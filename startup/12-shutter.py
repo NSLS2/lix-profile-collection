@@ -10,10 +10,16 @@ class FastShutter(Device):
     output = Cpt(EpicsSignal,'{shutter:1}sts', string=True, put_complete=True)
 
     def open(self):
+        print("opening shutter ...",)
+        #self.output.put(FastShutter.OPEN_SHUTTER)
         self.output.set(FastShutter.OPEN_SHUTTER, settle_time=FastShutter.SETTLE_TIME)
-
+        print(" done.")
+        
     def close(self):
+        print("closing shutter ...",)
+        #self.output.put(FastShutter.CLOSE_SHUTTER)
         self.output.set(FastShutter.CLOSE_SHUTTER, settle_time=FastShutter.SETTLE_TIME)
+        print(" done.")
 
 
 fast_shutter = FastShutter('XF:16IDB-BI', name='fast_shutter')

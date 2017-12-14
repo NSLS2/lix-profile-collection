@@ -2,6 +2,7 @@ from __future__ import print_function
 import os,sys
 import numpy as np
 from time import sleep
+from datetime import datetime
 
 # xf16id - 5008, lix - 3009
 def makedirs(path, mode=0o777, owner_uid=5008, group=3009):
@@ -31,3 +32,19 @@ def countdown(comment, duration):
         sys.stdout.flush()
         sleep(1)
     print("done: %s %d s "%(comment,duration))
+
+# this should be used for RE.msg_hook only    
+def print_time(msg):
+    now = datetime.now()
+    if not hasattr(print_time, "waiting"):
+        print_time.previous_time = 0
+        print_time.waiting = False
+    else:
+        if print_time.waiting == True:
+            print("%.3f sec lapsed since last wait msg." % (time.time()-print_time.previous_time))
+        if msg[:4]=="wait":
+            print_time.waiting = True
+            print_time.previous_time = time.time()
+        else:
+            print_time.waiting = False
+            print(now.strftime("%H:%M:%S.%f")[:-3], msg)

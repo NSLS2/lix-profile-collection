@@ -10,7 +10,7 @@ from filestore.handlers_base import HandlerBase
 import filestore.api as fs
 import fabio
 import os,time,threading
-
+from threading import Timer
 
 def first_Pilatus():
     #print("checking first Pialtus")
@@ -72,7 +72,6 @@ class PilatusFilePlugin(Device, FileStoreBulkWrite):
         set_and_wait(self.file_path, "/ramdisk/", timeout=99999)
         #set_and_wait(self.file_path, data_path, timeout=99999)
         set_and_wait(self.file_name, current_sample, timeout=99999)
-        #self.file_header.put("uid=%s" % )
         
         super().stage()
         res_kwargs = {'template': self.file_template.get(),
@@ -170,7 +169,7 @@ pilW2 = LIXPilatus("XF:16IDC-DT{Det:WAXS2}", name="pilW2", detector_id="WAXS2")
 pilatus_detectors = [pil1M, pilW1, pilW2]
 
 for det in pilatus_detectors:
-    det.read_attrs = ['file']
+    det.read_attrs = ['file']#, 'stats1_total', 'stats1_centroid']
 
 def pilatus_set_Nimage(n):
     for det in pilatus_detectors:
@@ -201,9 +200,6 @@ class PilatusExtTrigger(PilatusDetector):
     # Use self._image_name as in SingleTrigger?
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        #self.stage_sigs.update([
-        #    ('cam.trigger_mode', 2), # Ext. Triggrer; 3 in Bruno's original code, Mult. Trigger
-        #])
         self._num_images = 1
         self._acquisition_signal = self.cam.acquire
         self._counter_signal = self.cam.array_counter
@@ -211,59 +207,41 @@ class PilatusExtTrigger(PilatusDetector):
         
         self._status = None
         self.first = True
+        self.acq_t = 0 
         
     def set_num_images(self, num_images):
         self._num_images = num_images
         
     def stage(self):
-        print(self.name, "stage")
+        print(self.name, "staging")
         self.stage_sigs.update([
             ('cam.trigger_mode', 3), # 2 DOESN'T WORK!
             ('cam.num_images', self._num_images)
         ])
+        print(self.name, "stage sigs updated")
         super().stage()
-        #self._counter_signal.put(0)
-        #self._counter_signal.subscribe(self._counter_changed)
+        print(self.name, "super staged")
+        self._counter_signal.put(0)
+        acq_t = self.cam.acquire_period.get()
+        if acq_t>0.1: 
+            self.trig_width = 0.05
+        else:
+            self.trig_width = acq_t/2
+        self.trig_wait = acq_t+0.02-self.trig_width
+        #self._acquisition_signal.put(1) #, wait=True)
+        print(self.name, "checking armed status")
         self._acquisition_signal.put(1) #, wait=True)
         while self.armed.get() != 1:
-            time.sleep(0.1)
-        self.first = True
+            time.sleep(0.5)
         
         print(self.name, "staged")
         
     def unstage(self):
-        #self._counter_signal.clear_sub(self._counter_changed)
         self._status = None
         self._acquisition_signal.put(0)
         self.cam.trigger_mode.put(0, wait=True)
         super().unstage()
         
-    def do_trigger2(self):
-        print("sending trigger")
-        if self.first:
-            time.sleep(0.7)       # for some reason this delay is necesary, but only for the first trigger
-            #self.first = False
-        self._trigger_signal.put(4, wait=True) # Force High
-        time.sleep(0.05)
-        self._trigger_signal.put(3, wait=True) # Force Low
-        print("sent trigger")
-        
-    def trigger2(self):
-        print(self.name+" trigger")
-        if self._staged != Staged.yes:
-            raise RuntimeError("This detector is not ready to trigger."
-                               "Call the stage() method before triggering.")
-        
-        self._status = DeviceStatus(self)
-                # Only one Pilatus has to send the trigger
-        if self.name == first_PilatusExt():
-        #if "pil1M" in self.name:
-            threading.Thread(target=self.do_trigger).start()
-            #self.do_trigger()
-            
-        return self._status
-        
-  
     def trigger(self):
         print(self.name+" trigger")
         if self._staged != Staged.yes:
@@ -271,38 +249,18 @@ class PilatusExtTrigger(PilatusDetector):
                                "Call the stage() method before triggering.")
         
         status = DeviceStatus(self)
+        # Only one Pilatus has to send the trigger
         if self.name == first_PilatusExt():
             print("triggering")
             self._trigger_signal.put(4, wait=True) # Force High
-            time.sleep(0.05)
+            time.sleep(self.trig_width)
             self._trigger_signal.put(3, wait=True) # Force Low          
         
-        # Only one Pilatus has to send the trigger
-        counter_sig = self._counter_signal
-        cur_count = counter_sig.get()
-     
-        
-        def counter_cb(value, **kwargs):
-            if value != cur_count + 1:
-                print(f"!!!!! prev {cur_value} now {value}")
-            status._finished()
-            counter_sig.clear_sub(counter_cb)
-
-            
-        counter_sig.subscribe(counter_cb, run=False)       
-        
+        #set up callback to clear status after the end-of-exposure
+        Timer(self.trig_wait, status._finished, ()).start()
             
         return status
         
-    def _counter_changed(self, value=None, old_value=None, **kwargs):
-        if self._status is None:
-            return
-        
-        if old_value + 1 == value:
-            print(self.name + " finished [", value, "]")
-            self._status._finished()
-        else:
-            print("Unexpected counter change from", old_value, "to", value)
 
 class LIXPilatusExt(PilatusExtTrigger):
     file = Cpt(PilatusFilePlugin, suffix="cam1:",

@@ -1,5 +1,5 @@
 from ophyd import Device, Component as Cpt, EpicsMotor, EpicsSignalRO
-from epics import caget,caput
+from epics import caget,caput, PV
 
 state_inserted = 0
 state_removed = 1
@@ -55,5 +55,12 @@ class Transfocator(Device):
 
 
 ## Transfocator CRLs 
-crl = Transfocator('XF:16IDC-OP{CRL', 9, 'crl')
+p = PV('XF:16IDC-OP{CRL:1}config') 
+sleep(1) 
+if p.connect():
+    crl = Transfocator('XF:16IDC-OP{CRL', 9, 'crl')
+else:
+    print("transfocator is not available.")
+    
+del p
 

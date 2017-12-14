@@ -21,7 +21,7 @@ class ScanningExperimentalModule2():
     cy0 = 0.
     cz0 = 0.
     
-    def init(self):
+    def __init__(self):
         """ cy0 is the y motor position when the beam hits the Rx axis
         """
         self.sn0_set = False
@@ -46,9 +46,11 @@ class ScanningExperimentalModule2():
         
         # unit of z (microscopr focus is micron
         # the sign for the correction term is depends on how the signs for the other motions are defined
-        z1 = self.z0 - 1000.*(y1-self.cy0)*np.tan(np.radians(rx1)) 
-        y1 = y1 
-        mov([self.x, self.y, self.z, self.rx], [x1, y1, z1, rx1])
+        #z1 = self.z0 - 1000.*(y1-self.cy0)*np.tan(np.radians(rx1)) 
+        #y1 = y1 
+        z2 = self.z0 - 1000.*(y1-self.cy0)*np.sin(np.radians(rx1))
+        y2 = y1 - (y1-self.cy0)*(1. - np.cos(np.radians(rx1)))
+        mov([self.x, self.y, self.z, self.rx], [x1, y2, z2, rx1])
     
     
     # do two scans, at rx0 and -rx0; move y and z so that the center of the ROI is in focus
@@ -65,65 +67,46 @@ class ScanningExperimentalModule2():
         if Ny==None:
             Ny=Nx
          
-        RE.md['sample_name'] = sample_name 
-        RE.md['saxs'] = ({'saxs_x':saxs.x.position, 'saxs_y':saxs.y.position, 'saxs_z':saxs.z.position})
-        RE.md['waxs1'] = ({'waxs1_x':waxs1.x.position, 'waxs1_y':waxs1.y.position, 'waxs1_z':waxs1.z.position})
-        RE.md['waxs2'] = ({'waxs2_x':waxs2.x.position, 'waxs1_y':waxs2.y.position, 'waxs1_z':waxs2.z.position}) 
-        RE.md['energy'] = ({'mono_bragg': mono.bragg.position, 'energy': getE(), 'gap': get_gap()})
-        RE.md['XBPM'] = XBPM_pos() 
-        
         #d = cam_mic.snapshot(ROIs=[cam_mic.getROI(1)])
         #im1 = Image.fromarray(np.asarray(d[0][:,:,0]))
         
-        gs.DETS=[em1, em2, pil1M_ext,pilW1_ext,pilW2_ext]
+        #gs.DETS=[em1, em2, pil1M_ext,pilW1_ext,pilW2_ext]
+        #gs.DETS=[em1, em2, pil1M,pilW1,pilW2]
         set_pil_num_images(Nx*Ny)
         
         if rx0==None:
             change_sample(sample_name)
             RE.md['sample_rotation'] = self.rx.position
-            cam_mic.saveImg('%s_1.png' % current_sample)
-            RE(mesh(self.x, x1-dx/2, x1+dx/2, Nx, self.y, y1-dy/2, y1+dy/2, Ny))
-            cam_mic.saveImg('%s_2.png' % current_sample)            
+            cam_mic.saveImg('%s%s_1.png' % (data_path, current_sample))
+            #RE(mesh(self.x, x1-dx/2, x1+dx/2, Nx, self.y, y1-dy/2, y1+dy/2, Ny))
+            RE(mesh(self.y, y1-dy/2, y1+dy/2, Ny, self.x, x1-dx/2, x1+dx/2, Nx))
+            cam_mic.saveImg('%s%s_2.png' % (data_path, current_sample))            
             mov([self.x, self.y], [x1, y1])
       
         else:
             self.mv(x1, y1, rx0)
             change_sample(sample_name+"_a")
             RE.md['sample_rotation'] = rx0 
-            cam_mic.saveImg('%s_1.png' % current_sample)
+            cam_mic.saveImg('%s%s_1.png' % (data_path,current_sample))
             RE(mesh(self.x, x1-dx/2, x1+dx/2, Nx, self.y, y1-dy/2, y1+dy/2, Ny))
-            cam_mic.saveImg('%s_2.png' % current_sample)
+            cam_mic.saveImg('%s%s_2.png' % (data_path, current_sample))
        
             self.mv(x1, y1, -rx0)
             change_sample(sample_name+"_b")
             RE.md['sample_rotation'] = -rx0 
-            cam_mic.saveImg('%s_1.png' % current_sample)
+            cam_mic.saveImg('%s%s_1.png' % (data_path, current_sample))
             RE(mesh(self.x, x1-dx/2, x1+dx/2, Nx, self.y, y1-dy/2, y1+dy/2, Ny))
-            cam_mic.saveImg('%s_2.png' % current_sample)
+            cam_mic.saveImg('%s%s_2.png' % (data_path, current_sample))
             
             self.mv(x1, y1, 0)
       
     def scan1(self, s1, e1, Ny, s2, e2, Nx):
-         
-        RE.md['sample_name'] = sample_name 
-        RE.md['saxs'] = ({'saxs_x':saxs.x.position, 'saxs_y':saxs.y.position, 'saxs_z':saxs.z.position})
-        RE.md['waxs1'] = ({'waxs1_x':waxs1.x.position, 'waxs1_y':waxs1.y.position, 'waxs1_z':waxs1.z.position})
-        RE.md['waxs2'] = ({'waxs2_x':waxs2.x.position, 'waxs1_y':waxs2.y.position, 'waxs1_z':waxs2.z.position}) 
-        RE.md['energy'] = ({'mono_bragg': mono.bragg.position, 'energy': getE(), 'gap': get_gap()})
-        gs.DETS=[em1, em2, pil1M_ext,pilW1_ext,pilW2_ext]
         set_pil_num_images(Nx*Ny)
         RE(mesh(ss2.y, s1,e1, Ny, ss2.x, s2, e2, Nx))
 
-    def scan2(self, s1, e1, Ny, s2, e2, Nx):
-         
-        RE.md['sample_name'] = sample_name 
-        RE.md['saxs'] = ({'saxs_x':saxs.x.position, 'saxs_y':saxs.y.position, 'saxs_z':saxs.z.position})
-        RE.md['waxs1'] = ({'waxs1_x':waxs1.x.position, 'waxs1_y':waxs1.y.position, 'waxs1_z':waxs1.z.position})
-        RE.md['waxs2'] = ({'waxs2_x':waxs2.x.position, 'waxs1_y':waxs2.y.position, 'waxs1_z':waxs2.z.position}) 
-        RE.md['energy'] = ({'mono_bragg': mono.bragg.position, 'energy': getE(), 'gap': get_gap()})
-        gs.DETS=[em1, em2, pil1M_ext,pilW1_ext,pilW2_ext]
+    def scan2(self, s1, e1, Nx, s2, e2, Ny):
         set_pil_num_images(Nx*Ny)
-        RE(mesh(ss2.x, s1,e1, Ny, ss2.y, s2, e2, Nx))
+        RE(mesh(ss2.x, s1,e1, Nx, ss2.y, s2, e2, Ny))
     
 p1 = PV('XF:16IDC-ES:Scan2{Ax:X}Mtr')    
 p2 = PV('XF:16IDC-ES:Scan2{Ax:RX}Mtr')

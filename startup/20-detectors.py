@@ -1,4 +1,4 @@
-from ophyd import (SingleTrigger, TIFFPlugin,
+from ophyd import (SingleTrigger, MultiTrigger, TIFFPlugin,
                    ImagePlugin, StatsPlugin, DetectorBase, HDF5Plugin,
                    ROIPlugin, OverlayPlugin, AreaDetector)
 
@@ -9,7 +9,6 @@ from ophyd.areadetector.filestore_mixins import (FileStoreTIFFIterativeWrite,
 
 from ophyd import Component as Cpt
 from scipy.misc import imsave
-
 
 class TIFFPluginWithFileStore(TIFFPlugin, FileStoreTIFFIterativeWrite):
     def make_filename(self):
@@ -33,11 +32,104 @@ class LixProsilicaDetector(DetectorBase):
     cam = Cpt(cam.ProsilicaDetectorCam, '')
 
 
+    
+class MultiExpProsilica(MultiTrigger, LixProsilicaDetector):
+    """ useful for taking multiple exposures to average out beam motion
+    """
+    image = Cpt(ImagePlugin, 'image1:')
+    roi1 = Cpt(ROIPlugin, 'ROI1:')
+    roi2 = Cpt(ROIPlugin, 'ROI2:')
+    roi3 = Cpt(ROIPlugin, 'ROI3:')
+    roi4 = Cpt(ROIPlugin, 'ROI4:')
+    stats1 = Cpt(StatsPlugin, 'Stats1:')
+    stats2 = Cpt(StatsPlugin, 'Stats2:')
+    stats3 = Cpt(StatsPlugin, 'Stats3:')
+    stats4 = Cpt(StatsPlugin, 'Stats4:')
+    stats5 = Cpt(StatsPlugin, 'Stats5:')
+    proc1 = Cpt(ProcessPlugin, 'Proc1:')
+
+
+    def stage(self):
+        self.cam.acquire.put(0)
+        super().stage()
+
+    def unstage(self):
+        if hasattr(self, 'tiff'):
+            self.tiff.enable.put(0)
+        super().unstage()
+        
+    def setROI(self,i,ROI):
+        if i>0 and i<=4:
+            caput(self.prefix+("ROI%d:MinX" % i), ROI[0]) 
+            caput(self.prefix+("ROI%d:SizeX" % i), ROI[1]) 
+            caput(self.prefix+("ROI%d:MinY" % i), ROI[2]) 
+            caput(self.prefix+("ROI%d:SizeY" % i), ROI[3])
+        else:
+            raise(ValueError("valid ROI numbers are 1-4"))
+            
+    def getROI(self,i):
+        ROIs = {1: self.roi1, 2: self.roi2, 3:self.roi3, 4:self.roi4}
+        if i>0 and i<=4:
+            print("%s: [%d, %d, %d, %d]" % (ROIs[i].name,
+                                           ROIs[i].min_xyz.min_x.value,
+                                           ROIs[i].size.x.value,
+                                           ROIs[i].min_xyz.min_y.value,
+                                           ROIs[i].size.y.value))
+            return [ROIs[i].min_xyz.min_x.value,
+                    ROIs[i].size.x.value,
+                    ROIs[i].min_xyz.min_y.value,
+                    ROIs[i].size.y.value]
+        else:
+            raise(ValueError("valid ROI numbers are 1-4"))
+    
+    
+                   
+    def snapshot(self,showWholeImage=False, ROIs=None, showROI=False):
+        # array_data.value may have different shapes (mono/Bayer vs RGB)\
+        img = np.asarray(self.image.array_data.value)
+        if self.image.array_size.depth.get()>0:  # RGB
+            img = img.reshape([self.image.array_size.depth.value,
+                               self.image.array_size.height.value,
+                               self.image.array_size.width.value])
+        else: # mono/Bayer
+            img = img.reshape([self.image.array_size.height.value,
+                               self.image.array_size.width.value])
+        # demosaic first
+        if showWholeImage:
+            plt.figure()
+            plt.imshow(img)
+            plt.show()
+
+        # show ROIs
+        if ROIs==None: 
+           return
+        # ROI definition: [MinX, SizeX, MinY, SizeY]
+        n = len(ROIs)
+        data = []
+        for i in range(n):
+            roi = img[ROIs[i][2]:ROIs[i][2]+ROIs[i][3],ROIs[i][0]:ROIs[i][0]+ROIs[i][1]]
+            data.append(roi)
+            if showROI:
+                if i==0:
+                    plt.figure()
+                plt.subplot(1,n,i+1)
+                plt.imshow(roi)
+                if i==n-1: 
+                    plt.show()
+
+        return(data)
+
+    def saveImg(self, fn):
+        size_x,size_y = self.cam.size.get()
+        d = self.snapshot(ROIs=[[0, size_x, 0, size_y]])[0]
+        imsave(fn, d)    
+    
 class StandardProsilica(SingleTrigger, LixProsilicaDetector):
     #tiff = Cpt(TIFFPluginWithFileStore,
     #           suffix='TIFF1:',
     #           write_path_template='/GPFS/xf16id/data2/')
     image = Cpt(ImagePlugin, 'image1:')
+    proc1 = Cpt(ProcessPlugin, 'Proc1:')
     roi1 = Cpt(ROIPlugin, 'ROI1:')
     roi2 = Cpt(ROIPlugin, 'ROI2:')
     roi3 = Cpt(ROIPlugin, 'ROI3:')
@@ -145,6 +237,17 @@ def setup_cam(pv, name):
         print("%s is not accessible." % name)
     
     return cam
+
+trigger_cycle=[[('single trigger', {}) for _ in range(20)]]
+
+def setup_cam_Multi(pv, name):
+    try: 
+        cam = MultiExpProsilica(pv, trigger_cycle=[[('single trigger', {}) for _ in range(20)]], name=name)
+    except TimeoutError:
+        cam = None
+        print("%s is not accessible." % name)
+    
+    return cam
     
 def setup_camRGB(pv, name):
     try: 
@@ -160,10 +263,12 @@ cam02 = setup_cam("XF:16IDA-BI{FS:2-Cam:1}", "cam02")
 cam03 = setup_cam("XF:16IDA-BI{FS:3-Cam:1}", "cam03")
 cam04 = setup_cam("XF:16IDA-BI{FS:4-Cam:1}", "cam04")
 cam05 = setup_cam("XF:16IDB-BI{FS:5-Cam:1}", "cam05")
-cam06 = setup_cam("XF:16IDB-BI{FS:6-Cam:1}", "cam05")
+cam06 = setup_cam("XF:16IDB-BI{FS:6-Cam:1}", "cam06")
+cam06m = setup_cam_Multi(pv="XF:16IDB-BI{FS:6-Cam:1}", name="cam06m")
+cam05m = setup_cam_Multi(pv="XF:16IDB-BI{FS:5-Cam:1}", name="cam05m")
 
     
-all_standard_pros = [cam01, cam02, cam03, cam04, cam05, cam06]
+all_standard_pros = [cam01, cam02, cam03, cam04, cam05, cam05m, cam06,cam06m]
 
 for camera in all_standard_pros:
     if camera!=None:

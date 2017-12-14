@@ -21,7 +21,8 @@ def getE(bragg=None):
 # when Bragg = 9.6332, Y = -0.1
 # ov is the correction needed to get actual Y value
 # sc ov revised from -10.243 to ov = -28.5609 @ 11th April 2017
-def setE(energy, calc_only=True, ov=-28.5609):
+# ov = -11.5113, 2017 Sep 12
+def setE(energy, calc_only=True, ov=-11.5113):
     # Si(111) lattice constant is 5.43095A
     d = 5.43095 
     offset = 20.0
@@ -44,11 +45,14 @@ def XBPM_pos(navg=5):
     py = PV('SR:C16-BI{XBPM:1}Pos:Y-I')
     if px.connected==False or py.connected==False:
         return (np.nan, np.nan)
-    for i in range(navg):
-        xpos += caget('SR:C16-BI{XBPM:1}Pos:X-I')
-        ypos += caget('SR:C16-BI{XBPM:1}Pos:Y-I')        
-        sleep(0.05)
-    return (xpos/navg, ypos/navg)
+    try:
+        for i in range(navg):
+            xpos += caget('SR:C16-BI{XBPM:1}Pos:X-I')
+            ypos += caget('SR:C16-BI{XBPM:1}Pos:Y-I')        
+            sleep(0.05)
+        return (xpos/navg, ypos/navg)
+    except:
+        return ("unknown", "unknown") 
         
 def get_gap():
     return caget("SR:C16-ID:G1{IVU:1-LEnc}Gap")

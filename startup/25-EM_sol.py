@@ -55,6 +55,17 @@ class SolutionScatteringControlUnit(Device):
         self.ready.put(0)
         self.piston_pos.put(cur+dV)
         
+    def delayed_oscill_mvR(self, dV, times):
+        cur = self.piston_pos.get()
+        while self.ready.get()==0:
+            sleep(1.0)
+        self.ready.put(0)
+        for n in range(times):
+            cur1 = self.piston_pos.get()
+            self.piston_pos.put(cur1+dV)
+            self.wait()
+            dV=-dV
+        
         
 default_solution_scattering_config_file = '/GPFS/xf16id/config.solution'
 # y position of the middle flow-cell
@@ -73,12 +84,14 @@ class SolutionScatteringExperimentalModule():
     # the flow cells are designated 1 (bottom), 2 and 3
     # needle 1 is connected to the bottom flowcell, needle 2 connected to the top, HPLC middle
     flowcell_nd = {'upstream': 'top', 'downstream': 'bottom'}
-    flowcell_pos = {'top': -6.75, 'middle': -1.6, 'bottom': 3.45} # SC changed bottom from 3.78 07/12/17
+    flowcell_pos = {'bottom': 3.65, 'middle': -0.72, 'top': -5.41}  # 2017/10/11
+    #{'top': -6.33, 'middle': -1.36, 'bottom': 3.15} # SC changed bottom from 3.78 07/12/17
     # this is the 4-port valve piosition necessary for the wash the needle
     p4_needle_to_wash = {'upstream': 1, 'downstream': 0}
     # this is the 4-port valve piosition necessary to load throug the needle
     p4_needle_to_load = {'upstream': 0, 'downstream': 1}
     needle_dirty_flag = {'upstream': True, 'downstream': True}
+    tube_holder_pos = "down"
     bypass_tube_pos_ssr = True  # if true, ignore the optical sensor for tube holder position
     
     # need to home holder_x position to 0
@@ -91,7 +104,7 @@ class SolutionScatteringExperimentalModule():
     #          caput("XF:16IDC-ES:Sol{Enc-Ax:Xl}Mtr.HLM", 37.6)
     #     change the motor current back
     drain_pos = 0.
-    park_pos = 37.5
+    park_pos = 36.5
     
     disable_flow_cell_move = False
     
@@ -110,7 +123,7 @@ class SolutionScatteringExperimentalModule():
     default_pump_speed = 1500
     default_load_pump_speed = 350 # SC changed the value from 600 on 7/9/17
     vol_p4_to_cell = {'upstream': -140, 'downstream': -140}
-    vol_tube_to_cell = {'upstream': 95, 'downstream': 92} # SC done changes--> downstream value reduced to (92 from 104) 7/9/17, upstream changed from 110 to 100
+    vol_tube_to_cell = {'upstream': 90, 'downstream': 88} # SC done changes--> downstream value reduced to (92 from 104) 7/9/17, upstream changed from 110 to 100
     vol_sample_headroom = 13
     
     def __init__(self):
@@ -156,7 +169,8 @@ class SolutionScatteringExperimentalModule():
         if tn not in range(0,19) and tn!='park':
             raise RuntimeError('invalid tube position %d, must be 0 (drain) or 1-18, or \'park\' !!' % tn)
             
-        if self.ctrl.sv_pcr_tubes.get(as_string=True)!='down':
+        #if self.ctrl.sv_pcr_tubes.get(as_string=True)!='down':
+        if self.tube_holder_pos != "down":
             raise RuntimeError('PCR tube holder should be down right now !!')
 
         self.tube_pos = tn
@@ -187,6 +201,7 @@ class SolutionScatteringExperimentalModule():
             print('PCR tube holder down ...')
             self.ctrl.sv_pcr_tubes.put('down')
             self.ctrl.wait() 
+            self.tube_holder_pos = "down"
         elif pos=='up':
 #            if self.pcr_v_enable.get()==0 and (self.holder_x.position**2>1e-4 and self.tube_pos!=12):
             # revised by LY, 2017Mar23, to add bypass
@@ -195,11 +210,12 @@ class SolutionScatteringExperimentalModule():
             print('PCR tube holder up ...')
             self.ctrl.sv_pcr_tubes.put('up')
             self.ctrl.wait()        
+            self.tube_holder_pos = "up"
 
         # wait for the pneumatic actuator to settle
         sleep(5)
             
-    def dry_needle(self, nd, repeats=3, dry_duration=55):
+    def dry_needle(self, nd, repeats=3, dry_duration=35):
         if nd not in ('upstream', 'downstream'):
             raise RuntimeError('unrecoganized neelde (must be \'upstream\' or \'downstream\') !!', nd)
         
@@ -288,7 +304,58 @@ class SolutionScatteringExperimentalModule():
         self.ctrl.wait()
            
     
-    def collect_data(self, vol, exp, repeats, sample_name='test'):
+    def collect_data(self, vol=45, exp=2, repeats=3, sample_name='test'):
+        pilatus_ct_time(exp)
+        pilatus_number_reset(False)
+        
+        change_sample(sample_name)
+        RE.md['sample_name'] = current_sample 
+        RE.md['saxs'] = ({'saxs_x':saxs.x.position, 'saxs_y':saxs.y.position, 'saxs_z':saxs.z.position})
+        RE.md['waxs1'] = ({'waxs1_x':waxs1.x.position, 'waxs1_y':waxs1.y.position, 'waxs1_z':waxs1.z.position})
+        RE.md['waxs2'] = ({'waxs2_x':waxs2.x.position, 'waxs1_y':waxs2.y.position, 'waxs1_z':waxs2.z.position}) 
+        RE.md['energy'] = ({'mono_bragg': mono.bragg.position, 'energy': getE(), 'gap': get_gap()})
+        #RE.md['XBPM'] = XBPM_pos() 
+        
+        gs.DETS=[em1, em2, pil1M, pilW1, pilW2]
+        #gs.DETS=[em1, em2, pil1M_ext,pilW1_ext,pilW2_ext]
+        #set_pil_num_images(repeats)
+        
+        # pump_spd unit is ul/min
+        #self.ctrl.pump_spd.put(60.*vol/exp)
+        #for n in range(repeats):
+        #    print('collecting data, %d of %d repeats ...' % (n+1, repeats))
+        #    self.ctrl.pump_mvR(vol)
+        #    RE(ct(num=1))
+        #    self.ctrl.wait()
+        #    vol=-vol
+
+        # pump_spd unit is ul/min
+        self.ctrl.pump_spd.put(60.*vol/(repeats*exp))
+        #print('collecting data, %d of %d repeats ...' % (n+1, repeats))
+        #self.ctrl.pump_mvR(vol)
+        th = threading.Thread(target=self.ctrl.delayed_mvR, args=(vol, ) )
+        th.start() 
+        # single image per trigger
+        #RE(ct(num=repeats))
+        # take multiple images per trigger
+        pilatus_set_Nimage(repeats)
+        RE(ct(num=1))
+        self.ctrl.wait()
+        
+        pilatus_number_reset(True)
+        self.ctrl.pump_spd.put(self.default_pump_speed)
+        if vol<0:  # odd number of repeats, return sample to original position
+            self.ctrl.pump_mvR(vol)
+        self.ctrl.wait()
+
+        del RE.md['sample_name']
+        del RE.md['saxs']
+        del RE.md['waxs1']
+        del RE.md['waxs2']
+        del RE.md['energy']
+        #del RE.md['XBPM']
+    
+    def collect_oscill_data(self, vol=45, exp=2, repeats=3, sample_name='test'):
         pilatus_ct_time(exp)
         pilatus_number_reset(False)
         
@@ -314,11 +381,11 @@ class SolutionScatteringExperimentalModule():
         #    vol=-vol
 
         # pump_spd unit is ul/min
-        self.ctrl.pump_spd.put(60.*vol/(repeats*exp))
+        self.ctrl.pump_spd.put(60.*vol/exp)
         #print('collecting data, %d of %d repeats ...' % (n+1, repeats))
         #self.ctrl.pump_mvR(vol)
-        th = threading.Thread(target=self.ctrl.delayed_mvR, args=(vol, ) )
-        th.start()
+        th = threading.Thread(target=self.ctrl.delayed_oscill_mvR, args=(vol, repeats, ) )
+        th.start() 
         # single image per trigger
         #RE(ct(num=repeats))
         # take multiple images per trigger
@@ -338,7 +405,8 @@ class SolutionScatteringExperimentalModule():
         del RE.md['waxs2']
         del RE.md['energy']
         del RE.md['XBPM']
-    
+        
+            
     def return_sample(self):
         ''' assuming that the sample has just been measured
             dump the sample back into the PCR tube
@@ -370,11 +438,72 @@ class SolutionScatteringExperimentalModule():
         
         self.wash_needle(nd)
         
+    def measure_oscill(self, tn, nd=None, vol=50, exp=5, repeats=3, sample_name='test', delay=0):
+        ''' measure(self, tn, nd, vol, exp, repeats, sample_name='test')
+            tn: tube number: 1-18
+            nd: needle, "upstream" or "downstream", if need to specify
+            exp: exposure time
+            repeats: # of exposures
+        '''
         
-    def measure_list(self, sample_list):
+        nd = self.verify_needle_for_tube(tn, nd)
+        
+        self.select_flow_cell(self.flowcell_nd[nd])
+        self.prepare_to_load_sample(tn, nd)
+        self.load_sample(vol)
+        if delay>0:
+            countdown("delay before exposure:",delay)
+        self.collect_oscill_data(vol, exp, repeats, sample_name)
+        self.return_sample()
+        
+        self.wash_needle(nd)
+        
+    def measure_nowash(self, tn, nd=None, vol=50, exp=2, repeats=3, sample_name='test', delay=0):
+        ''' measure(self, tn, nd, vol, exp, repeats, sample_name='test')
+            tn: tube number: 1-18
+            nd: needle, "upstream" or "downstream", if need to specify
+            exp: exposure time
+            repeats: # of exposures
+        '''
+        nd = self.verify_needle_for_tube(tn, nd)
+        
+        self.select_flow_cell(self.flowcell_nd[nd])
+        self.prepare_to_load_sample(tn, nd)
+        self.load_sample(vol)
+        if delay>0:
+            countdown("delay before exposure:",delay)
+        self.collect_data(vol, exp, repeats, sample_name)
+        
+        self.return_sample()
+        
+        
+    def measure_list(self, vol=45, exp=2, repeats=3, sample_list="list1", delay=0, nd=None):
         ''' a list of subset of necessary parameters for single sample data collection
         '''
-        pass
+        i=0
+        for a in sample_list[0]:
+            sample_name=sample_list[1][i]
+            nd = self.verify_needle_for_tube(a, nd)
+            self.prepare_to_load_sample(a, nd)
+            #self.load_sample(vol)
+            if delay>0:
+                countdown("delay before exposure:",delay)
+            th1=threading.Thread(target=self.collect_data,args=(vol, exp, repeats, sample_name,))
+            th1.start()
+            i+=1
+            if i<sample_list.shape[1]:
+                c=sample_list[0][i]
+                ndn = self.verify_needle_for_tube(c, nd=None)
+                if nd!=ndn:
+                    #th2=threading.Thread(target=self.wash_needle,args=(ndn,))
+                    #th2.start()
+                    self.wash_needle(ndn)
+                    while th1.is_alive():
+                        th1.join(0.2)
+            self.select_tube_pos(a)
+            self.return_sample()
+            nd=None
+            
     
        
     def mov_delay(self, length):

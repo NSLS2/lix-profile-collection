@@ -5,6 +5,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import time
 
+def johnHello():
+  print("hello!!")
+
 def mov_all(motor, pos, wait=True, relative=False):
     if relative:
         pos += motor.position
