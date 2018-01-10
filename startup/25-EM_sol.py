@@ -1,5 +1,5 @@
 # part of the ipython profile for data collection
-from ophyd import (EpicsSignal, Device, Component as Cpt)
+from ophyd import (EpicsSignal, EpicsMotor, Device, Component as Cpt)
 from time import sleep
 import threading
 from epics import PV
@@ -75,8 +75,10 @@ class SolutionScatteringExperimentalModule():
     
     ctrl = SolutionScatteringControlUnit('XF:16IDC-ES:Sol{ctrl}', name='sol_ctrl')
     pcr_v_enable = EpicsSignal("XF:16IDC-ES:Sol{ctrl}SampleAlign")    # 1 means PCR tube holder can go up 
+    pcr_holder_up = EpicsSignal("XF:16IDC-ES:Sol{ctrl}HolderUp")
     
-    sample_y = EpicsMotor('XF:16IDC-ES:Sol{Enc-Ax:YU}Mtr', name='sol_sample_y')
+    
+    #sample_y = EpicsMotor('XF:16IDC-ES:Sol{Enc-Ax:YU}Mtr', name='sol_sample_y')
     sample_x = EpicsMotor('XF:16IDC-ES:Sol{Enc-Ax:Xu}Mtr', name='sol_sample_x')
     holder_x = EpicsMotor('XF:16IDC-ES:Sol{Enc-Ax:Xl}Mtr', name='sol_holder_x')
     
@@ -100,11 +102,11 @@ class SolutionScatteringExperimentalModule():
     #     reduce motor current, drive sol.holder_x in the possitive direction to hit the hard stop
     #     move the motor back by 0.5mm, set the current position to 37.5 ("park" position)
     #     set software limits:
-    #          caput("XF:16IDC-ES:Sol{Enc-Ax:Xl}Mtr.LLM", -116)
-    #          caput("XF:16IDC-ES:Sol{Enc-Ax:Xl}Mtr.HLM", 37.6)
+    #          caput("XF:16IDC-ES:Sol{Enc-Ax:Xl}Mtr.LLM", -119)
+    #          caput("XF:16IDC-ES:Sol{Enc-Ax:Xl}Mtr.HLM", 31.5)
     #     change the motor current back
     drain_pos = 0.
-    park_pos = 36.5
+    park_pos = 31.0
     
     disable_flow_cell_move = False
     
@@ -160,7 +162,7 @@ class SolutionScatteringExperimentalModule():
             print("flow cell motion disabled !!!")
         else:
             print('move to flow cell %s ...' % cn)
-            self.sample_y.move(self.flowcell_pos[cn])
+            #self.sample_y.move(self.flowcell_pos[cn])
     
     def select_tube_pos(self, tn):
         '''1 argument accepted: 
@@ -169,14 +171,20 @@ class SolutionScatteringExperimentalModule():
         if tn not in range(0,19) and tn!='park':
             raise RuntimeError('invalid tube position %d, must be 0 (drain) or 1-18, or \'park\' !!' % tn)
             
-        #if self.ctrl.sv_pcr_tubes.get(as_string=True)!='down':
-        if self.tube_holder_pos != "down":
-            raise RuntimeError('PCR tube holder should be down right now !!')
+        #addtition of new position sensor for sample holder actuator 12/2017:
+        if self.pcr_holder_up.get()==0:
+            raise RuntimeError('Sample holder is up right now and should be moved down!!')
+        else:
+            print('Sample holder is down.')
 
         self.tube_pos = tn
         if tn=='park':
             #if sol.ctrl.sv_door_lower.get(as_string=True)=='close':
             #raise RuntimeError('Attempting to park the PCR tube holder while the sample door is closed !!')
+            if self.pcr_holder_up.get()==0:
+                raise RuntimeError('Sample holder is up right now and should be moved down!!')
+            else:
+                print('Sample holder is down.')
             self.holder_x.move(self.park_pos)
             print('move to PCR tube holder park position ...')        
         else:
@@ -184,9 +192,14 @@ class SolutionScatteringExperimentalModule():
             #tube1_pos = -15.95     # relative to well position
             #tube_spc = -9.0      # these are mechanically determined and should not change
             # 2017 march version of tube holder with alterate tube/empty holes
-            tube1_pos = -15.62     # relative to well position
+            tube1_pos=-18.75    #12/20/17 by JB
             tube_spc = -5.8417     # these are mechanically determined and should not change
             pos = self.drain_pos
+            if self.pcr_holder_up.get()==0:
+                raise RuntimeError('Sample holder is up right now and should be moved down!!')
+            else:
+                print('Sample holder is down.')
+            
             if tn>0:
                 pos += (tube1_pos + tube_spc*(tn-1))
             print('move to PCR tube position %d ...' % tn)
@@ -300,6 +313,10 @@ class SolutionScatteringExperimentalModule():
         self.ctrl.wait()
         
         self.move_tube_holder('down')
+        if self.pcr_holder_up.get()==0:
+            raise RuntimeError('sample holder is not down!!')
+        else:
+            print('Sample holder is down.')
         self.ctrl.pump_mvA(self.return_piston_pos+self.vol_tube_to_cell[nd])
         self.ctrl.wait()
            
@@ -308,15 +325,17 @@ class SolutionScatteringExperimentalModule():
         pilatus_ct_time(exp)
         pilatus_number_reset(False)
         
-        change_sample(sample_name)
-        RE.md['sample_name'] = current_sample 
-        RE.md['saxs'] = ({'saxs_x':saxs.x.position, 'saxs_y':saxs.y.position, 'saxs_z':saxs.z.position})
-        RE.md['waxs1'] = ({'waxs1_x':waxs1.x.position, 'waxs1_y':waxs1.y.position, 'waxs1_z':waxs1.z.position})
-        RE.md['waxs2'] = ({'waxs2_x':waxs2.x.position, 'waxs1_y':waxs2.y.position, 'waxs1_z':waxs2.z.position}) 
-        RE.md['energy'] = ({'mono_bragg': mono.bragg.position, 'energy': getE(), 'gap': get_gap()})
+        updata_metadata()
+        
+        #change_sample(sample_name)
+        #RE.md['sample_name'] = current_sample 
+        #RE.md['saxs'] = ({'saxs_x':saxs.x.position, 'saxs_y':saxs.y.position, 'saxs_z':saxs.z.position})
+        #RE.md['waxs1'] = ({'waxs1_x':waxs1.x.position, 'waxs1_y':waxs1.y.position, 'waxs1_z':waxs1.z.position})
+        #RE.md['waxs2'] = ({'waxs2_x':waxs2.x.position, 'waxs1_y':waxs2.y.position, 'waxs1_z':waxs2.z.position}) 
+        #RE.md['energy'] = ({'mono_bragg': mono.bragg.position, 'energy': getE(), 'gap': get_gap()})
         #RE.md['XBPM'] = XBPM_pos() 
         
-        gs.DETS=[em1, em2, pil1M, pilW1, pilW2]
+        gs.DETS=[pil1M] #[em1, em2, pil1M]#, pilW1, pilW2]
         #gs.DETS=[em1, em2, pil1M_ext,pilW1_ext,pilW2_ext]
         #set_pil_num_images(repeats)
         
@@ -336,9 +355,10 @@ class SolutionScatteringExperimentalModule():
         th = threading.Thread(target=self.ctrl.delayed_mvR, args=(vol, ) )
         th.start() 
         # single image per trigger
-        #RE(ct(num=repeats))
+        RE(ct(num=repeats))
         # take multiple images per trigger
-        pilatus_set_Nimage(repeats)
+        #pilatus_set_Nimage(repeats)
+        set_pil_num_images(repeats)
         RE(ct(num=1))
         self.ctrl.wait()
         
@@ -359,15 +379,17 @@ class SolutionScatteringExperimentalModule():
         pilatus_ct_time(exp)
         pilatus_number_reset(False)
         
-        change_sample(sample_name)
-        RE.md['sample_name'] = current_sample 
-        RE.md['saxs'] = ({'saxs_x':saxs.x.position, 'saxs_y':saxs.y.position, 'saxs_z':saxs.z.position})
-        RE.md['waxs1'] = ({'waxs1_x':waxs1.x.position, 'waxs1_y':waxs1.y.position, 'waxs1_z':waxs1.z.position})
-        RE.md['waxs2'] = ({'waxs2_x':waxs2.x.position, 'waxs1_y':waxs2.y.position, 'waxs1_z':waxs2.z.position}) 
-        RE.md['energy'] = ({'mono_bragg': mono.bragg.position, 'energy': getE(), 'gap': get_gap()})
-        RE.md['XBPM'] = XBPM_pos() 
+        updata_metadata()
         
-        gs.DETS=[em1, em2, pil1M, pilW1, pilW2]
+        #change_sample(sample_name)
+        #RE.md['sample_name'] = current_sample 
+        #RE.md['saxs'] = ({'saxs_x':saxs.x.position, 'saxs_y':saxs.y.position, 'saxs_z':saxs.z.position})
+        #RE.md['waxs1'] = ({'waxs1_x':waxs1.x.position, 'waxs1_y':waxs1.y.position, 'waxs1_z':waxs1.z.position})
+        #RE.md['waxs2'] = ({'waxs2_x':waxs2.x.position, 'waxs1_y':waxs2.y.position, 'waxs1_z':waxs2.z.position}) 
+        #RE.md['energy'] = ({'mono_bragg': mono.bragg.position, 'energy': getE(), 'gap': get_gap()})
+        #RE.md['XBPM'] = XBPM_pos() 
+        
+        gs.DETS=[em1, em2, pil1M]#, pilW1, pilW2]
         #gs.DETS=[em1, em2, pil1M_ext,pilW1_ext,pilW2_ext]
         #set_pil_num_images(repeats)
         
@@ -389,7 +411,8 @@ class SolutionScatteringExperimentalModule():
         # single image per trigger
         #RE(ct(num=repeats))
         # take multiple images per trigger
-        pilatus_set_Nimage(repeats)
+        #pilatus_set_Nimage(repeats)
+        set_pil_num_images(repeats)
         RE(ct(num=1))
         self.ctrl.wait()
         
@@ -517,15 +540,17 @@ class SolutionScatteringExperimentalModule():
         pilatus_ct_time(exp)
         pilatus_number_reset(False)
         
-        change_sample(sample_name)
-        RE.md['sample_name'] = current_sample 
-        RE.md['saxs'] = ({'saxs_x':saxs.x.position, 'saxs_y':saxs.y.position, 'saxs_z':saxs.z.position})
-        RE.md['waxs1'] = ({'waxs1_x':waxs1.x.position, 'waxs1_y':waxs1.y.position, 'waxs1_z':waxs1.z.position})
-        RE.md['waxs2'] = ({'waxs2_x':waxs2.x.position, 'waxs1_y':waxs2.y.position, 'waxs1_z':waxs2.z.position}) 
-        RE.md['energy'] = ({'mono_bragg': mono.bragg.position, 'energy': getE(), 'gap': get_gap()})
-        RE.md['XBPM'] = XBPM_pos() 
+        updata_metadata()
+        #change_sample(sample_name)
+        #RE.md['sample_name'] = current_sample 
+        #RE.md['saxs'] = ({'saxs_x':saxs.x.position, 'saxs_y':saxs.y.position, 'saxs_z':saxs.z.position})
+        #RE.md['waxs1'] = ({'waxs1_x':waxs1.x.position, 'waxs1_y':waxs1.y.position, 'waxs1_z':waxs1.z.position})
+        #RE.md['waxs2'] = ({'waxs2_x':waxs2.x.position, 'waxs1_y':waxs2.y.position, 'waxs1_z':waxs2.z.position}) 
+        #RE.md['energy'] = ({'mono_bragg': mono.bragg.position, 'energy': getE(), 'gap': get_gap()})
+        #RE.md['XBPM'] = XBPM_pos() 
         gs.DETS=[em1, em2, pil1M, pilW1, pilW2]
-        pilatus_set_Nimage(repeats)
+        #pilatus_set_Nimage(repeats)
+        set_pil_num_images(repeats)
         length=7.5
         #self.ctrl.wait()
         self.sample_x.velocity.put(length/((repeats*exp)+4))

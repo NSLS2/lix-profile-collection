@@ -20,8 +20,8 @@ def hplc_scan(detectors, monitors, *, md=None):
                   {'plan_name': 'hplc_scan'})
 
     @fast_shutter_decorator() 
-    @subs_decorator(LiveTable([usb4000.region1.luminescence.name]))
-    @subs_decorator(LoudLivePlot(usb4000.region1.luminescence.name))
+    #@subs_decorator(LiveTable([usb4000.region1.luminescence.name]))
+    #@subs_decorator(LoudLivePlot(usb4000.region1.luminescence.name))
     @stage_decorator([hplc] + detectors)
     #@monitor_during_decorator(monitors)
     @run_decorator(md=md)
@@ -47,10 +47,8 @@ def collect_hplc(sample_name,exp):#, CV=24, flowrate=0.5)
     change_sample(sample_name)
     #time = CV/flowrate
     #no_of_cts = time * 60/exp
-    #set_pil_num_images(no_of_cts)
-    pilatus_set_Nimage(1)
+    set_pil_num_images(1)
     pilatus_ct_time(exp)
-    #RE(hplc_scan(detectors=[pil1M, pilW1, pilW2, em2, usb4000], monitors=[]))
-    #RE(hplc_scan(detectors=[pil1M_ext, pilW1_ext, pilW2_ext, em1, em2], monitors=[]))
+    updata_metadata()
     RE(hplc_scan(detectors=[pil1M, pilW1, pilW2, em1, em2], monitors=[]))
 

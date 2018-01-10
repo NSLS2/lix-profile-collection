@@ -7,9 +7,8 @@ def print_scanid(name, doc):
         last_scan_id = doc['scan_id']  
         print('Scan ID:', doc['scan_id'])
         print('Unique ID:', doc['uid'])
-        pil1M.HeaderString.put("uid=%s" % doc['uid'])
-        pilW1.HeaderString.put("uid=%s" % doc['uid'])
-        pilW2.HeaderString.put("uid=%s" % doc['uid'])
+        for d in set(pilatus_detectors_ext+pilatus_detectors) & set(gs.DETS):
+            d.HeaderString.put("uid=%s" % doc['uid'])
        
 def print_scanid_stop(name, doc):
     global last_scan_uid
