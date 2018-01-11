@@ -2,6 +2,7 @@ import logging
 
 import nslsii
 
+from databroker import Broker
 # TODO : move to /etc/databroker/lix.yml
 # and use :
 # nslsii.configure_base(get_ipython().user_ns, 'lix')
@@ -30,7 +31,7 @@ config = {
 
 db = Broker.from_config(config)
 
-nslsii.configure_base(db)
+nslsii.configure_base(get_ipython().user_ns, db)
 
 import ophyd
 ophyd.utils.startup.setup()

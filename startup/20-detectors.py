@@ -6,6 +6,7 @@ import ophyd.areadetector.cam as cam
 
 from ophyd.areadetector.filestore_mixins import (FileStoreTIFFIterativeWrite,
                                                  FileStoreHDF5IterativeWrite)
+from ophyd.areadetector.plugins import ProcessPlugin
 
 from ophyd import Component as Cpt
 from scipy.misc import imsave
@@ -301,6 +302,6 @@ for cam in all_RGB_cam:
         # In the case of the OverlayPlugin, the Overlay object has no port_name
         # which leads to a empty port_map at asyn_digraph.
         #
-        for overlay in cam.over1.signal_names:
+        for overlay in cam.over1.component_names:
             if overlay.startswith('overlay'):
                 getattr(cam.over1, overlay).validate_asyn_ports = lambda: None

@@ -1,9 +1,9 @@
 from collections import ChainMap
 from ophyd import DeviceStatus
 from bluesky.preprocessors import (monitor_during_decorator, run_decorator,
-    stage_decorator, subs_decorator)
-from bluesky.plan_stubs import (complete, kickoff, collect, monitor, unmonitor)
-from bluesky.plans import (trigger_and_read, )
+                                   stage_decorator, subs_decorator)
+from bluesky.plan_stubs import (complete, kickoff, collect, monitor, unmonitor,
+                                trigger_and_read)
 from bluesky.callbacks import LivePlot
 
 

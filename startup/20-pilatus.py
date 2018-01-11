@@ -3,10 +3,12 @@ from ophyd import ( Component as Cpt, ADComponent,
                     ROIPlugin, StatsPlugin, ImagePlugin,
                     SingleTrigger, PilatusDetector, Device)
 
-from ophyd.areadetector.filestore_mixins import FileStoreBulkWrite
+# deprecated
+#from ophyd.areadetector.filestore_mixins import FileStoreBulkWrite
+from ophyd.areadetector.filestore_mixins import FileStoreIterativeWrite
 
 from ophyd.utils import set_and_wait
-from filestore.handlers_base import HandlerBase
+from databroker.assets.handlers_base import HandlerBase
 
 # shortcut to databroker registry
 reg = db.reg
@@ -31,7 +33,7 @@ def first_PilatusExt():
             return det.name
     return None
 
-class PilatusFilePlugin(Device, FileStoreBulkWrite):
+class PilatusFilePlugin(Device, FileStoreIterativeWrite):
     file_path = ADComponent(EpicsSignalWithRBV, 'FilePath', string=True)
     file_number = ADComponent(EpicsSignalWithRBV, 'FileNumber')
     file_name = ADComponent(EpicsSignalWithRBV, 'FileName', string=True)

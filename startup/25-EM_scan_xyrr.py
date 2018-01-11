@@ -5,15 +5,14 @@ import threading
 from epics import PV
 from scipy import misc
 
-from bluesky.plans import grid_scan
 
 
 class ScanningExperimentalModule2():
     """ the zero for Ry must be set correctly so that Rx is pointing in the x direction
         once homed, this position is at -6.0
     """
-    x = EpicsMotor('XF:16IDC-ES:Scan2{Ax:X}Mtr', name='ss2_x')
-    y = EpicsMotor('XF:16IDC-ES:Scan2{Ax:Y}Mtr', name='ss2_y')
+    x = EpicsMotor('XF:16IDC-ES:Scan2{Ax:sX}Mtr', name='ss2_x')
+    y = EpicsMotor('XF:16IDC-ES:Scan2{Ax:sY}Mtr', name='ss2_y')
     z = EpicsMotor('XF:16IDC-ES:InAir{Mscp:1-Ax:F}Mtr', name='focus')
     rx = EpicsMotor('XF:16IDC-ES:Scan2{Ax:RX}Mtr', name='ss2_rx')
     ry = EpicsMotor('XF:16IDC-ES:Scan2{Ax:RY}Mtr', name='ss2_ry')    
@@ -80,8 +79,8 @@ class ScanningExperimentalModule2():
             change_sample(sample_name)
             RE.md['sample_rotation'] = self.rx.position
             cam_mic.saveImg('%s%s_1.png' % (data_path, current_sample))
-            #RE(grid_scan(gs.DETS, self.x, x1-dx/2, x1+dx/2, Nx, self.y, y1-dy/2, y1+dy/2, Ny))
-            RE(grid_scan(gs.DETS, self.y, y1-dy/2, y1+dy/2, Ny, self.x, x1-dx/2, x1+dx/2, Nx))
+            #RE(grid_scan_fs(gs.DETS, self.x, x1-dx/2, x1+dx/2, Nx, self.y, y1-dy/2, y1+dy/2, Ny))
+            RE(grid_scan_fs(gs.DETS, self.y, y1-dy/2, y1+dy/2, Ny, self.x, x1-dx/2, x1+dx/2, Nx))
             cam_mic.saveImg('%s%s_2.png' % (data_path, current_sample))            
             mov([self.x, self.y], [x1, y1])
       
@@ -90,25 +89,25 @@ class ScanningExperimentalModule2():
             change_sample(sample_name+"_a")
             RE.md['sample_rotation'] = rx0 
             cam_mic.saveImg('%s%s_1.png' % (data_path,current_sample))
-            RE(grid_scan(gs.DETS, self.x, x1-dx/2, x1+dx/2, Nx, self.y, y1-dy/2, y1+dy/2, Ny))
+            RE(grid_scan_fs(gs.DETS, self.x, x1-dx/2, x1+dx/2, Nx, self.y, y1-dy/2, y1+dy/2, Ny))
             cam_mic.saveImg('%s%s_2.png' % (data_path, current_sample))
        
             self.mv(x1, y1, -rx0)
             change_sample(sample_name+"_b")
             RE.md['sample_rotation'] = -rx0 
             cam_mic.saveImg('%s%s_1.png' % (data_path, current_sample))
-            RE(grid_scan(gs.DETS, self.x, x1-dx/2, x1+dx/2, Nx, self.y, y1-dy/2, y1+dy/2, Ny))
+            RE(grid_scan_fs(gs.DETS, self.x, x1-dx/2, x1+dx/2, Nx, self.y, y1-dy/2, y1+dy/2, Ny))
             cam_mic.saveImg('%s%s_2.png' % (data_path, current_sample))
             
             self.mv(x1, y1, 0)
       
     def scan1(self, s1, e1, Ny, s2, e2, Nx):
         set_pil_num_images(Nx*Ny)
-        RE(grid_scan(gs.DETS, ss2.y, s1,e1, Ny, ss2.x, s2, e2, Nx))
+        RE(grid_scan_fs(gs.DETS, ss2.y, s1,e1, Ny, ss2.x, s2, e2, Nx))
 
     def scan2(self, s1, e1, Nx, s2, e2, Ny):
         set_pil_num_images(Nx*Ny)
-        RE(grid_scan(gs.DETS, ss2.x, s1,e1, Nx, ss2.y, s2, e2, Ny))
+        RE(grid_scan_fs(gs.DETS, ss2.x, s1,e1, Nx, ss2.y, s2, e2, Ny))
     
 p1 = PV('XF:16IDC-ES:Scan2{Ax:X}Mtr')    
 p2 = PV('XF:16IDC-ES:Scan2{Ax:RX}Mtr')

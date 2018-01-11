@@ -5,10 +5,17 @@ from ophyd.sim import motor, det
 # Need to use bluesky alternatives
 #from bluesky.spec_api import ct, ascan, d2scan, mesh, inner_spec_decorator, partition
 
-ct = fast_shutter_decorator()(ct)
-abscan = fast_shutter_decorator()(ascan)
-dscan = fast_shutter_decorator()(d2scan)
-mesh = fast_shutter_decorator()(mesh)
+import bluesky.plans as bp
+# rename them slightly different so they're easier to find
+relative_inner_product_scan_fs = fast_shutter_decorator(bp.relative_inner_product_scan)
+count_fs = fast_shutter_decorator(bp.count)
+grid_scan_fs = fast_shutter_decorator()(bp.grid_scan)
+
+
+#ct = fast_shutter_decorator()(ct)
+#abscan = fast_shutter_decorator()(ascan)
+#dscan = fast_shutter_decorator()(d2scan)
+#mesh = fast_shutter_decorator()(mesh)
 
 #gs.DETS = [det]
 

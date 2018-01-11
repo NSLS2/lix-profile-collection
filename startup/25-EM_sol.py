@@ -345,7 +345,7 @@ class SolutionScatteringExperimentalModule():
         #for n in range(repeats):
         #    print('collecting data, %d of %d repeats ...' % (n+1, repeats))
         #    self.ctrl.pump_mvR(vol)
-        #    RE(bp.count(gs.DETS, num=1))
+        #    RE(count_fs(gs.DETS, num=1))
         #    self.ctrl.wait()
         #    vol=-vol
 
@@ -356,11 +356,11 @@ class SolutionScatteringExperimentalModule():
         th = threading.Thread(target=self.ctrl.delayed_mvR, args=(vol, ) )
         th.start() 
         # single image per trigger
-        RE(bp.count(gs.DETS, num=repeats))
+        RE(count_fs(gs.DETS, num=repeats))
         # take multiple images per trigger
         #pilatus_set_Nimage(repeats)
         set_pil_num_images(repeats)
-        RE(bp.count(gs.DETS, num=1))
+        RE(count_fs(gs.DETS, num=1))
         self.ctrl.wait()
         
         pilatus_number_reset(True)
@@ -399,7 +399,7 @@ class SolutionScatteringExperimentalModule():
         #for n in range(repeats):
         #    print('collecting data, %d of %d repeats ...' % (n+1, repeats))
         #    self.ctrl.pump_mvR(vol)
-        #    RE(bp.count(gs.DETS, num=1))
+        #    RE(count_fs(gs.DETS, num=1))
         #    self.ctrl.wait()
         #    vol=-vol
 
@@ -410,11 +410,11 @@ class SolutionScatteringExperimentalModule():
         th = threading.Thread(target=self.ctrl.delayed_oscill_mvR, args=(vol, repeats, ) )
         th.start() 
         # single image per trigger
-        #RE(bp.count(gs.DETS, num=repeats))
+        #RE(count_fs(gs.DETS, num=repeats))
         # take multiple images per trigger
         #pilatus_set_Nimage(repeats)
         set_pil_num_images(repeats)
-        RE(bp.count(gs.DETS, num=1))
+        RE(count_fs(gs.DETS, num=1))
         self.ctrl.wait()
         
         pilatus_number_reset(True)
@@ -557,7 +557,7 @@ class SolutionScatteringExperimentalModule():
         self.sample_x.velocity.put(length/((repeats*exp)+4))
         th = threading.Thread(target=self.mov_delay, args=(length, ) )
         th.start()
-        RE(bp.count(gs.DETS, num=1))
+        RE(count_fs(gs.DETS, num=1))
         self.sample_x.velocity.put(0)
         movr(self.sample_x, length)
         

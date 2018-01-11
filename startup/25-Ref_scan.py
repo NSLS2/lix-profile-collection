@@ -112,7 +112,7 @@ class RefScan():
         mov(tilt.rx, 650)
         set_pil_num_images(5)
         change_sample(sample_name+"gis")
-        RE(bp.count(gs.DETS, num=1))
+        RE(count_fs(gs.DETS, num=1))
         print(db[-4].start.uid)
         print(db[-3].start.uid)
         print(db[-2].start.uid)
@@ -138,7 +138,7 @@ class RefScan():
         mov(tilt.rx, 650)
         set_pil_num_images(5)
         change_sample(sample_name+"gis")
-        RE(bp.count(gs.DETS, num=1))
+        RE(count_fs(gs.DETS, num=1))
         
     
     #def scan(self, sname="none", rx_range=20000, xrange=2, Nx=20, cts=1, attenuation=None):
@@ -225,7 +225,7 @@ class RefScan():
         mov(tilt.rx, 650)
         set_pil_num_images(5)
         change_sample("test")
-        RE(bp.count(gs.DETS, num=1))
+        RE(count_fs(gs.DETS, num=1))
 
     
     

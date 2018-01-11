@@ -6,6 +6,7 @@ import numpy as np
 import time
 import bluesky.plans as bp
 
+
 def johnHello():
   print("hello!!")
 
@@ -77,9 +78,9 @@ def Bi_vert_scan(filename="none"):
         print("****************************************************")
         print(v)
         print("****************************************************")
-        #RE(bp.relative_inner_product_scan(gs.DETS, scan_steps-1, mps.bottom, 0, bot_scan_high, mps.top, 0, top_range))
-        # relative_inner_product_scan( detectors, num, motor1, start1, stop1, motor2, start2, stop2...)
-        RE(bp.relative_inner_product_scan(gs.DETS, 220, mps.bottom, 0, -2.2, mps.top, 0, 2.2))
+        #RE(relative_inner_product_scan_fs(gs.DETS, scan_steps-1, mps.bottom, 0, bot_scan_high, mps.top, 0, top_range))
+        # relative_inner_product_scan_fs( detectors, num, motor1, start1, stop1, motor2, start2, stop2...)
+        RE(relative_inner_product_scan_fs(gs.DETS, 220, mps.bottom, 0, -2.2, mps.top, 0, 2.2))
         header, data = fetch_scan()
         s_pos = data['mps_top']
         s_data = data['cam05_stats1_centroid_y']

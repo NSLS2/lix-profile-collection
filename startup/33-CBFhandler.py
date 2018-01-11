@@ -1,4 +1,5 @@
 from databroker.assets.handlers_base import HandlerBase
+from databroker.assets.base_registry import DuplicateHandler
 import fabio
 
 # this is a temporary fix to get around the bug that the frames per point were are 
@@ -58,6 +59,7 @@ class PilatusCBFHandler(HandlerBase):
 
 try:
     db.reg.register_handler('AD_CBF', PilatusCBFHandler)
-except:
-    print("could not register PilatusCBFHandler.")
-
+except DuplicateHandler:
+    print("could not register PilatusCBFHandler. It already exists.")
+else:
+    print("Error in handler registration")

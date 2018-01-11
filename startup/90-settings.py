@@ -21,8 +21,8 @@ def print_md(name, doc):
     if name == 'start':
         print('Metadata:\n', repr(doc))
 
-RE.subscribe('start', print_scanid)
-RE.subscribe('stop', print_scanid_stop)
+RE.subscribe(print_scanid, 'start')
+RE.subscribe(print_scanid_stop, 'stop')
 
 # For debug purpose to see the metadata being stored
 #RE.subscribe('start', print_md)

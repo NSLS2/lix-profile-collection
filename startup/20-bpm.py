@@ -1,5 +1,5 @@
 from ophyd import Device, EpicsSignal, Signal, Component as Cpt
-from ophyd.quadem import NSLS_EM, TetrAMM
+from ophyd.quadem import NSLS_EM, TetrAMM, QuadEM
 from ophyd import DeviceStatus
 import numpy as np
 
