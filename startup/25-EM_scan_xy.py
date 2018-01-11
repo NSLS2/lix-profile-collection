@@ -33,12 +33,12 @@ class ScanningExperimentalModule1():
         
 
         if mtr1=='x':
-            RE(bp.outer_product_scan(gs.DETS, 
+            RE(bp.grid_scan(gs.DETS, 
                                      smf.x, s1, e1, Nx, 
                                      smf.y, s2, e2, Ny, False, 
                                      per_step=one_nd_step_with_shutter))
         else:
-            RE(bp.outer_product_scan(gs.DETS, 
+            RE(bp.grid_scan(gs.DETS, 
                                      smf.y, s1, e1, Nx, 
                                      smf.x, s2, e2, Ny, False, 
                                      per_step=one_nd_step_with_shutter))

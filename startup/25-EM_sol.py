@@ -3,6 +3,7 @@ from ophyd import (EpicsSignal, EpicsMotor, Device, Component as Cpt)
 from time import sleep
 import threading
 from epics import PV
+import bluesky.plans as bp
 
 class SolutionScatteringControlUnit(Device):
     reset_pump = Cpt(EpicsSignal, 'pp1c_reset')
@@ -335,16 +336,16 @@ class SolutionScatteringExperimentalModule():
         #RE.md['energy'] = ({'mono_bragg': mono.bragg.position, 'energy': getE(), 'gap': get_gap()})
         #RE.md['XBPM'] = XBPM_pos() 
         
-        gs.DETS=[pil1M] #[em1, em2, pil1M]#, pilW1, pilW2]
         #gs.DETS=[em1, em2, pil1M_ext,pilW1_ext,pilW2_ext]
         #set_pil_num_images(repeats)
         
+        gs.DETS=[pil1M] #[em1, em2, pil1M]#, pilW1, pilW2]
         # pump_spd unit is ul/min
         #self.ctrl.pump_spd.put(60.*vol/exp)
         #for n in range(repeats):
         #    print('collecting data, %d of %d repeats ...' % (n+1, repeats))
         #    self.ctrl.pump_mvR(vol)
-        #    RE(ct(num=1))
+        #    RE(bp.count(gs.DETS, num=1))
         #    self.ctrl.wait()
         #    vol=-vol
 
@@ -355,11 +356,11 @@ class SolutionScatteringExperimentalModule():
         th = threading.Thread(target=self.ctrl.delayed_mvR, args=(vol, ) )
         th.start() 
         # single image per trigger
-        RE(ct(num=repeats))
+        RE(bp.count(gs.DETS, num=repeats))
         # take multiple images per trigger
         #pilatus_set_Nimage(repeats)
         set_pil_num_images(repeats)
-        RE(ct(num=1))
+        RE(bp.count(gs.DETS, num=1))
         self.ctrl.wait()
         
         pilatus_number_reset(True)
@@ -398,7 +399,7 @@ class SolutionScatteringExperimentalModule():
         #for n in range(repeats):
         #    print('collecting data, %d of %d repeats ...' % (n+1, repeats))
         #    self.ctrl.pump_mvR(vol)
-        #    RE(ct(num=1))
+        #    RE(bp.count(gs.DETS, num=1))
         #    self.ctrl.wait()
         #    vol=-vol
 
@@ -409,11 +410,11 @@ class SolutionScatteringExperimentalModule():
         th = threading.Thread(target=self.ctrl.delayed_oscill_mvR, args=(vol, repeats, ) )
         th.start() 
         # single image per trigger
-        #RE(ct(num=repeats))
+        #RE(bp.count(gs.DETS, num=repeats))
         # take multiple images per trigger
         #pilatus_set_Nimage(repeats)
         set_pil_num_images(repeats)
-        RE(ct(num=1))
+        RE(bp.count(gs.DETS, num=1))
         self.ctrl.wait()
         
         pilatus_number_reset(True)
@@ -556,7 +557,7 @@ class SolutionScatteringExperimentalModule():
         self.sample_x.velocity.put(length/((repeats*exp)+4))
         th = threading.Thread(target=self.mov_delay, args=(length, ) )
         th.start()
-        RE(ct(num=1))
+        RE(bp.count(gs.DETS, num=1))
         self.sample_x.velocity.put(0)
         movr(self.sample_x, length)
         

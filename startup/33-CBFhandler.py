@@ -1,5 +1,4 @@
-from filestore.handlers_base import HandlerBase
-import filestore.api as fs
+from databroker.assets.handlers_base import HandlerBase
 import fabio
 
 # this is a temporary fix to get around the bug that the frames per point were are 
@@ -58,7 +57,7 @@ class PilatusCBFHandler(HandlerBase):
     """
 
 try:
-    db.fs.register_handler('AD_CBF', PilatusCBFHandler)
+    db.reg.register_handler('AD_CBF', PilatusCBFHandler)
 except:
     print("could not register PilatusCBFHandler.")
 

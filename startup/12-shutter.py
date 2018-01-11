@@ -1,7 +1,8 @@
 from ophyd import (EpicsSignal, Device, Component as Cpt)
 
-import os
-os.environ['EPICS_CA_ADDR_LIST']='10.16.2.59 10.16.2.60 10.16.2.61'
+# this might not work as intended, uncomment if needed
+#import os
+#os.environ['EPICS_CA_ADDR_LIST']='10.16.2.59 10.16.2.60 10.16.2.61'
 
 class FastShutter(Device):
     OPEN_SHUTTER = "open"

@@ -5,6 +5,8 @@ from epics import PV
 from scipy import misc
 import numpy as np
 
+import bluesky.plans as bp
+
 
 class RefScan():
     
@@ -24,7 +26,7 @@ class RefScan():
         if attenuation==None:
             change_sample(sample_name)
             set_pil_num_images(Nx)
-            RE(scan(tilt.rx, 0.01, rx_range, Nx-1))
+            RE(bp.scan(gs.DETS, tilt.rx, 0.01, rx_range, Nx-1))
       
         else:
             change_sample(sample_name+"_a")
@@ -33,7 +35,7 @@ class RefScan():
             nosa=round(2000/steps)
             #print(nosa)
             set_pil_num_images(nosa)
-            RE(scan(tilt.rx, 0.01, 2000, nosa-1))
+            RE(bp.scan(gs.DETS, tilt.rx, 0.01, 2000, nosa-1))
             
             change_sample(sample_name+"_b")
             Attn.fraction(60)
@@ -42,7 +44,7 @@ class RefScan():
             nos=round(range/steps)
             #print(nos)
             set_pil_num_images(nos)
-            RE(scan(tilt.rx, 2000, 7000, nos-1))
+            RE(bp.scan(gs.DETS, tilt.rx, 2000, 7000, nos-1))
             
             change_sample(sample_name+"_c")
             Attn.fraction(100)
@@ -51,7 +53,7 @@ class RefScan():
             nosc=round(rangec/steps)
             #print(nosc)
             set_pil_num_images(nosc)
-            RE(scan(tilt.rx, 7000, rx_range, nosc-1))
+            RE(bp.scan(gs.DETS, tilt.rx, 7000, rx_range, nosc-1))
             print(db[-3].start.uid)
             print(db[-2].start.uid)
             print(db[-1].start.uid)
@@ -75,7 +77,7 @@ class RefScan():
         if attenuation==None:
             change_sample(sample_name)
             set_pil_num_images(Nx)
-            RE(scan(tilt.rx, 0.01, rx_range, Nx-1))
+            RE(bp.scan(gs.DETS, tilt.rx, 0.01, rx_range, Nx-1))
             
         else:
             change_sample(sample_name+"_a")
@@ -84,7 +86,7 @@ class RefScan():
             nosa=round(4000/steps)
             #print(nosa)
             set_pil_num_images(nosa)
-            RE(scan(tilt.rx, 0.01, 4000, nosa-1))
+            RE(bp.scan(gs.DETS, tilt.rx, 0.01, 4000, nosa-1))
             
             change_sample(sample_name+"_b")
             Attn.fraction(70)
@@ -93,7 +95,7 @@ class RefScan():
             nos=round(range/steps)
             #print(nos)
             set_pil_num_images(nos)
-            RE(scan(tilt.rx, 4000, 10000, nos-1))
+            RE(bp.scan(gs.DETS, tilt.rx, 4000, 10000, nos-1))
             
             change_sample(sample_name+"_c")
             Attn.fraction(100)
@@ -102,7 +104,7 @@ class RefScan():
             nosc=round(rangec/steps)
             #print(nosc)
             set_pil_num_images(nosc)
-            RE(scan(tilt.rx, 10000, rx_range, nosc-1))
+            RE(bp.scan(gs.DETS, tilt.rx, 10000, rx_range, nosc-1))
        
         #mov(waxs1.x, 63.82)
         gs.DETS=[em1, em2, pil1M_ext]
@@ -110,7 +112,7 @@ class RefScan():
         mov(tilt.rx, 650)
         set_pil_num_images(5)
         change_sample(sample_name+"gis")
-        RE(ct(num=1))
+        RE(bp.count(gs.DETS, num=1))
         print(db[-4].start.uid)
         print(db[-3].start.uid)
         print(db[-2].start.uid)
@@ -136,7 +138,7 @@ class RefScan():
         mov(tilt.rx, 650)
         set_pil_num_images(5)
         change_sample(sample_name+"gis")
-        RE(ct(num=1))
+        RE(bp.count(gs.DETS, num=1))
         
     
     #def scan(self, sname="none", rx_range=20000, xrange=2, Nx=20, cts=1, attenuation=None):
@@ -223,7 +225,7 @@ class RefScan():
         mov(tilt.rx, 650)
         set_pil_num_images(5)
         change_sample("test")
-        RE(ct(num=1))
+        RE(bp.count(gs.DETS, num=1))
 
     
     

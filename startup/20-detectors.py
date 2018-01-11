@@ -9,6 +9,7 @@ from ophyd.areadetector.filestore_mixins import (FileStoreTIFFIterativeWrite,
 
 from ophyd import Component as Cpt
 from scipy.misc import imsave
+reg = db.reg
 
 class TIFFPluginWithFileStore(TIFFPlugin, FileStoreTIFFIterativeWrite):
     def make_filename(self):
@@ -220,13 +221,13 @@ class StandardProsilicaWithTIFF(StandardProsilica):
     tiff = Cpt(TIFFPluginWithFileStore,
                suffix='TIFF1:',
                write_path_template='/GPFS/xf16id/exp_path/',
-               fs=db.fs)
+               reg=db.reg)
 
 class LIXMicroscopeCamera(StandardProsilica):
     tiff = Cpt(TIFFPluginWithFileStore,
                suffix='TIFF1:',
                write_path_template='/GPFS/xf16id/exp_path/',
-               fs=db.fs)
+               reg=db.reg)
     over1 = Cpt(OverlayPlugin, 'Over1:')
 
 def setup_cam(pv, name):

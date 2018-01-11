@@ -3,7 +3,28 @@ import matplotlib.pyplot as plt
 from itertools import cycle
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.collections import PolyCollection
-from bluesky.callbacks.core import CallbackBase, _get_obj_fields
+from bluesky.callbacks.core import CallbackBase
+
+# grabbed this from bluesky v0.7.0 bluesky.callbacks.core
+# because it no longer exists in later versions
+def _get_obj_fields(fields):
+    """
+    If fields includes any objects, get their field names using obj.describe()
+
+    ['det1', det_obj] -> ['det1, 'det_obj_field1, 'det_obj_field2']"
+    """
+    string_fields = []
+    for field in fields:
+        if isinstance(field, str):
+            string_fields.append(field)
+        else:
+            try:
+                field_list = sorted(field.describe().keys())
+            except AttributeError:
+                raise ValueError("Fields must be strings or objects with a "
+                                 "'describe' method that return a dict.")
+            string_fields.extend(field_list)
+    return string_fields
 
 class LivePlot3D(CallbackBase):
     """

@@ -7,7 +7,10 @@ from ophyd.areadetector.filestore_mixins import FileStoreBulkWrite
 
 from ophyd.utils import set_and_wait
 from filestore.handlers_base import HandlerBase
-import filestore.api as fs
+
+# shortcut to databroker registry
+reg = db.reg
+
 import fabio
 import os,time,threading
 from threading import Timer
@@ -94,8 +97,8 @@ class PilatusFilePlugin(Device, FileStoreBulkWrite):
                       'filename': f_fn, # self.file_name(), 
                       'frame_per_point': fpp,
                       'initial_number': self.file_number.get()}
-        #self._resource = fs.insert_resource('AD_CBF', rpath, res_kwargs, root=path)
-        self._resource = fs.insert_resource('AD_CBF', data_path, res_kwargs, root="/")
+        #self._resource = reg.insert_resource('AD_CBF', rpath, res_kwargs, root=path)
+        self._resource = reg.insert_resource('AD_CBF', data_path, res_kwargs, root="/")
        
         try: # this is used by solution scattering only
             sol
@@ -127,7 +130,7 @@ class PilatusFilePlugin(Device, FileStoreBulkWrite):
 class LIXPilatus(SingleTrigger, PilatusDetector):
     # this does not get root is input because it is hardcoded above
     file = Cpt(PilatusFilePlugin, suffix="cam1:",
-               write_path_template="", fs=db.fs)
+               write_path_template="", reg=db.reg)
 
     roi1 = Cpt(ROIPlugin, 'ROI1:')
     roi2 = Cpt(ROIPlugin, 'ROI2:')
@@ -233,7 +236,7 @@ class PilatusExtTrigger(PilatusDetector):
 
 class LIXPilatusExt(PilatusExtTrigger):
     file = Cpt(PilatusFilePlugin, suffix="cam1:",
-               write_path_template="", fs=db.fs)
+               write_path_template="", reg=db.reg)
 
     roi1 = Cpt(ROIPlugin, 'ROI1:')
     roi2 = Cpt(ROIPlugin, 'ROI2:')
