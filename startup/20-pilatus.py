@@ -1,20 +1,28 @@
 from ophyd import ( Component as Cpt, ADComponent,
-                    EpicsSignal, EpicsSignalRO,
+                    EpicsSignal, EpicsSignalRO, EpicsSignalWithRBV,
                     ROIPlugin, StatsPlugin, ImagePlugin,
-                    SingleTrigger, PilatusDetector)
+                    SingleTrigger, PilatusDetector, Device)
 
-from ophyd.areadetector.filestore_mixins import FileStoreBulkWrite
+# deprecated
+#from ophyd.areadetector.filestore_mixins import FileStoreBulkWrite
+from ophyd.areadetector.filestore_mixins import FileStoreIterativeWrite
 
 from ophyd.utils import set_and_wait
-from filestore.handlers_base import HandlerBase
-import filestore.api as fs
+from databroker.assets.handlers_base import HandlerBase
+from ophyd.device import Staged
+
+
+# shortcut to databroker registry
+reg = db.reg
+
 import fabio
 import os,time,threading
 from threading import Timer
+from types import SimpleNamespace
 
 def first_Pilatus():
     #print("checking first Pialtus")
-    for det in gs.DETS:
+    for det in DETS:
         if det.__class__ == LIXPilatus:
             #print(det.name)
             return det.name
@@ -22,22 +30,29 @@ def first_Pilatus():
 
 def first_PilatusExt():
     #print("checking first Pialtus")
-    for det in reversed(gs.DETS):
+    for det in reversed(DETS):
         if det.__class__ == LIXPilatusExt:
             #print(det.name)
             return det.name
     return None
 
-class PilatusFilePlugin(Device, FileStoreBulkWrite):
+class PilatusFilePlugin(Device, FileStoreIterativeWrite):
     file_path = ADComponent(EpicsSignalWithRBV, 'FilePath', string=True)
     file_number = ADComponent(EpicsSignalWithRBV, 'FileNumber')
     file_name = ADComponent(EpicsSignalWithRBV, 'FileName', string=True)
     file_template = ADComponent(EpicsSignalWithRBV, 'FileTemplate', string=True)
-    file_header = Cpt(Signal, name='HeaderString')
-    reset_file_number = Cpt(Signal, name='reset_file_number', value=1)
-    filemover_files = Cpt(EpicsSignal, 'filemover.filename')
-    filemover_target_dir = Cpt(EpicsSignal, 'filemover.target')
-    filemover_move = Cpt(EpicsSignal, 'filemover.moving')
+    enable = SimpleNamespace(get=lambda: True)
+    
+    # this is not necessary to record since it contains the UID for the scan, useful 
+    # to save in the CBF file but no need in the data store
+    #file_header = ADComponent(EpicsSignal, "HeaderString", string=True) 
+    
+    # this is not necessary to record in the data store either, move to the parent 
+    #reset_file_number = Cpt(Signal, name='reset_file_number', value=1)
+    
+    #filemover_files = Cpt(EpicsSignal, 'filemover.filename')
+    #filemover_target_dir = Cpt(EpicsSignal, 'filemover.target')
+    #filemover_move = Cpt(EpicsSignal, 'filemover.moving')
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -49,8 +64,9 @@ class PilatusFilePlugin(Device, FileStoreBulkWrite):
         global current_sample
         global data_path
         
-        set_and_wait(self.file_template, '%s%s_%6.6d_'+self.parent.detector_id+'.cbf', timeout=99999)
-        if self.reset_file_number.get() == 1:
+        f_tplt = '%s%s_%06d_'+self.parent.detector_id+'.cbf'
+        set_and_wait(self.file_template, f_tplt, timeout=99999)
+        if self.parent.reset_file_number.get() == 1:
             set_and_wait(self.file_number, 1, timeout=99999)
 
         # original code by Hugo
@@ -69,17 +85,26 @@ class PilatusFilePlugin(Device, FileStoreBulkWrite):
             #print("first Pilatus is %s" % self.parent.name)
             change_path()
         
-        set_and_wait(self.file_path, "/ramdisk/", timeout=99999)
-        #set_and_wait(self.file_path, data_path, timeout=99999)
-        set_and_wait(self.file_name, current_sample, timeout=99999)
-        
+        #set_and_wait(self.file_path, "/ramdisk/", timeout=99999) # 12/19/17, changed back to GPFS
+        f_path = data_path
+        f_fn = current_sample
+        set_and_wait(self.file_path, f_path, timeout=99999)# 12/19/17, changed back to GPFS
+        set_and_wait(self.file_name, f_fn, timeout=99999)
+                
+        fpp = self.get_frames_per_point()
+        # when camserver collects in "multiple" mode, another number is added to the file name
+        # even though the template does not specify it. The template cannot be changed to add this
+        # second number. The template will be revised in the CBF handler if fpp>1
+        #if fpp>1:
+        #    f_tplt = '%s%s_%06d_'+self.parent.detector_id+'_%05d.cbf'
+
         super().stage()
-        res_kwargs = {'template': self.file_template.get(),
-                      'filename': self.file_name.get(),
-                      'frame_per_point': self.get_frames_per_point(),
+        res_kwargs = {'template': f_tplt, # self.file_template(),  #
+                      'filename': f_fn, # self.file_name(), 
+                      'frame_per_point': fpp,
                       'initial_number': self.file_number.get()}
-        #self._resource = fs.insert_resource('AD_CBF', rpath, res_kwargs, root=path)
-        self._resource = fs.insert_resource('AD_CBF', data_path, res_kwargs, root="/")
+        #self._resource = reg.insert_resource('AD_CBF', rpath, res_kwargs, root=path)
+        self._resource = reg.insert_resource('AD_CBF', data_path, res_kwargs, root="/")
        
         try: # this is used by solution scattering only
             sol
@@ -92,59 +117,26 @@ class PilatusFilePlugin(Device, FileStoreBulkWrite):
     def unstage(self):        
         super().unstage()
         # move the files first
-        if self.filemover_move.get()==1:
-            print("files are still being moved from the detector server to ",self.filemover_target_dir.get())
-            while self.filemover_move.get()==1:
-                sleep(1)
-            print("done.")
-        self.filemover_files.put(current_sample)
-        self.filemover_target_dir.put(data_path)        
-        self.filemover_move.put(1)
-
+        ##12/19/17 commented out
+        #if self.filemover_move.get()==1:
+        #    print("files are still being moved from the detector server to ",self.filemover_target_dir.get())
+        #    while self.filemover_move.get()==1:
+        #        sleep(1)
+        #    print("done.")
+        #self.filemover_files.put(current_sample)
+        #self.filemover_target_dir.put(data_path)        
+        #self.filemover_move.put(1)
+        ##12/19/17 commented out
         if self.parent.name == first_Pilatus() or self.parent.name == first_PilatusExt():
             release_lock()
         
     def get_frames_per_point(self):
-        return 1
-
-class PilatusCBFHandler(HandlerBase):
-    specs = {'AD_CBF'} | HandlerBase.specs
-
-    def __init__(self, rpath, template, filename, frame_per_point=1, initial_number=1):
-        self._path = rpath
-        self._fpp = frame_per_point
-        self._template = template
-        self._filename = filename
-        self._initial_number = initial_number
-
-    def __call__(self, point_number):
-        start, stop = self._initial_number + point_number * self._fpp, (point_number + 2) * self._fpp
-        ret = []
-        # commented out by LY to test scan speed imperovement, 2017-01-24
-        for j in range(start, stop):
-            fn = self._template % (self._path, self._filename, j)
-            #print("call Open File: ", fn)
-            img = fabio.open(fn)
-            ret.append(img.data)
-        return np.array(ret).squeeze()
-
-    def get_file_list(self, datum_kwargs_gen):
-        file_list = []
-        for dk in datum_kwargs_gen:
-            point_number = dk['point_number']
-            start, stop = self._initial_number + point_number * self._fpp, (point_number + 2) * self._fpp
-            ret = []
-            for j in range(start, stop):
-                fn = self._template % (self._path, self._filename, j)
-                #print("Will open file: ", fn)
-                file_list.append(fn)
-        return file_list
+        return self.parent.cam.num_images.get()   # always return 1 before 2018
 
 class LIXPilatus(SingleTrigger, PilatusDetector):
     # this does not get root is input because it is hardcoded above
     file = Cpt(PilatusFilePlugin, suffix="cam1:",
-               write_path_template="",
-               fs=db.fs)
+               write_path_template="", reg=db.reg)
 
     roi1 = Cpt(ROIPlugin, 'ROI1:')
     roi2 = Cpt(ROIPlugin, 'ROI2:')
@@ -156,40 +148,25 @@ class LIXPilatus(SingleTrigger, PilatusDetector):
     stats3 = Cpt(StatsPlugin, 'Stats3:')
     stats4 = Cpt(StatsPlugin, 'Stats4:')
 
+    reset_file_number = Cpt(Signal, name='reset_file_number', value=1)
     HeaderString = Cpt(EpicsSignal, "cam1:HeaderString")
     
     def __init__(self, *args, detector_id, **kwargs):
         self.detector_id = detector_id
+        self._num_images = 1
         super().__init__(*args, **kwargs)
 
-pil1M = LIXPilatus("XF:16IDC-DT{Det:SAXS}", name="pil1M", detector_id="SAXS")
-pilW1 = LIXPilatus("XF:16IDC-DT{Det:WAXS1}", name="pilW1", detector_id="WAXS1")
-pilW2 = LIXPilatus("XF:16IDC-DT{Det:WAXS2}", name="pilW2", detector_id="WAXS2")
-
-pilatus_detectors = [pil1M, pilW1, pilW2]
-
-for det in pilatus_detectors:
-    det.read_attrs = ['file']#, 'stats1_total', 'stats1_centroid']
-
-def pilatus_set_Nimage(n):
-    for det in pilatus_detectors:
-        det.cam.num_images.put(n)
+    def set_num_images(self, num_images):
+        self._num_images = num_images
         
-def pilatus_number_reset(status):
-    for det in pilatus_detectors:
-        val = 1 if status else 0
-        det.file.reset_file_number.put(val)
-
-def pilatus_ct_time(exp):
-    for det in pilatus_detectors:
-        det.cam.acquire_time.put(exp)
-        det.cam.acquire_period.put(exp+0.01)
-
-try:
-    db.fs.register_handler('AD_CBF', PilatusCBFHandler)
-except:
-    pass
-
+    def stage(self):
+        self.cam.num_images.put(self._num_images)
+        super().stage()
+    
+    def unstage(self):
+        self.cam.num_images.put(1, wait=True)
+        super().unstage()
+        
 
 ############## below is based on code written by Bruno
 ############## hardware triggering for Pilatus detectors
@@ -240,6 +217,7 @@ class PilatusExtTrigger(PilatusDetector):
         self._status = None
         self._acquisition_signal.put(0)
         self.cam.trigger_mode.put(0, wait=True)
+        self.cam.num_images.put(1, wait=True)
         super().unstage()
         
     def trigger(self):
@@ -264,7 +242,7 @@ class PilatusExtTrigger(PilatusDetector):
 
 class LIXPilatusExt(PilatusExtTrigger):
     file = Cpt(PilatusFilePlugin, suffix="cam1:",
-               write_path_template="", fs=db.fs)
+               write_path_template="", reg=db.reg)
 
     roi1 = Cpt(ROIPlugin, 'ROI1:')
     roi2 = Cpt(ROIPlugin, 'ROI2:')
@@ -276,21 +254,44 @@ class LIXPilatusExt(PilatusExtTrigger):
     stats3 = Cpt(StatsPlugin, 'Stats3:')
     stats4 = Cpt(StatsPlugin, 'Stats4:')
 
+    reset_file_number = Cpt(Signal, name='reset_file_number', value=1)
+    HeaderString = Cpt(EpicsSignal, "cam1:HeaderString")   # was missing before 2018
+
     def __init__(self, *args, **kwargs):
         self.detector_id = kwargs.pop('detector_id')
         super().__init__(*args, **kwargs)
         
+        
+pil1M = LIXPilatus("XF:16IDC-DT{Det:SAXS}", name="pil1M", detector_id="SAXS")
+pilW1 = LIXPilatus("XF:16IDC-DT{Det:WAXS1}", name="pilW1", detector_id="WAXS1")
+pilW2 = LIXPilatus("XF:16IDC-DT{Det:WAXS2}", name="pilW2", detector_id="WAXS2")
+
 pil1M_ext = LIXPilatusExt("XF:16IDC-DT{Det:SAXS}", name="pil1M_ext", detector_id="SAXS")
 pilW1_ext = LIXPilatusExt("XF:16IDC-DT{Det:WAXS1}", name="pilW1_ext", detector_id="WAXS1")
 pilW2_ext = LIXPilatusExt("XF:16IDC-DT{Det:WAXS2}", name="pilW2_ext", detector_id="WAXS2")
 
+pilatus_detectors = [pil1M, pilW1, pilW2]
 pilatus_detectors_ext = [pil1M_ext, pilW1_ext, pilW2_ext]
 
-for det in pilatus_detectors_ext:
+for det in pilatus_detectors+pilatus_detectors_ext:
     det.read_attrs = ['file']
 
+#def pilatus_set_Nimage(n):
+#    for det in pilatus_detectors:
+#        det.cam.num_images.put(n)
+        
+def pilatus_number_reset(status):
+    for det in pilatus_detectors:
+        val = 1 if status else 0
+        det.reset_file_number.put(val)
+
+def pilatus_ct_time(exp):
+    for det in pilatus_detectors:
+        det.cam.acquire_time.put(exp)
+        det.cam.acquire_period.put(exp+0.01)        
+        
 def set_pil_num_images(num):
-    for d in pilatus_detectors_ext:
+    for d in pilatus_detectors+pilatus_detectors_ext:
         d.set_num_images(num)
 
 

@@ -4,6 +4,8 @@ from PIL import Image
 import matplotlib.pyplot as plt
 import numpy as np
 import time
+import bluesky.plans as bp
+
 
 def johnHello():
   print("hello!!")
@@ -63,21 +65,22 @@ def reset_voltage(chn):
 def Bi_vert_scan(filename="none"):
     # Increaments/Decreaments Voltage on each vertical mirror channel, while scanning the vertical slits
     #sv_avg=np.zeros(steps+4, order='F') # zero array for averaging over the centroid
-    gs.DETS=[cam05]
+    DETS=[cam05]
     d = {}
     d_t = {}
     vert_scan=[]
     #sv_avg=np.zeros(steps+4, order='F') # zero array for averaging over the centroid
     s_avg=np.zeros(220+1,order='F')
-    gs.DETS=[cam05]
+    DETS=[cam05]
     step=10
     for v in range (12,24):
         set_voltage(v)
         print("****************************************************")
         print(v)
         print("****************************************************")
-        #RE(dscan(mps.bottom, 0, bot_scan_high, mps.top, 0, top_range, scan_steps-1))
-        RE(dscan(mps.bottom, 0, -2.2, mps.top, 0, 2.2, 220))
+        #RE(relative_inner_product_scan_fs(DETS, scan_steps-1, mps.bottom, 0, bot_scan_high, mps.top, 0, top_range))
+        # relative_inner_product_scan_fs( detectors, num, motor1, start1, stop1, motor2, start2, stop2...)
+        RE(relative_inner_product_scan_fs(DETS, 220, mps.bottom, 0, -2.2, mps.top, 0, 2.2))
         header, data = fetch_scan()
         s_pos = data['mps_top']
         s_data = data['cam05_stats1_centroid_y']

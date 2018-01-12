@@ -1,13 +1,23 @@
 from collections import deque
-from bluesky.examples import motor, det
-from bluesky.spec_api import ct, ascan, d2scan, mesh, inner_spec_decorator, partition
+from ophyd.sim import motor, det
 
-ct = fast_shutter_decorator()(ct)
-abscan = fast_shutter_decorator()(ascan)
-dscan = fast_shutter_decorator()(d2scan)
-mesh = fast_shutter_decorator()(mesh)
+# NO LONGER SUPPORTED
+# Need to use bluesky alternatives
+#from bluesky.spec_api import ct, ascan, d2scan, mesh, inner_spec_decorator, partition
 
-gs.DETS = [det]
+import bluesky.plans as bp
+# rename them slightly different so they're easier to find
+relative_inner_product_scan_fs = fast_shutter_decorator(bp.relative_inner_product_scan)
+count_fs = fast_shutter_decorator(bp.count)
+grid_scan_fs = fast_shutter_decorator()(bp.grid_scan)
+
+
+#ct = fast_shutter_decorator()(ct)
+#abscan = fast_shutter_decorator()(ascan)
+#dscan = fast_shutter_decorator()(d2scan)
+#mesh = fast_shutter_decorator()(mesh)
+
+#DETS = [det]
 
 
 
@@ -39,5 +49,5 @@ gs.DETS = [det]
 #    inner = inner_spec_decorator('d2scan', time, motors=motors)(
  #       bp.relative_inner_product_scan)
 #
- #   return (yield from inner(gs.DETS, num, *(args[:-1]), md=md, 
+ #   return (yield from inner(DETS, num, *(args[:-1]), md=md, 
   #                           per_step=one_nd_step_with_shutter))

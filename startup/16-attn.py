@@ -9,7 +9,7 @@ t2p = np.genfromtxt("/GPFS/xf16id/controls/data_files/atn2x_pos_per.dat",delimit
 t3p = np.genfromtxt("/GPFS/xf16id/controls/data_files/atn3x_pos_per.dat",delimiter=',',skip_header=0)
 
 
-class Attneuator():
+class Attenuator():
     def fraction(self, a):
         if a!=0:
             factor=a/100
@@ -37,4 +37,4 @@ class Attneuator():
             print("full beam")
             self.att_factor=100
             
-Attn= Attneuator()
+Attn= Attenuator()

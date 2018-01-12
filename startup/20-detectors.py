@@ -6,9 +6,11 @@ import ophyd.areadetector.cam as cam
 
 from ophyd.areadetector.filestore_mixins import (FileStoreTIFFIterativeWrite,
                                                  FileStoreHDF5IterativeWrite)
+from ophyd.areadetector.plugins import ProcessPlugin
 
 from ophyd import Component as Cpt
 from scipy.misc import imsave
+reg = db.reg
 
 class TIFFPluginWithFileStore(TIFFPlugin, FileStoreTIFFIterativeWrite):
     def make_filename(self):
@@ -220,13 +222,13 @@ class StandardProsilicaWithTIFF(StandardProsilica):
     tiff = Cpt(TIFFPluginWithFileStore,
                suffix='TIFF1:',
                write_path_template='/GPFS/xf16id/exp_path/',
-               fs=db.fs)
+               reg=db.reg)
 
 class LIXMicroscopeCamera(StandardProsilica):
     tiff = Cpt(TIFFPluginWithFileStore,
                suffix='TIFF1:',
                write_path_template='/GPFS/xf16id/exp_path/',
-               fs=db.fs)
+               reg=db.reg)
     over1 = Cpt(OverlayPlugin, 'Over1:')
 
 def setup_cam(pv, name):
@@ -300,6 +302,6 @@ for cam in all_RGB_cam:
         # In the case of the OverlayPlugin, the Overlay object has no port_name
         # which leads to a empty port_map at asyn_digraph.
         #
-        for overlay in cam.over1.signal_names:
+        for overlay in cam.over1.component_names:
             if overlay.startswith('overlay'):
                 getattr(cam.over1, overlay).validate_asyn_ports = lambda: None
