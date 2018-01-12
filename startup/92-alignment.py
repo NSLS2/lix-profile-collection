@@ -8,7 +8,7 @@ from time import sleep
 # take snapshot on SCN1
 def snapcam01():
     C1ROI1 = [290, 200, 225, 150]
-    gs.DETS = [cam01]
+    DETS = [cam01]
     setROI(cam01, [C1ROI1])
 
     # need to set exposure time to 0.001
@@ -25,7 +25,7 @@ def snapcam01():
 
 def snapcam06():
     #C1ROI1 = [0, 1935, 0, 1455]
-    gs.DETS = [cam06]
+    DETS = [cam06]
     #setROI(cam06)#, [C1ROI1])
 
     # need to set exposure time to 0.001

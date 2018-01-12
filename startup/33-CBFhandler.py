@@ -7,6 +7,7 @@ import fabio
 global pilatus_fpp
 pilatus_fpp = 1
 
+
 class PilatusCBFHandler(HandlerBase):
     specs = {'AD_CBF'} | HandlerBase.specs
 
@@ -37,25 +38,24 @@ class PilatusCBFHandler(HandlerBase):
                 else:
                     fn = self._template % (self._path, self._filename, j)
                 #print("  reading "+fn)
+                print("getting file {}".format(fn))
                 img = fabio.open(fn)
                 ret.append(img.data)
         return np.array(ret).squeeze()
 
-    """
-    def get_file_list(self, datum_kwargs_gen):
-        file_list = []
-        print("CBF handler get_filelist()", datum_kwargs_gen)
-        for dk in datum_kwargs_gen:
-            point_number = dk['point_number']
-            start = self._initial_number
-            stop = self._initial_number + point_number
-            print("  ", self._initial_number, point_number, self._fpp)
-            ret = []
-            for j in range(start, stop):
-                fn = self._template % (self._path, self._filename, j)
-                file_list.append(fn)
-        return file_list
-    """
+#    def get_file_list(self, datum_kwargs_gen):
+#        file_list = []
+#        print("CBF handler get_filelist()", datum_kwargs_gen)
+#        for dk in datum_kwargs_gen:
+#            point_number = dk['point_number']
+#            start = self._initial_number
+#            stop = self._initial_number + point_number
+#            print("  ", self._initial_number, point_number, self._fpp)
+#            ret = []
+#            for j in range(start, stop):
+#                fn = self._template % (self._path, self._filename, j)
+#                file_list.append(fn)
+#        return file_list
 
 try:
     db.reg.register_handler('AD_CBF', PilatusCBFHandler)

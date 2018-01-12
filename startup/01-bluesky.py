@@ -26,6 +26,7 @@ class CustomRunEngine(RunEngine):
 RE = CustomRunEngine()
 #gs.RE = RE
 
+configure_base(get_ipython().user_ns, db)
 
 #RE = gs.RE
 abort = RE.abort
@@ -35,8 +36,4 @@ stop = RE.stop
 RE.md['group'] = 'lix'
 RE.md['beamline_id'] = 'LIX'
 
-# define list of DET's used globally
-class gs:
-    DETS = []
-
-
+DETS = []

@@ -20,13 +20,13 @@ class RefScan():
         RE.md['Att_fraction']=Attn.att_factor
         #RE.md['XBPM'] = XBPM_pos() 
         mov(waxs1.x, 103.82)
-        gs.DETS=[em1, em2, pilW1_ext]
+        DETS=[em1, em2, pilW1_ext]
         pilatus_ct_time(cts)
         
         if attenuation==None:
             change_sample(sample_name)
             set_pil_num_images(Nx)
-            RE(bp.scan(gs.DETS, tilt.rx, 0.01, rx_range, Nx-1))
+            RE(bp.scan(DETS, tilt.rx, 0.01, rx_range, Nx-1))
       
         else:
             change_sample(sample_name+"_a")
@@ -35,7 +35,7 @@ class RefScan():
             nosa=round(2000/steps)
             #print(nosa)
             set_pil_num_images(nosa)
-            RE(bp.scan(gs.DETS, tilt.rx, 0.01, 2000, nosa-1))
+            RE(bp.scan(DETS, tilt.rx, 0.01, 2000, nosa-1))
             
             change_sample(sample_name+"_b")
             Attn.fraction(60)
@@ -44,7 +44,7 @@ class RefScan():
             nos=round(range/steps)
             #print(nos)
             set_pil_num_images(nos)
-            RE(bp.scan(gs.DETS, tilt.rx, 2000, 7000, nos-1))
+            RE(bp.scan(DETS, tilt.rx, 2000, 7000, nos-1))
             
             change_sample(sample_name+"_c")
             Attn.fraction(100)
@@ -53,7 +53,7 @@ class RefScan():
             nosc=round(rangec/steps)
             #print(nosc)
             set_pil_num_images(nosc)
-            RE(bp.scan(gs.DETS, tilt.rx, 7000, rx_range, nosc-1))
+            RE(bp.scan(DETS, tilt.rx, 7000, rx_range, nosc-1))
             print(db[-3].start.uid)
             print(db[-2].start.uid)
             print(db[-1].start.uid)
@@ -69,7 +69,7 @@ class RefScan():
         RE.md['energy'] = ({'mono_bragg': mono.bragg.position, 'energy': getE(), 'gap': get_gap()})
         RE.md['Att_fraction']=Attn.att_factor
         
-        gs.DETS=[em1, em2, pilW1_ext]
+        DETS=[em1, em2, pilW1_ext]
         pilatus_ct_time(cts)
         
         mov(waxs1.x, 103.82)
@@ -77,7 +77,7 @@ class RefScan():
         if attenuation==None:
             change_sample(sample_name)
             set_pil_num_images(Nx)
-            RE(bp.scan(gs.DETS, tilt.rx, 0.01, rx_range, Nx-1))
+            RE(bp.scan(DETS, tilt.rx, 0.01, rx_range, Nx-1))
             
         else:
             change_sample(sample_name+"_a")
@@ -86,7 +86,7 @@ class RefScan():
             nosa=round(4000/steps)
             #print(nosa)
             set_pil_num_images(nosa)
-            RE(bp.scan(gs.DETS, tilt.rx, 0.01, 4000, nosa-1))
+            RE(bp.scan(DETS, tilt.rx, 0.01, 4000, nosa-1))
             
             change_sample(sample_name+"_b")
             Attn.fraction(70)
@@ -95,7 +95,7 @@ class RefScan():
             nos=round(range/steps)
             #print(nos)
             set_pil_num_images(nos)
-            RE(bp.scan(gs.DETS, tilt.rx, 4000, 10000, nos-1))
+            RE(bp.scan(DETS, tilt.rx, 4000, 10000, nos-1))
             
             change_sample(sample_name+"_c")
             Attn.fraction(100)
@@ -104,15 +104,15 @@ class RefScan():
             nosc=round(rangec/steps)
             #print(nosc)
             set_pil_num_images(nosc)
-            RE(bp.scan(gs.DETS, tilt.rx, 10000, rx_range, nosc-1))
+            RE(bp.scan(DETS, tilt.rx, 10000, rx_range, nosc-1))
        
         #mov(waxs1.x, 63.82)
-        gs.DETS=[em1, em2, pil1M_ext]
+        DETS=[em1, em2, pil1M_ext]
         pilatus_ct_time(cts)
         mov(tilt.rx, 650)
         set_pil_num_images(5)
         change_sample(sample_name+"gis")
-        RE(count_fs(gs.DETS, num=1))
+        RE(count_fs(DETS, num=1))
         print(db[-4].start.uid)
         print(db[-3].start.uid)
         print(db[-2].start.uid)
@@ -120,25 +120,25 @@ class RefScan():
         
     def det_in(self):
         mov(waxs1.x, 103.82)
-        gs.DETS=[em1, em2, pilW1_ext]
+        DETS=[em1, em2, pilW1_ext]
         pilatus_ct_time(1)
         
     
     def det_out(self):
         mov(waxs1.x, 63.82)
-        gs.DETS=[em1, em2, pil1M_ext]
+        DETS=[em1, em2, pil1M_ext]
         pilatus_ct_time(1)
         
         
     def giscan(self,sample_name="none",cts=1):
         mov(waxs1.x, 63.82)
-        gs.DETS=[em1, em2, pil1M_ext]
+        DETS=[em1, em2, pil1M_ext]
         cta=cts*5
         pilatus_ct_time(cta)
         mov(tilt.rx, 650)
         set_pil_num_images(5)
         change_sample(sample_name+"gis")
-        RE(count_fs(gs.DETS, num=1))
+        RE(count_fs(DETS, num=1))
         
     
     #def scan(self, sname="none", rx_range=20000, xrange=2, Nx=20, cts=1, attenuation=None):
@@ -220,12 +220,12 @@ class RefScan():
     
     def ct1(self):
         mov(waxs1.x, 63.82)
-        gs.DETS=[em1, em2, pil1M_ext]
+        DETS=[em1, em2, pil1M_ext]
         pilatus_ct_time(1)
         mov(tilt.rx, 650)
         set_pil_num_images(5)
         change_sample("test")
-        RE(count_fs(gs.DETS, num=1))
+        RE(count_fs(DETS, num=1))
 
     
     

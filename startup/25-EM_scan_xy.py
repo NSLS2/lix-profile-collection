@@ -27,18 +27,18 @@ class ScanningExperimentalModule1():
         #RE.md['XBPM'] = XBPM_pos() 
         
         change_sample(sample_name)
-        gs.DETS=[em1, em2, pilW1_ext,pilW2_ext,pil1M_ext]
+        DETS=[em1, em2, pilW1_ext,pilW2_ext,pil1M_ext]
         set_pil_num_images(Nx*Ny)
         pilatus_ct_time(cts)
         
 
         if mtr1=='x':
-            RE(grid_scan_fs(gs.DETS, 
+            RE(grid_scan_fs(DETS, 
                                      smf.x, s1, e1, Nx, 
                                      smf.y, s2, e2, Ny, False, 
                                      per_step=one_nd_step_with_shutter))
         else:
-            RE(grid_scan_fs(gs.DETS, 
+            RE(grid_scan_fs(DETS, 
                                      smf.y, s1, e1, Nx, 
                                      smf.x, s2, e2, Ny, False, 
                                      per_step=one_nd_step_with_shutter))

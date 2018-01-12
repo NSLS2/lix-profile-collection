@@ -9,6 +9,8 @@ from ophyd.areadetector.filestore_mixins import FileStoreIterativeWrite
 
 from ophyd.utils import set_and_wait
 from databroker.assets.handlers_base import HandlerBase
+from ophyd.device import Staged
+
 
 # shortcut to databroker registry
 reg = db.reg
@@ -16,10 +18,11 @@ reg = db.reg
 import fabio
 import os,time,threading
 from threading import Timer
+from types import SimpleNamespace
 
 def first_Pilatus():
     #print("checking first Pialtus")
-    for det in gs.DETS:
+    for det in DETS:
         if det.__class__ == LIXPilatus:
             #print(det.name)
             return det.name
@@ -27,7 +30,7 @@ def first_Pilatus():
 
 def first_PilatusExt():
     #print("checking first Pialtus")
-    for det in reversed(gs.DETS):
+    for det in reversed(DETS):
         if det.__class__ == LIXPilatusExt:
             #print(det.name)
             return det.name
@@ -38,6 +41,7 @@ class PilatusFilePlugin(Device, FileStoreIterativeWrite):
     file_number = ADComponent(EpicsSignalWithRBV, 'FileNumber')
     file_name = ADComponent(EpicsSignalWithRBV, 'FileName', string=True)
     file_template = ADComponent(EpicsSignalWithRBV, 'FileTemplate', string=True)
+    enable = SimpleNamespace(get=lambda: True)
     
     # this is not necessary to record since it contains the UID for the scan, useful 
     # to save in the CBF file but no need in the data store

@@ -17,7 +17,7 @@ grid_scan_fs = fast_shutter_decorator()(bp.grid_scan)
 #dscan = fast_shutter_decorator()(d2scan)
 #mesh = fast_shutter_decorator()(mesh)
 
-#gs.DETS = [det]
+#DETS = [det]
 
 
 
@@ -49,5 +49,5 @@ grid_scan_fs = fast_shutter_decorator()(bp.grid_scan)
 #    inner = inner_spec_decorator('d2scan', time, motors=motors)(
  #       bp.relative_inner_product_scan)
 #
- #   return (yield from inner(gs.DETS, num, *(args[:-1]), md=md, 
+ #   return (yield from inner(DETS, num, *(args[:-1]), md=md, 
   #                           per_step=one_nd_step_with_shutter))

@@ -7,7 +7,7 @@ def print_scanid(name, doc):
         last_scan_id = doc['scan_id']  
         print('Scan ID:', doc['scan_id'])
         print('Unique ID:', doc['uid'])
-        for d in set(pilatus_detectors_ext+pilatus_detectors) & set(gs.DETS):
+        for d in set(pilatus_detectors_ext+pilatus_detectors) & set(DETS):
             d.HeaderString.put("uid=%s" % doc['uid'])
        
 def print_scanid_stop(name, doc):
