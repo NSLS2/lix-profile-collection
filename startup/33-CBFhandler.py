@@ -57,9 +57,4 @@ class PilatusCBFHandler(HandlerBase):
 #                file_list.append(fn)
 #        return file_list
 
-try:
-    db.reg.register_handler('AD_CBF', PilatusCBFHandler)
-except DuplicateHandler:
-    print("could not register PilatusCBFHandler. It already exists.")
-else:
-    print("Error in handler registration")
+db.reg.register_handler('AD_CBF', PilatusCBFHandler, overwrite=True)

@@ -3,7 +3,7 @@ from traitlets import HasTraits, TraitType, Unicode, List, Float, Bool, link
 from bluesky.utils import get_history
 from functools import partial
 from bluesky.run_engine import RunEngine
-from bluesky.callbacks import *
+from bluesky.callbacks import LiveTable
 from bluesky.callbacks.olog import logbook_cb_factory
 
 # Subscribe metadatastore to documents.
@@ -24,11 +24,10 @@ class CustomRunEngine(RunEngine):
         return super().__call__(*args, **kwargs)
 
 RE = CustomRunEngine()
-#gs.RE = RE
 
 configure_base(get_ipython().user_ns, db)
+bec.disable_plots()
 
-#RE = gs.RE
 abort = RE.abort
 resume = RE.resume
 stop = RE.stop
