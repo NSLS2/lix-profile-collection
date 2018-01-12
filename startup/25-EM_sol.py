@@ -336,16 +336,16 @@ class SolutionScatteringExperimentalModule():
         #RE.md['energy'] = ({'mono_bragg': mono.bragg.position, 'energy': getE(), 'gap': get_gap()})
         #RE.md['XBPM'] = XBPM_pos() 
         
-        #gs.DETS=[em1, em2, pil1M_ext,pilW1_ext,pilW2_ext]
+        #DETS=[em1, em2, pil1M_ext,pilW1_ext,pilW2_ext]
         #set_pil_num_images(repeats)
         
-        gs.DETS=[pil1M] #[em1, em2, pil1M]#, pilW1, pilW2]
+        DETS=[pil1M] #[em1, em2, pil1M]#, pilW1, pilW2]
         # pump_spd unit is ul/min
         #self.ctrl.pump_spd.put(60.*vol/exp)
         #for n in range(repeats):
         #    print('collecting data, %d of %d repeats ...' % (n+1, repeats))
         #    self.ctrl.pump_mvR(vol)
-        #    RE(count_fs(gs.DETS, num=1))
+        #    RE(count_fs(DETS, num=1))
         #    self.ctrl.wait()
         #    vol=-vol
 
@@ -356,11 +356,11 @@ class SolutionScatteringExperimentalModule():
         th = threading.Thread(target=self.ctrl.delayed_mvR, args=(vol, ) )
         th.start() 
         # single image per trigger
-        RE(count_fs(gs.DETS, num=repeats))
+        RE(count_fs(DETS, num=repeats))
         # take multiple images per trigger
         #pilatus_set_Nimage(repeats)
         set_pil_num_images(repeats)
-        RE(count_fs(gs.DETS, num=1))
+        RE(count_fs(DETS, num=1))
         self.ctrl.wait()
         
         pilatus_number_reset(True)
@@ -390,8 +390,8 @@ class SolutionScatteringExperimentalModule():
         #RE.md['energy'] = ({'mono_bragg': mono.bragg.position, 'energy': getE(), 'gap': get_gap()})
         #RE.md['XBPM'] = XBPM_pos() 
         
-        gs.DETS=[em1, em2, pil1M]#, pilW1, pilW2]
-        #gs.DETS=[em1, em2, pil1M_ext,pilW1_ext,pilW2_ext]
+        DETS=[em1, em2, pil1M]#, pilW1, pilW2]
+        #DETS=[em1, em2, pil1M_ext,pilW1_ext,pilW2_ext]
         #set_pil_num_images(repeats)
         
         # pump_spd unit is ul/min
@@ -399,7 +399,7 @@ class SolutionScatteringExperimentalModule():
         #for n in range(repeats):
         #    print('collecting data, %d of %d repeats ...' % (n+1, repeats))
         #    self.ctrl.pump_mvR(vol)
-        #    RE(count_fs(gs.DETS, num=1))
+        #    RE(count_fs(DETS, num=1))
         #    self.ctrl.wait()
         #    vol=-vol
 
@@ -410,11 +410,11 @@ class SolutionScatteringExperimentalModule():
         th = threading.Thread(target=self.ctrl.delayed_oscill_mvR, args=(vol, repeats, ) )
         th.start() 
         # single image per trigger
-        #RE(count_fs(gs.DETS, num=repeats))
+        #RE(count_fs(DETS, num=repeats))
         # take multiple images per trigger
         #pilatus_set_Nimage(repeats)
         set_pil_num_images(repeats)
-        RE(count_fs(gs.DETS, num=1))
+        RE(count_fs(DETS, num=1))
         self.ctrl.wait()
         
         pilatus_number_reset(True)
@@ -549,7 +549,7 @@ class SolutionScatteringExperimentalModule():
         #RE.md['waxs2'] = ({'waxs2_x':waxs2.x.position, 'waxs1_y':waxs2.y.position, 'waxs1_z':waxs2.z.position}) 
         #RE.md['energy'] = ({'mono_bragg': mono.bragg.position, 'energy': getE(), 'gap': get_gap()})
         #RE.md['XBPM'] = XBPM_pos() 
-        gs.DETS=[em1, em2, pil1M, pilW1, pilW2]
+        DETS=[em1, em2, pil1M, pilW1, pilW2]
         #pilatus_set_Nimage(repeats)
         set_pil_num_images(repeats)
         length=7.5
@@ -557,7 +557,7 @@ class SolutionScatteringExperimentalModule():
         self.sample_x.velocity.put(length/((repeats*exp)+4))
         th = threading.Thread(target=self.mov_delay, args=(length, ) )
         th.start()
-        RE(count_fs(gs.DETS, num=1))
+        RE(count_fs(DETS, num=1))
         self.sample_x.velocity.put(0)
         movr(self.sample_x, length)
         
