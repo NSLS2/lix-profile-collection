@@ -216,8 +216,8 @@ class PilatusExtTrigger(PilatusDetector):
     def unstage(self):
         self._status = None
         self._acquisition_signal.put(0)
-        self.cam.trigger_mode.put(0, wait=True)
-        self.cam.num_images.put(1, wait=True)
+        #self.cam.trigger_mode.put(0, wait=True)
+        #self.cam.num_images.put(1, wait=True)
         super().unstage()
         
     def trigger(self):
@@ -236,7 +236,7 @@ class PilatusExtTrigger(PilatusDetector):
         
         #set up callback to clear status after the end-of-exposure
         Timer(self.trig_wait, status._finished, ()).start()
-            
+        self.dispatch(f'{self.name}_image', ttime.time())
         return status
         
 
