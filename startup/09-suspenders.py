@@ -4,7 +4,7 @@ from bluesky.suspenders import SuspendCeil
 #from bluesky.suspenders import SuspendBoolLow
 
 BEAM_RECOVER_TIME = 30 #Time in seconds
-BEAM_THRES = 200
+BEAM_THRES = 300
 beam_current = EpicsSignal('SR:OPS-BI{DCCT:1}I:Real-I')
 
 beam_current_sus = SuspendFloor(beam_current, BEAM_THRES, sleep=BEAM_RECOVER_TIME)

@@ -356,11 +356,11 @@ class SolutionScatteringExperimentalModule():
         th = threading.Thread(target=self.ctrl.delayed_mvR, args=(vol, ) )
         th.start() 
         # single image per trigger
-        RE(count_fs(DETS, num=repeats))
+        #RE(ct(DETS, num=repeats))
         # take multiple images per trigger
         #pilatus_set_Nimage(repeats)
         set_pil_num_images(repeats)
-        RE(count_fs(DETS, num=1))
+        RE(ct(DETS, num=1))
         self.ctrl.wait()
         
         pilatus_number_reset(True)
@@ -410,11 +410,11 @@ class SolutionScatteringExperimentalModule():
         th = threading.Thread(target=self.ctrl.delayed_oscill_mvR, args=(vol, repeats, ) )
         th.start() 
         # single image per trigger
-        #RE(count_fs(DETS, num=repeats))
+        #RE(ct(DETS, num=repeats))
         # take multiple images per trigger
         #pilatus_set_Nimage(repeats)
         set_pil_num_images(repeats)
-        RE(count_fs(DETS, num=1))
+        RE(ct(DETS, num=1))
         self.ctrl.wait()
         
         pilatus_number_reset(True)

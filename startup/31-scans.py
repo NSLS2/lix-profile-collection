@@ -7,9 +7,17 @@ from ophyd.sim import motor, det
 
 import bluesky.plans as bp
 # rename them slightly different so they're easier to find
-relative_inner_product_scan_fs = fast_shutter_decorator(bp.relative_inner_product_scan)
-count_fs = fast_shutter_decorator(bp.count)
-grid_scan_fs = fast_shutter_decorator()(bp.grid_scan)
+#relative_inner_product_scan_fs = fast_shutter_decorator(bp.relative_inner_product_scan)
+#count_fs = fast_shutter_decorator(bp.count)
+#grid_scan_fs = fast_shutter_decorator()(bp.grid_scan)
+
+# NOTE: 
+# the syntax for asca/dscan is:   ascan(detecotrs, n_steps, motro1, start1, end1, ...)
+# the syntax for mesh is:         mesh(detectors, motor1, start1, end1, nstep1, ...)
+ascan = fast_shutter_decorator()(bp.inner_product_scan)
+dscan = fast_shutter_decorator()(bp.relative_inner_product_scan)
+ct = fast_shutter_decorator()(bp.count)
+mesh = fast_shutter_decorator()(bp.grid_scan)
 
 
 #ct = fast_shutter_decorator()(ct)

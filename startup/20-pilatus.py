@@ -11,7 +11,6 @@ from ophyd.utils import set_and_wait
 from databroker.assets.handlers_base import HandlerBase
 from ophyd.device import Staged
 
-
 # shortcut to databroker registry
 reg = db.reg
 
@@ -20,27 +19,12 @@ import os,time,threading
 from threading import Timer
 from types import SimpleNamespace
 
-def first_Pilatus():
-    #print("checking first Pialtus")
-    for det in DETS:
-        if det.__class__ == LIXPilatus:
-            #print(det.name)
-            return det.name
-    return None
-
-def first_PilatusExt():
-    #print("checking first Pialtus")
-    for det in reversed(DETS):
-        if det.__class__ == LIXPilatusExt:
-            #print(det.name)
-            return det.name
-    return None
-
 class PilatusFilePlugin(Device, FileStoreIterativeWrite):
     file_path = ADComponent(EpicsSignalWithRBV, 'FilePath', string=True)
     file_number = ADComponent(EpicsSignalWithRBV, 'FileNumber')
     file_name = ADComponent(EpicsSignalWithRBV, 'FileName', string=True)
     file_template = ADComponent(EpicsSignalWithRBV, 'FileTemplate', string=True)
+    file_number_reset = 1
     enable = SimpleNamespace(get=lambda: True)
     
     # this is not necessary to record since it contains the UID for the scan, useful 
@@ -66,8 +50,6 @@ class PilatusFilePlugin(Device, FileStoreIterativeWrite):
         
         f_tplt = '%s%s_%06d_'+self.parent.detector_id+'.cbf'
         set_and_wait(self.file_template, f_tplt, timeout=99999)
-        if self.parent.reset_file_number.get() == 1:
-            set_and_wait(self.file_number, 1, timeout=99999)
 
         # original code by Hugo
         # this is done now when login()
@@ -84,6 +66,18 @@ class PilatusFilePlugin(Device, FileStoreIterativeWrite):
         if self.parent.name == first_Pilatus() or self.parent.name == first_PilatusExt():
             #print("first Pilatus is %s" % self.parent.name)
             change_path()
+            
+        # if file number reset is Ture, use 1 as the next file #
+        # if reset is False, when the first Pilatus/PilatusExt instance is staged, the file# will be 
+        # synchronized to the highest current value
+        if PilatusFilePlugin.file_number_reset==1:
+            print("resetting file number for ", self.parent.name)
+            set_and_wait(self.file_number, 1, timeout=99999)
+        elif self.parent.name == first_Pilatus() or self.parent.name == first_PilatusExt():
+            next_file_number = np.max([d.file.file_number.get() for d in pilatus_detectors])
+            for d in pilatus_detectors:
+                print("setting file number for %s to %d." % (d.name, next_file_number))
+                set_and_wait(d.file.file_number, next_file_number, timeout=99999)
         
         #set_and_wait(self.file_path, "/ramdisk/", timeout=99999) # 12/19/17, changed back to GPFS
         f_path = data_path
@@ -116,8 +110,8 @@ class PilatusFilePlugin(Device, FileStoreIterativeWrite):
 
     def unstage(self):        
         super().unstage()
-        # move the files first
         ##12/19/17 commented out
+        # move the files from ramdisk to GPFS
         #if self.filemover_move.get()==1:
         #    print("files are still being moved from the detector server to ",self.filemover_target_dir.get())
         #    while self.filemover_move.get()==1:
@@ -273,6 +267,22 @@ pilW2_ext = LIXPilatusExt("XF:16IDC-DT{Det:WAXS2}", name="pilW2_ext", detector_i
 pilatus_detectors = [pil1M, pilW1, pilW2]
 pilatus_detectors_ext = [pil1M_ext, pilW1_ext, pilW2_ext]
 
+def first_Pilatus():
+    #print("checking first Pialtus")
+    for det in DETS:
+        if det.__class__ == LIXPilatus:
+            #print(det.name)
+            return det.name
+    return None
+
+def first_PilatusExt():
+    #print("checking first Pialtus")
+    for det in reversed(DETS):
+        if det.__class__ == LIXPilatusExt:
+            #print(det.name)
+            return det.name
+    return None
+
 for det in pilatus_detectors+pilatus_detectors_ext:
     det.read_attrs = ['file']
 
@@ -281,9 +291,8 @@ for det in pilatus_detectors+pilatus_detectors_ext:
 #        det.cam.num_images.put(n)
         
 def pilatus_number_reset(status):
-    for det in pilatus_detectors:
-        val = 1 if status else 0
-        det.reset_file_number.put(val)
+    val = 1 if status else 0
+    PilatusFilePlugin.file_number_reset = val
 
 def pilatus_ct_time(exp):
     for det in pilatus_detectors:
