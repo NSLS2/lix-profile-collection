@@ -125,7 +125,8 @@ class PilatusFilePlugin(Device, FileStoreIterativeWrite):
             release_lock()
         
     def get_frames_per_point(self):
-        return self.parent.cam.num_images.get()   # always return 1 before 2018
+        #return self.parent.cam.num_images.get()   # always return 1 before 2018
+        return self.parent._num_images
 
 class LIXPilatus(SingleTrigger, PilatusDetector):
     # this does not get root is input because it is hardcoded above

@@ -1,8 +1,8 @@
-import logging
+import logging,sys
 
 import nslsii
 
-# override configure_base
+# override base
 # hopefully should be PR to nslsii
 def import_star(module, ns):
     public = lambda name: not name.startswith('_')
@@ -75,6 +75,7 @@ def configure_base(user_ns, broker_name, *,
     # if RunEngine already defined grab it
     # useful when users make their own custom RunEngine
     if 'RE' in user_ns:
+        print('HERE')
         RE = user_ns['RE']
     else:
         RE = RunEngine(get_history())
@@ -89,13 +90,16 @@ def configure_base(user_ns, broker_name, *,
     ns['sd'] = sd
 
     if isinstance(broker_name, str):
+        print('here')
         # Set up a Broker.
         from databroker import Broker
         db = Broker.named(broker_name)
         ns['db'] = db
     else:
+        print('should be here')
         db = broker_name
 
+  
     RE.subscribe(db.insert)
 
     if pbar:
@@ -171,7 +175,6 @@ def configure_base(user_ns, broker_name, *,
 
     import bluesky.callbacks.broker
     import_star(bluesky.callbacks.broker, ns)
-
     import bluesky.simulators
     import_star(bluesky.simulators, ns)
 

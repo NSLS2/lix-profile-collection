@@ -26,6 +26,7 @@ class CustomRunEngine(RunEngine):
 RE = CustomRunEngine()
 
 configure_base(get_ipython().user_ns, db)
+
 bec.disable_plots()
 
 abort = RE.abort
