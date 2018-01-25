@@ -15,19 +15,19 @@ def list_scans(**kwargs):
     headers = db(**kwargs)
     uids = []
     for h in headers:
-        s = "%8s%10s%10s" % (h.start.proposal_id, h.start.run_id, h.start.plan_name)
+        s = "%8s%10s%10s" % (h.start['proposal_id'], h.start['run_id'], h.start['plan_name'])
         try:
-            s = "%s%8d" % (s, h.start.num_points)
+            s = "%s%8d" % (s, h.start['num_points'])
         except:
             s = "%s%8s" % (s,"")
-        t = time.asctime(time.localtime(h.start.time)).split()
+        t = time.asctime(time.localtime(h.start['time'])).split()
         s = s + (" %s-%s-%s %s " % (t[4], t[1], t[2], t[3])) 
         try:
-            s = "%s %s" % (s, h.start.sample_name)
+            s = "%s %s" % (s, h.start['sample_name'])
         except:
             pass
-        print(s, h.start.uid)
-        uids.append(h.start.uid)
+        print(s, h.start['uid'])
+        uids.append(h.start['uid'])
 
     return(uids)
 
