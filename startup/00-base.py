@@ -69,13 +69,15 @@ def configure_base(user_ns, broker_name, *,
     """
     ns = {}  # We will update user_ns with this at the end.
 
+    # Test if we are in Jupyter or IPython:
+    in_jupyter = user_ns['get_ipython']().has_trait('kernel')
+
     # Set up a RunEngine and use metadata backed by a sqlite file.
     from bluesky import RunEngine
     from bluesky.utils import get_history
     # if RunEngine already defined grab it
     # useful when users make their own custom RunEngine
     if 'RE' in user_ns:
-        print('HERE')
         RE = user_ns['RE']
     else:
         RE = RunEngine(get_history())
@@ -90,19 +92,16 @@ def configure_base(user_ns, broker_name, *,
     ns['sd'] = sd
 
     if isinstance(broker_name, str):
-        print('here')
         # Set up a Broker.
         from databroker import Broker
         db = Broker.named(broker_name)
         ns['db'] = db
     else:
-        print('should be here')
         db = broker_name
 
-  
     RE.subscribe(db.insert)
 
-    if pbar:
+    if pbar and not in_jupyter:
         # Add a progress bar.
         from bluesky.utils import ProgressBarManager
         pbar_manager = ProgressBarManager()
@@ -119,6 +118,8 @@ def configure_base(user_ns, broker_name, *,
         from bluesky.callbacks.best_effort import BestEffortCallback
         _bec = BestEffortCallback()
         RE.subscribe(_bec)
+        if in_jupyter:
+            _bec.disable_plots()
         ns['bec'] = _bec
         ns['peaks'] = _bec.peaks  # just as alias for less typing
 
@@ -128,9 +129,18 @@ def configure_base(user_ns, broker_name, *,
         ns['plt'] = plt
         plt.ion()
 
+        # Commented to allow more intelligent setting of kickers (for Jupyter and IPython):
+        ## Make plots update live while scans run.
+        # from bluesky.utils import install_kicker
+        # install_kicker()
+
         # Make plots update live while scans run.
-        from bluesky.utils import install_kicker
-        install_kicker()
+        if in_jupyter:
+            from bluesky.utils import install_nb_kicker
+            install_nb_kicker()
+        else:
+            from bluesky.utils import install_qt_kicker
+            install_qt_kicker()
 
     if epics_context:
         # Create a context in the underlying EPICS client.
