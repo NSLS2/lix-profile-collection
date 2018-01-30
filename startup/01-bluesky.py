@@ -25,9 +25,12 @@ class CustomRunEngine(RunEngine):
 
 RE = CustomRunEngine()
 
-configure_base(get_ipython().user_ns, db)
+# If you run it in Jupyter notebook, mpl should be "False"
+configure_base(get_ipython().user_ns, db, mpl=False)
+# ... else in IPython terminal it should be "True"
+# configure_base(get_ipython().user_ns, db, mpl=True)
 
-bec.disable_plots()
+# bec.disable_plots()
 
 abort = RE.abort
 resume = RE.resume
