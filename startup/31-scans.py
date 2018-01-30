@@ -17,7 +17,8 @@ import bluesky.plans as bp
 ascan = fast_shutter_decorator()(bp.inner_product_scan)
 dscan = fast_shutter_decorator()(bp.relative_inner_product_scan)
 ct = fast_shutter_decorator()(bp.count)
-mesh = fast_shutter_decorator()(bp.grid_scan)
+#mesh = fast_shutter_decorator()(bp.grid_scan)
+mesh = fast_shutter_decorator()(relative_outer_product_scan)
 
 
 #ct = fast_shutter_decorator()(ct)

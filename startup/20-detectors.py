@@ -9,7 +9,8 @@ from ophyd.areadetector.filestore_mixins import (FileStoreTIFFIterativeWrite,
 from ophyd.areadetector.plugins import ProcessPlugin
 
 from ophyd import Component as Cpt
-from scipy.misc import imsave
+import imageio
+
 reg = db.reg
 
 class TIFFPluginWithFileStore(TIFFPlugin, FileStoreTIFFIterativeWrite):
@@ -124,7 +125,7 @@ class MultiExpProsilica(MultiTrigger, LixProsilicaDetector):
     def saveImg(self, fn):
         size_x,size_y = self.cam.size.get()
         d = self.snapshot(ROIs=[[0, size_x, 0, size_y]])[0]
-        imsave(fn, d)    
+        imageio.imwrite(fn, d)    
     
 class StandardProsilica(SingleTrigger, LixProsilicaDetector):
     #tiff = Cpt(TIFFPluginWithFileStore,
@@ -216,7 +217,7 @@ class StandardProsilica(SingleTrigger, LixProsilicaDetector):
     def saveImg(self, fn):
         size_x,size_y = self.cam.size.get()
         d = self.snapshot(ROIs=[[0, size_x, 0, size_y]])[0]
-        imsave(fn, d)    
+        imageio.imwrite(fn, d)    
 
 class StandardProsilicaWithTIFF(StandardProsilica):
     tiff = Cpt(TIFFPluginWithFileStore,
