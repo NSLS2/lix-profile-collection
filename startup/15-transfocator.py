@@ -12,6 +12,8 @@ class Transfocator(Device):
     x2 = Cpt(EpicsMotor,'-Ax:DX}Mtr')
     y2 = Cpt(EpicsMotor,'-Ax:DY}Mtr')
     busy = Cpt(EpicsSignalRO, "}busy")
+    saved_states = {}
+    current_state = None
 
     def __init__(self, prefix, num_lens_group, name):
         super().__init__(prefix, name=name)
@@ -21,15 +23,18 @@ class Transfocator(Device):
         for i in range(num_lens_group):
             self.lens_group.append(EpicsSignal(prefix+":%d}sts" % (i+1)))
             self.lens_group_config.append(caget(prefix+(':%d}config' % (i+1))))
-    
+        self.current_state = [self.lens_group[i].get() for i in range(self.num_lens_group)]
+            
     def wait(self):
         while self.busy.get()>0:   
             sleep(0.2)
     
-    def get_state(self):
-        print("inserted lens groups:")
+    def get_state(self, silent=False):
+        if not silent:
+            print("inserted lens groups:")
         for i in range(self.num_lens_group):
-            if self.lens_group[i].get()==state_inserted:
+            self.current_state[i] = self.lens_group[i].get()
+            if self.current_state[i]==state_inserted and not silent:
                 print("\tgroup %d: %s" % (i+1, self.lens_group_config[i]))
                 
     def get_focal_length(self):
@@ -50,9 +55,20 @@ class Transfocator(Device):
             print("invalid lens group: # %d" % grp)
             return
         self.lens_group[grp-1].put(state_removed)
-        self.wait()        
+        self.wait()  
         
-
+    def restore_state(self, name="last"):
+        for i in range(len(self.saved_states[name])):
+             self.lens_group[i].put(self.saved_states[name][i])
+        
+    def save_state(self, name="last"):
+        self.get_state(silent=True)
+        self.saved_states[name] = self.current_state
+        
+    def remove_all(self):
+        for i in range(self.num_lens_group):
+            self.lens_group[i].put(state_removed)
+        self.get_state(silent=True)
 
 ## Transfocator CRLs 
 p = PV('XF:16IDC-OP{CRL:1}config') 
