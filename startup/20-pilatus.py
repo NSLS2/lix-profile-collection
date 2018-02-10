@@ -145,12 +145,19 @@ class LIXPilatus(SingleTrigger, PilatusDetector):
 
     reset_file_number = Cpt(Signal, name='reset_file_number', value=1)
     HeaderString = Cpt(EpicsSignal, "cam1:HeaderString")
+    ThresholdEnergy = Cpt(EpicsSignal, "cam1:ThresholdEnergy")
     
     def __init__(self, *args, detector_id, **kwargs):
         self.detector_id = detector_id
         self._num_images = 1
         super().__init__(*args, **kwargs)
 
+    def set_thresh(self, ene):
+        """ set threshold
+        """
+        set_and_wait(self.ThresholdEnergy, ene)
+        caput(self.prefix+"cam1:ThresholdApply", 1)
+        
     def set_num_images(self, num_images):
         self._num_images = num_images
         
@@ -254,7 +261,7 @@ class LIXPilatusExt(PilatusExtTrigger):
 
     def __init__(self, *args, **kwargs):
         self.detector_id = kwargs.pop('detector_id')
-        super().__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)        
         
         
 pil1M = LIXPilatus("XF:16IDC-DT{Det:SAXS}", name="pil1M", detector_id="SAXS")
@@ -299,6 +306,11 @@ def pilatus_ct_time(exp):
     for det in pilatus_detectors:
         det.cam.acquire_time.put(exp)
         det.cam.acquire_period.put(exp+0.01)        
+
+def pilatus_set_thresh():
+    ene = int(getE()/10*0.5+0.5)*0.01
+    for det in pilatus_detectors:
+        det.set_thresh(ene) 
         
 def set_pil_num_images(num):
     for d in pilatus_detectors+pilatus_detectors_ext:
