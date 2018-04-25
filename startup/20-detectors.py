@@ -132,7 +132,7 @@ class StandardProsilica(SingleTrigger, LixProsilicaDetector):
     #           suffix='TIFF1:',
     #           write_path_template='/GPFS/xf16id/data2/')
     image = Cpt(ImagePlugin, 'image1:')
-    proc1 = Cpt(ProcessPlugin, 'Proc1:')
+    #proc1 = Cpt(ProcessPlugin, 'Proc1:')
     roi1 = Cpt(ROIPlugin, 'ROI1:')
     roi2 = Cpt(ROIPlugin, 'ROI2:')
     roi3 = Cpt(ROIPlugin, 'ROI3:')
@@ -231,6 +231,13 @@ class LIXMicroscopeCamera(StandardProsilica):
                write_path_template='/GPFS/xf16id/exp_path/',
                reg=db.reg)
     over1 = Cpt(OverlayPlugin, 'Over1:')
+    
+class LIXMicroscopeCameraMulti(MultiExpProsilica):
+    tiff = Cpt(TIFFPluginWithFileStore,
+               suffix='TIFF1:',
+               write_path_template='/GPFS/xf16id/exp_path/',
+               reg=db.reg)
+    over1 = Cpt(OverlayPlugin, 'Over1:')
 
 def setup_cam(pv, name):
     try: 
@@ -260,6 +267,15 @@ def setup_camRGB(pv, name):
         print("%s is not accessible." % name)
     
     return cam
+
+def setup_camRGB_Multi(pv, name):
+    try: 
+        cam = LIXMicroscopeCameraMulti(pv, trigger_cycle=[[('single trigger', {}) for _ in range(20)]], name=name)
+    except TimeoutError:
+        cam = None
+        print("%s is not accessible." % name)
+    
+    return cam
     
 cam01 = setup_cam("XF:16IDA-BI{FS:1-Cam:1}", "cam01")
 cam02 = setup_cam("XF:16IDA-BI{FS:2-Cam:1}", "cam02")
@@ -275,25 +291,31 @@ all_standard_pros = [cam01, cam02, cam03, cam04, cam05, cam05m, cam06,cam06m]
 
 for camera in all_standard_pros:
     if camera!=None:
-        camera.read_attrs= ['stats1', 'stats2','stats3']
+        camera.read_attrs= ['image', 'stats1', 'stats2','stats3']
         camera.stats1.read_attrs = ['total', 'centroid', 'profile_average']
         camera.stats2.read_attrs = ['total', 'centroid']
         camera.stats3.read_attrs = ['total', 'centroid']
+        camera.stats1.centroid.read_attrs=['x','y']
+        camera.stats1.profile_average.read_attrs=['x','y']
         #camera.tiff.read_attrs = [] # we dont need anything other than the image
         
 cam_mic = setup_camRGB("XF:16IDC-ES:InAir{Mscp:1-Cam:1}", "cam_mic")
 cam_sol = setup_camRGB("XF:16IDC-BI{Cam:Sol}", "cam_sol")
 cam_overhead = setup_camRGB("XF:16IDC-BI{FS:9-Cam:1}", "cam_mic")
-cam_spare = setup_camRGB("XF:16IDC-BI{Cam:Spare}", "cam_mic")
-    
-all_RGB_cam = [cam_sol, cam_overhead, cam_spare, cam_mic]
+cam_spare = setup_camRGB("XF:16IDC-BI{Cam:Spare}", "cam_spare")
+cam_sparem = setup_camRGB_Multi("XF:16IDC-BI{Cam:Spare}", "cam_sparem")
+
+
+all_RGB_cam = [cam_sol, cam_overhead, cam_spare, cam_mic, cam_sparem]
     
 for cam in all_RGB_cam:
     if cam!=None:
-        cam.read_attrs = ['stats1', 'stats2', 'stats3', 'roi1', 'tiff']
-        cam.stats1.read_attrs = ['total', 'centroid']
+        cam.read_attrs = ['image', 'stats1', 'stats2', 'stats3', 'roi1', 'tiff']
+        cam.stats1.read_attrs = ['total', 'centroid', 'profile_average']
         cam.stats2.read_attrs = ['total', 'centroid']
         cam.stats3.read_attrs = ['total', 'centroid']
+        cam.stats1.centroid.read_attrs=['x','y']
+        cam.stats1.profile_average.read_attrs=['x','y']
         cam.roi1.read_attrs = ['min_xyz', 'size']
         cam.tiff.read_attrs = [] # we dont need anything other than the image
         cam.over1.read_attrs = [] # we dont need anything from overlay

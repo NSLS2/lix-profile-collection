@@ -9,9 +9,10 @@ from scipy import misc
 
 class ScanningExperimentalModule2():
     """ the zero for Ry must be set correctly so that Rx is pointing in the x direction
-        once homed, this position is at -6.0
+        once homed, this position i1s at -6.0
     """
     x = EpicsMotor('XF:16IDC-ES:Scan2{Ax:sX}Mtr', name='ss2_x')
+    x1 = EpicsMotor('XF:16IDC-ES:Scan2{Ax:X}Mtr', name='ss2_x1')
     y = EpicsMotor('XF:16IDC-ES:Scan2{Ax:sY}Mtr', name='ss2_y')
     z = EpicsMotor('XF:16IDC-ES:InAir{Mscp:1-Ax:F}Mtr', name='focus')
     rx = EpicsMotor('XF:16IDC-ES:Scan2{Ax:RX}Mtr', name='ss2_rx')
@@ -71,7 +72,7 @@ class ScanningExperimentalModule2():
         #d = cam_mic.snapshot(ROIs=[cam_mic.getROI(1)])
         #im1 = Image.fromarray(np.asarray(d[0][:,:,0]))
         
-        #DETS=[em1, em2, pil1M_ext,pilW1_ext,pilW2_ext]
+        DETS=[em1, em2, pil1M_ext,pilW1_ext,pilW2_ext]
         #DETS=[em1, em2, pil1M,pilW1,pilW2]
         set_pil_num_images(Nx*Ny)
         
@@ -80,7 +81,7 @@ class ScanningExperimentalModule2():
             RE.md['sample_rotation'] = self.rx.position
             cam_mic.saveImg('%s%s_1.png' % (data_path, current_sample))
             #RE(grid_scan_fs(DETS, self.x, x1-dx/2, x1+dx/2, Nx, self.y, y1-dy/2, y1+dy/2, Ny))
-            RE(mesh(DETS, self.y, y1-dy/2, y1+dy/2, Ny, self.x, x1-dx/2, x1+dx/2, Nx))
+            RE(mesh(DETS, self.y, y1-dy/2, y1+dy/2, Ny, self.x, x1-dx/2, x1+dx/2, Nx, False))
             cam_mic.saveImg('%s%s_2.png' % (data_path, current_sample))            
             mov([self.x, self.y], [x1, y1])
       
@@ -89,25 +90,85 @@ class ScanningExperimentalModule2():
             change_sample(sample_name+"_a")
             RE.md['sample_rotation'] = rx0 
             cam_mic.saveImg('%s%s_1.png' % (data_path,current_sample))
-            RE(mesh(DETS, self.x, x1-dx/2, x1+dx/2, Nx, self.y, y1-dy/2, y1+dy/2, Ny))
+            RE(mesh(DETS, self.x, x1-dx/2, x1+dx/2, Nx, self.y, y1-dy/2, y1+dy/2, Ny, False))
             cam_mic.saveImg('%s%s_2.png' % (data_path, current_sample))
        
             self.mv(x1, y1, -rx0)
             change_sample(sample_name+"_b")
             RE.md['sample_rotation'] = -rx0 
             cam_mic.saveImg('%s%s_1.png' % (data_path, current_sample))
-            RE(mesh(DETS, self.x, x1-dx/2, x1+dx/2, Nx, self.y, y1-dy/2, y1+dy/2, Ny))
+            RE(mesh(DETS, self.x, x1-dx/2, x1+dx/2, Nx, self.y, y1-dy/2, y1+dy/2, Ny, False))
             cam_mic.saveImg('%s%s_2.png' % (data_path, current_sample))
             
             self.mv(x1, y1, 0)
       
-    def scan1(self, s1, e1, Ny, s2, e2, Nx):
+    def scan1(self, sample_name, dx, dy, Nx, Ny=None, rx0=None):
+        #if not self.sn0_set:
+        #    print("must run set_sn0() to define sample orientaion first.")
+        x1 = self.x.position
+        y1 = self.y.position
+        print(x1)
+        print(y1)
+        #r0 = self.rx.position
+        #if Ny==None:
+        #    Ny=Nx
+         
+        #d = cam_mic.snapshot(ROIs=[cam_mic.getROI(1)])
+        #im1 = Image.fromarray(np.asarray(d[0][:,:,0]))
+        
+        DETS=[em1, em2, pil1M_ext,pilW1_ext,pilW2_ext]
+        #DETS=[em1, em2, pil1M,pilW1,pilW2]
         set_pil_num_images(Nx*Ny)
-        RE(mesh(DETS, ss2.y, s1,e1, Ny, ss2.x, s2, e2, Nx))
+        
+        if rx0==None:
+            change_sample(sample_name)
+            RE.md['sample_rotation'] = self.rx.position
+            cam_mic.saveImg('%s%s_1.png' % (data_path, current_sample))
+            #RE(grid_scan_fs(DETS, self.x, x1-dx/2, x1+dx/2, Nx, self.y, y1-dy/2, y1+dy/2, Ny))
+            RE(mesh(DETS, self.y, y1-dy/2, y1+dy/2, Ny, self.x, x1-dx/2, x1+dx/2, Nx, False))
+            cam_mic.saveImg('%s%s_2.png' % (data_path, current_sample))            
+            #mov([self.x, self.y], [x1, y1])
+      
+        else:
+            #self.mv(x1, y1, rx0)
+            change_sample(sample_name+"_a")
+            RE.md['sample_rotation'] = rx0 
+            cam_mic.saveImg('%s%s_1.png' % (data_path,current_sample))
+            RE(mesh(DETS, self.x, x1-dx/2, x1+dx/2, Nx, self.y, y1-dy/2, y1+dy/2, Ny, False))
+            cam_mic.saveImg('%s%s_2.png' % (data_path, current_sample))
+       
+            #self.mv(x1, y1, -rx0)
+            change_sample(sample_name+"_b")
+            RE.md['sample_rotation'] = -rx0 
+            cam_mic.saveImg('%s%s_1.png' % (data_path, current_sample))
+            RE(mesh(DETS, self.x, x1-dx/2, x1+dx/2, Nx, self.y, y1-dy/2, y1+dy/2, Ny, False))
+            cam_mic.saveImg('%s%s_2.png' % (data_path, current_sample))
+            
+            self.mv(x1, y1, 0)
+    
+    #def scanyx(self,sample_name, s1, e1, Ny, s2, e2, Nx, ct=1):
+    def scany(self,sample_name, s1, e1, Ny, ct=1):
+        pilatus_ct_time(ct) 
+        change_sample(sample_name)
+        cam_mic.saveImg('%s%s_1.png' % (data_path, current_sample))
+        #set_pil_num_images(Nx*Ny)
+        set_pil_num_images(Ny)
+        #RE(mesh(DETS, ss2.y, s1,e1, Ny, ss2.x, s2, e2, Nx, False))
+        RE(dscan(DETS, Ny, ss2.y, s1,e1))
+        cam_mic.saveImg('%s%s_2.png' % (data_path, current_sample))
 
-    def scan2(self, s1, e1, Nx, s2, e2, Ny):
-        set_pil_num_images(Nx*Ny)
-        RE(mesh(DETS, ss2.x, s1,e1, Nx, ss2.y, s2, e2, Ny))
+
+    #def scanxy(self,sample_name, s1, e1, Nx, s2, e2, Ny,ct=1):
+    def scanx(self,sample_name, s1, e1, Nx, ct=1):
+        pilatus_ct_time(ct) 
+        change_sample(sample_name)
+        cam_mic.saveImg('%s%s_1.png' % (data_path, current_sample))
+        #set_pil_num_images(Nx*Ny)
+        set_pil_num_images(Nx)
+        #RE(mesh(DETS, ss2.x, s1,e1, Nx, ss2.y, s2, e2, Ny, False))
+        RE(dscan(DETS, Nx, ss2.x, s1,e1))
+        cam_mic.saveImg('%s%s_2.png' % (data_path, current_sample))
+
     
 p1 = PV('XF:16IDC-ES:Scan2{Ax:X}Mtr')    
 p2 = PV('XF:16IDC-ES:Scan2{Ax:RX}Mtr')

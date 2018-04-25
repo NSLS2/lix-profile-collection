@@ -40,7 +40,7 @@ class SolutionScatteringControlUnit(Device):
         while True:
             if self.status.get()==0 and self.serial_busy.get()==0:
                 break
-            time.sleep(0.5)
+            sleep(0.5)
 
     def pump_mvA(self, des):
         self.piston_pos.put(des)
@@ -52,20 +52,23 @@ class SolutionScatteringControlUnit(Device):
     def delayed_mvR(self, dV):
         cur = self.piston_pos.get()
         while self.ready.get()==0:
-            sleep(1.0)
+            sleep(.2)
         self.ready.put(0)
         self.piston_pos.put(cur+dV)
         
     def delayed_oscill_mvR(self, dV, times):
         cur = self.piston_pos.get()
+        dO=dV-10
+        #self.piston_pos.put(cur+3)
+        dV=dV-10
         while self.ready.get()==0:
-            sleep(1.0)
+            sleep(.2)
         self.ready.put(0)
         for n in range(times):
             cur1 = self.piston_pos.get()
             self.piston_pos.put(cur1+dV)
             self.wait()
-            dV=-dV
+            dV=-dO
         
         
 default_solution_scattering_config_file = '/GPFS/xf16id/config.solution'
@@ -79,7 +82,7 @@ class SolutionScatteringExperimentalModule():
     pcr_holder_up = EpicsSignal("XF:16IDC-ES:Sol{ctrl}HolderUp")
     
     
-    #sample_y = EpicsMotor('XF:16IDC-ES:Sol{Enc-Ax:YU}Mtr', name='sol_sample_y')
+    sample_y = EpicsMotor('XF:16IDC-ES:Sol{Enc-Ax:YU}Mtr', name='sol_sample_y')
     sample_x = EpicsMotor('XF:16IDC-ES:Sol{Enc-Ax:Xu}Mtr', name='sol_sample_x')
     holder_x = EpicsMotor('XF:16IDC-ES:Sol{Enc-Ax:Xl}Mtr', name='sol_holder_x')
     
@@ -87,7 +90,7 @@ class SolutionScatteringExperimentalModule():
     # the flow cells are designated 1 (bottom), 2 and 3
     # needle 1 is connected to the bottom flowcell, needle 2 connected to the top, HPLC middle
     flowcell_nd = {'upstream': 'top', 'downstream': 'bottom'}
-    flowcell_pos = {'bottom': 3.65, 'middle': -0.72, 'top': -5.41}  # 2017/10/11
+    flowcell_pos = {'bottom': 3.15, 'middle': -1.348, 'top': -5.985}  # 2017/10/11
     #{'top': -6.33, 'middle': -1.36, 'bottom': 3.15} # SC changed bottom from 3.78 07/12/17
     # this is the 4-port valve piosition necessary for the wash the needle
     p4_needle_to_wash = {'upstream': 1, 'downstream': 0}
@@ -122,11 +125,11 @@ class SolutionScatteringExperimentalModule():
     drain = {'upstream': ctrl.sv_drain1, 'downstream': ctrl.sv_drain2}
     
     # syringe pump 
-    default_piston_pos = 175
+    default_piston_pos = 165
     default_pump_speed = 1500
     default_load_pump_speed = 350 # SC changed the value from 600 on 7/9/17
     vol_p4_to_cell = {'upstream': -140, 'downstream': -140}
-    vol_tube_to_cell = {'upstream': 90, 'downstream': 88} # SC done changes--> downstream value reduced to (92 from 104) 7/9/17, upstream changed from 110 to 100
+    vol_tube_to_cell = {'upstream': 84, 'downstream': 67} # SC done changes--> downstream value reduced to (92 from 104) 7/9/17, upstream changed from 110 to 100 02/13/18
     vol_sample_headroom = 13
     
     def __init__(self):
@@ -140,7 +143,6 @@ class SolutionScatteringExperimentalModule():
         #self.load_config(default_solution_scattering_config_file)
         self.return_piston_pos = self.default_piston_pos
         self.ctrl.pump_spd.put(self.default_pump_speed)
-        
     # needle vs tube position
     # this applies for the tube holder that has the alternate tube/empty pattern
     # in the current design the even tube position is on the downstream side
@@ -163,7 +165,7 @@ class SolutionScatteringExperimentalModule():
             print("flow cell motion disabled !!!")
         else:
             print('move to flow cell %s ...' % cn)
-            #self.sample_y.move(self.flowcell_pos[cn])
+            self.sample_y.move(self.flowcell_pos[cn])
     
     def select_tube_pos(self, tn):
         '''1 argument accepted: 
@@ -171,12 +173,6 @@ class SolutionScatteringExperimentalModule():
         position 0 is the washing well '''
         if tn not in range(0,19) and tn!='park':
             raise RuntimeError('invalid tube position %d, must be 0 (drain) or 1-18, or \'park\' !!' % tn)
-            
-        #addtition of new position sensor for sample holder actuator 12/2017:
-        if self.pcr_holder_up.get()==0:
-            raise RuntimeError('Sample holder is up right now and should be moved down!!')
-        else:
-            print('Sample holder is down.')
 
         self.tube_pos = tn
         if tn=='park':
@@ -208,16 +204,21 @@ class SolutionScatteringExperimentalModule():
 
     def move_tube_holder(self, pos):
         '''1 argument accepted:
-        'up' or 'down'
-        up allowed only when the hodler is anligned to needle
+           'up' or 'down'sol.sel
+           up allowed only when the hodler is anligned to needle
         '''
         if pos=='down':
             print('PCR tube holder down ...')
             self.ctrl.sv_pcr_tubes.put('down')
             self.ctrl.wait() 
-            self.tube_holder_pos = "down"
+            # wait for the pneumatic actuator to settle
+            #addtition of new position sensor for sample holder actuator 12/2017:
+            while True:
+                if self.pcr_holder_up.get()==1:
+                    break
+            self.tube_holder_pos = "down"                
         elif pos=='up':
-#            if self.pcr_v_enable.get()==0 and (self.holder_x.position**2>1e-4 and self.tube_pos!=12):
+            # if self.pcr_v_enable.get()==0 and (self.holder_x.position**2>1e-4 and self.tube_pos!=12):
             # revised by LY, 2017Mar23, to add bypass
             if self.pcr_v_enable.get()==0 and self.bypass_tube_pos_ssr==False:
                 raise RuntimeError('attempting to raise PCR tubes while mis-aligned !!') 
@@ -226,8 +227,6 @@ class SolutionScatteringExperimentalModule():
             self.ctrl.wait()        
             self.tube_holder_pos = "up"
 
-        # wait for the pneumatic actuator to settle
-        sleep(5)
             
     def dry_needle(self, nd, repeats=3, dry_duration=35):
         if nd not in ('upstream', 'downstream'):
@@ -307,6 +306,7 @@ class SolutionScatteringExperimentalModule():
         self.ctrl.wait()
 
         self.return_piston_pos = self.ctrl.piston_pos.get()
+        a=self.return_piston_pos
         self.ctrl.pump_spd.put(self.default_load_pump_speed)
         self.move_tube_holder('up') 
         self.ctrl.pump_mvR(vol+self.vol_sample_headroom)
@@ -323,12 +323,13 @@ class SolutionScatteringExperimentalModule():
            
     
     def collect_data(self, vol=45, exp=2, repeats=3, sample_name='test'):
+        global DETS
         pilatus_ct_time(exp)
         pilatus_number_reset(False)
         
         updata_metadata()
         
-        #change_sample(sample_name)
+        change_sample(sample_name)
         #RE.md['sample_name'] = current_sample 
         #RE.md['saxs'] = ({'saxs_x':saxs.x.position, 'saxs_y':saxs.y.position, 'saxs_z':saxs.z.position})
         #RE.md['waxs1'] = ({'waxs1_x':waxs1.x.position, 'waxs1_y':waxs1.y.position, 'waxs1_z':waxs1.z.position})
@@ -336,10 +337,10 @@ class SolutionScatteringExperimentalModule():
         #RE.md['energy'] = ({'mono_bragg': mono.bragg.position, 'energy': getE(), 'gap': get_gap()})
         #RE.md['XBPM'] = XBPM_pos() 
         
-        #DETS=[em1, em2, pil1M_ext,pilW1_ext,pilW2_ext]
-        #set_pil_num_images(repeats)
+        DETS=[em1, em2, pil1M_ext,pilW1_ext,pilW2_ext]
+        set_pil_num_images(repeats)
         
-        DETS=[pil1M] #[em1, em2, pil1M]#, pilW1, pilW2]
+        #DETS=[em1, em2, pil1M, pilW1, pilW2]
         # pump_spd unit is ul/min
         #self.ctrl.pump_spd.put(60.*vol/exp)
         #for n in range(repeats):
@@ -382,7 +383,7 @@ class SolutionScatteringExperimentalModule():
         
         updata_metadata()
         
-        #change_sample(sample_name)
+        change_sample(sample_name)
         #RE.md['sample_name'] = current_sample 
         #RE.md['saxs'] = ({'saxs_x':saxs.x.position, 'saxs_y':saxs.y.position, 'saxs_z':saxs.z.position})
         #RE.md['waxs1'] = ({'waxs1_x':waxs1.x.position, 'waxs1_y':waxs1.y.position, 'waxs1_z':waxs1.z.position})
@@ -390,7 +391,7 @@ class SolutionScatteringExperimentalModule():
         #RE.md['energy'] = ({'mono_bragg': mono.bragg.position, 'energy': getE(), 'gap': get_gap()})
         #RE.md['XBPM'] = XBPM_pos() 
         
-        DETS=[em1, em2, pil1M]#, pilW1, pilW2]
+        DETS=[em1, em2, pil1M, pilW1, pilW2]
         #DETS=[em1, em2, pil1M_ext,pilW1_ext,pilW2_ext]
         #set_pil_num_images(repeats)
         
@@ -462,7 +463,8 @@ class SolutionScatteringExperimentalModule():
         
         self.wash_needle(nd)
         
-    def measure_oscill(self, tn, nd=None, vol=50, exp=5, repeats=3, sample_name='test', delay=0):
+    # delay is after load_sample and measure, this is useful for temperature control    
+    def measure_noreturn(self, tn, nd=None, vol=50, exp=5, repeats=3, sample_name='test', delay=0):
         ''' measure(self, tn, nd, vol, exp, repeats, sample_name='test')
             tn: tube number: 1-18
             nd: needle, "upstream" or "downstream", if need to specify
@@ -473,6 +475,25 @@ class SolutionScatteringExperimentalModule():
         nd = self.verify_needle_for_tube(tn, nd)
         
         self.select_flow_cell(self.flowcell_nd[nd])
+        self.prepare_to_load_sample(tn, nd)
+        self.load_sample(vol)
+        if delay>0:
+            countdown("delay before exposure:",delay)
+        self.collect_data(vol, exp, repeats, sample_name)
+          
+        
+        
+    def measure_oscill(self, tn, nd=None, vol=50, exp=5, repeats=3, sample_name='test', delay=0):
+        ''' measure(self, tn, nd, vol, exp, repeats, sample_name='test')
+            tn: tube number: 1-18
+            nd: needle, "upstream" or "downstream", if need to specify
+            exp: exposure time
+            repeats: # of exposures
+        '''
+        
+        nd = self.verify_needle_for_tube(tn, nd)
+        
+        #self.select_flow_cell(self.flowcell_nd[nd])
         self.prepare_to_load_sample(tn, nd)
         self.load_sample(vol)
         if delay>0:
