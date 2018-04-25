@@ -78,9 +78,11 @@ default_solution_scattering_config_file = '/GPFS/xf16id/config.solution'
 class SolutionScatteringExperimentalModule():
     
     ctrl = SolutionScatteringControlUnit('XF:16IDC-ES:Sol{ctrl}', name='sol_ctrl')
-    pcr_v_enable = EpicsSignal("XF:16IDC-ES:Sol{ctrl}SampleAlign")    # 1 means PCR tube holder can go up 
-    pcr_holder_up = EpicsSignal("XF:16IDC-ES:Sol{ctrl}HolderUp")
-    
+    pcr_v_enable = EpicsSignal("XF:16IDC-ES:Sol{ctrl}SampleAligned")    # 1 means PCR tube holder can go up 
+    pcr_holder_down = EpicsSignal("XF:16IDC-ES:Sol{ctrl}HolderDown")
+    EMready = EpicsSignal("XF:16IDC-ES:Sol{ctrl}EMSolready")
+    HolderPresent = EpicsSignal("XF:16IDC-ES:Sol{ctrl}HolderPresent")
+    DoorOpen = EpicsSignal("XF:16IDC-ES:Sol{ctrl}DoorOpen")
     
     sample_y = EpicsMotor('XF:16IDC-ES:Sol{Enc-Ax:YU}Mtr', name='sol_sample_y')
     sample_x = EpicsMotor('XF:16IDC-ES:Sol{Enc-Ax:Xu}Mtr', name='sol_sample_x')
@@ -100,15 +102,8 @@ class SolutionScatteringExperimentalModule():
     tube_holder_pos = "down"
     bypass_tube_pos_ssr = True  # if true, ignore the optical sensor for tube holder position
     
-    # need to home holder_x position to 0
+    # need to home holder_x position to 0; use home_holder()
     # tube postion 1 is on the inboard side
-    # homing procedure without encoder strip:
-    #     reduce motor current, drive sol.holder_x in the possitive direction to hit the hard stop
-    #     move the motor back by 0.5mm, set the current position to 37.5 ("park" position)
-    #     set software limits:
-    #          caput("XF:16IDC-ES:Sol{Enc-Ax:Xl}Mtr.LLM", -119)
-    #          caput("XF:16IDC-ES:Sol{Enc-Ax:Xl}Mtr.HLM", 31.5)
-    #     change the motor current back
     drain_pos = 0.
     park_pos = 31.0
     
@@ -127,11 +122,22 @@ class SolutionScatteringExperimentalModule():
     # syringe pump 
     default_piston_pos = 165
     default_pump_speed = 1500
-    default_load_pump_speed = 350 # SC changed the value from 600 on 7/9/17
+    # SC changed the value from 600 on 7/9/17
+    default_load_pump_speed = 350     
     vol_p4_to_cell = {'upstream': -140, 'downstream': -140}
-    vol_tube_to_cell = {'upstream': 84, 'downstream': 67} # SC done changes--> downstream value reduced to (92 from 104) 7/9/17, upstream changed from 110 to 100 02/13/18
+    # SC done changes 02/13/18 --> 
+    #   downstream value reduced to (92 from 104) 7/9/17, upstream changed from 110 to 100 
+    vol_tube_to_cell = {'upstream': 84, 'downstream': 67} 
     vol_sample_headroom = 13
     
+    # these numbers are for the 2016 version tube holder
+    #tube1_pos = -15.95     # relative to well position
+    #tube_spc = -9.0      # these are mechanically determined and should not change
+    # 2017 march version of tube holder with alterate tube/empty holes
+    Ntube = 18
+    tube1_pos=-18.75    #12/20/17 by JB
+    tube_spc = -5.8417     # these are mechanically determined and should not change
+            
     def __init__(self):
         # important to home the stages !!!!!
         #     home sample y (SmarAct) from controller
@@ -143,6 +149,7 @@ class SolutionScatteringExperimentalModule():
         #self.load_config(default_solution_scattering_config_file)
         self.return_piston_pos = self.default_piston_pos
         self.ctrl.pump_spd.put(self.default_pump_speed)
+
     # needle vs tube position
     # this applies for the tube holder that has the alternate tube/empty pattern
     # in the current design the even tube position is on the downstream side
@@ -153,7 +160,48 @@ class SolutionScatteringExperimentalModule():
             return("upstream")
         else: # odd tube number
             return("downstream")
+
+    # homing procedure without encoder strip [obsolete]:
+    #     reduce motor current, drive sol.holder_x in the possitive direction to hit the hard stop
+    #     move the motor back by 0.5mm, set the current position to 37.5 ("park" position)
+    #     set software limits:
+    #          caput("XF:16IDC-ES:Sol{Enc-Ax:Xl}Mtr.LLM", -119)
+    #          caput("XF:16IDC-ES:Sol{Enc-Ax:Xl}Mtr.HLM", 31.5)
+    #     change the motor current back
+    # keep motor current low?
+    def home_holder(self):
+        mot = sol.holder_x
     
+        mot.acceleration.put(0.2)
+        mot.velocity.put(25)
+        caput(mot.prefix+".HLM", mot.position+120)
+        # move holder_x to hard limit toward the door
+        mot.move(mot.position+100)
+        while mot.moving:
+            sleep(0.5)
+
+        # washing well position will be set to zero later
+        # the value of the park position is also the distance between "park" and "wash"
+        mot.move(mot.position-self.park_pos+0.5)
+
+        pv = 'XF:16IDC-ES:Sol{ctrl}SampleAligned'
+
+        while caget(pv)==0:                      
+            mot.move(mot.position-0.1)
+        p1 = mot.position
+
+        mot.move(p1-1)
+        while caget(pv)==0:                      
+            mot.move(mot.position+0.1)
+        p2 = mot.position
+
+        mot.move((p1+p2)/2)
+        while mot.moving:
+            sleep(0.5)
+        mot.set_current_position(0)
+        caput(mot.prefix+".HLM", self.park_pos+0.5)
+        caput(mot.prefix+".LLM", self.tube1_pos+self.tube_spc*(self.Ntube-1)-0.5)
+        
     def save_config(self):
         pass
 
@@ -168,61 +216,51 @@ class SolutionScatteringExperimentalModule():
             self.sample_y.move(self.flowcell_pos[cn])
     
     def select_tube_pos(self, tn):
-        '''1 argument accepted: 
-        position 1 to 18 from, 1 on the inboard side
-        position 0 is the washing well '''
-        if tn not in range(0,19) and tn!='park':
+        ''' 1 argument accepted: 
+            position 1 to 18 from, 1 on the inboard side
+            position 0 is the washing well 
+        '''
+        if tn not in range(0,self.Ntube+1) and tn!='park':
             raise RuntimeError('invalid tube position %d, must be 0 (drain) or 1-18, or \'park\' !!' % tn)
+        if self.pcr_holder_down.get()!=1:
+            raise RuntimeError('Cannot move holder when it is not down!!')
 
         self.tube_pos = tn
         if tn=='park':
-            #if sol.ctrl.sv_door_lower.get(as_string=True)=='close':
-            #raise RuntimeError('Attempting to park the PCR tube holder while the sample door is closed !!')
-            if self.pcr_holder_up.get()==0:
-                raise RuntimeError('Sample holder is up right now and should be moved down!!')
-            else:
-                print('Sample holder is down.')
+            if self.DoorOpen.get()!=1:
+                raise RuntimeError('Attempting to park PCR tube holder while the sample door is closed !!')
             self.holder_x.move(self.park_pos)
             print('move to PCR tube holder park position ...')        
         else:
-            # these numbers are for the 2016 version tube holder
-            #tube1_pos = -15.95     # relative to well position
-            #tube_spc = -9.0      # these are mechanically determined and should not change
-            # 2017 march version of tube holder with alterate tube/empty holes
-            tube1_pos=-18.75    #12/20/17 by JB
-            tube_spc = -5.8417     # these are mechanically determined and should not change
             pos = self.drain_pos
-            if self.pcr_holder_up.get()==0:
-                raise RuntimeError('Sample holder is up right now and should be moved down!!')
-            else:
-                print('Sample holder is down.')
-            
             if tn>0:
-                pos += (tube1_pos + tube_spc*(tn-1))
+                pos += (self.tube1_pos + self.tube_spc*(tn-1))
             print('move to PCR tube position %d ...' % tn)
             self.holder_x.move(pos)
 
+        while self.holder_x.moving:
+            sleep(0.5)
+            
     def move_tube_holder(self, pos):
         '''1 argument accepted:
-           'up' or 'down'sol.sel
+           'up' or 'down'
            up allowed only when the hodler is anligned to needle
         '''
         if pos=='down':
-            print('PCR tube holder down ...')
+            print('moving PCR tube holder down ...')
             self.ctrl.sv_pcr_tubes.put('down')
             self.ctrl.wait() 
             # wait for the pneumatic actuator to settle
             #addtition of new position sensor for sample holder actuator 12/2017:
-            while True:
-                if self.pcr_holder_up.get()==1:
-                    break
+            while self.pcr_holder_down.get()!=1:
+                    sleep(0.5)
             self.tube_holder_pos = "down"                
         elif pos=='up':
             # if self.pcr_v_enable.get()==0 and (self.holder_x.position**2>1e-4 and self.tube_pos!=12):
             # revised by LY, 2017Mar23, to add bypass
             if self.pcr_v_enable.get()==0 and self.bypass_tube_pos_ssr==False:
                 raise RuntimeError('attempting to raise PCR tubes while mis-aligned !!') 
-            print('PCR tube holder up ...')
+            print('moving PCR tube holder up ...')
             self.ctrl.sv_pcr_tubes.put('up')
             self.ctrl.wait()        
             self.tube_holder_pos = "up"
@@ -302,7 +340,8 @@ class SolutionScatteringExperimentalModule():
         self.ctrl.pump_mvA(self.default_piston_pos)
         self.ctrl.wait()
         self.ctrl.valve_pos.put("sam")
-        self.ctrl.pump_mvR(self.vol_p4_to_cell[nd]) ## fill the tubing with water only upto the end of the flow channel
+        # fill the tubing with water only upto the end of the flow channel
+        self.ctrl.pump_mvR(self.vol_p4_to_cell[nd]) 
         self.ctrl.wait()
 
         self.return_piston_pos = self.ctrl.piston_pos.get()
@@ -330,36 +369,14 @@ class SolutionScatteringExperimentalModule():
         updata_metadata()
         
         change_sample(sample_name)
-        #RE.md['sample_name'] = current_sample 
-        #RE.md['saxs'] = ({'saxs_x':saxs.x.position, 'saxs_y':saxs.y.position, 'saxs_z':saxs.z.position})
-        #RE.md['waxs1'] = ({'waxs1_x':waxs1.x.position, 'waxs1_y':waxs1.y.position, 'waxs1_z':waxs1.z.position})
-        #RE.md['waxs2'] = ({'waxs2_x':waxs2.x.position, 'waxs1_y':waxs2.y.position, 'waxs1_z':waxs2.z.position}) 
-        #RE.md['energy'] = ({'mono_bragg': mono.bragg.position, 'energy': getE(), 'gap': get_gap()})
-        #RE.md['XBPM'] = XBPM_pos() 
-        
         DETS=[em1, em2, pil1M_ext,pilW1_ext,pilW2_ext]
         set_pil_num_images(repeats)
         
-        #DETS=[em1, em2, pil1M, pilW1, pilW2]
-        # pump_spd unit is ul/min
-        #self.ctrl.pump_spd.put(60.*vol/exp)
-        #for n in range(repeats):
-        #    print('collecting data, %d of %d repeats ...' % (n+1, repeats))
-        #    self.ctrl.pump_mvR(vol)
-        #    RE(count_fs(DETS, num=1))
-        #    self.ctrl.wait()
-        #    vol=-vol
-
         # pump_spd unit is ul/min
         self.ctrl.pump_spd.put(60.*vol/(repeats*exp))
-        #print('collecting data, %d of %d repeats ...' % (n+1, repeats))
-        #self.ctrl.pump_mvR(vol)
+        print('collecting data, %d of %d repeats ...' % (n+1, repeats))
         th = threading.Thread(target=self.ctrl.delayed_mvR, args=(vol, ) )
         th.start() 
-        # single image per trigger
-        #RE(ct(DETS, num=repeats))
-        # take multiple images per trigger
-        #pilatus_set_Nimage(repeats)
         set_pil_num_images(repeats)
         RE(ct(DETS, num=1))
         self.ctrl.wait()
@@ -370,13 +387,6 @@ class SolutionScatteringExperimentalModule():
             self.ctrl.pump_mvR(vol)
         self.ctrl.wait()
 
-        del RE.md['sample_name']
-        del RE.md['saxs']
-        del RE.md['waxs1']
-        del RE.md['waxs2']
-        del RE.md['energy']
-        #del RE.md['XBPM']
-    
     def collect_oscill_data(self, vol=45, exp=2, repeats=3, sample_name='test'):
         pilatus_ct_time(exp)
         pilatus_number_reset(False)
@@ -384,12 +394,6 @@ class SolutionScatteringExperimentalModule():
         updata_metadata()
         
         change_sample(sample_name)
-        #RE.md['sample_name'] = current_sample 
-        #RE.md['saxs'] = ({'saxs_x':saxs.x.position, 'saxs_y':saxs.y.position, 'saxs_z':saxs.z.position})
-        #RE.md['waxs1'] = ({'waxs1_x':waxs1.x.position, 'waxs1_y':waxs1.y.position, 'waxs1_z':waxs1.z.position})
-        #RE.md['waxs2'] = ({'waxs2_x':waxs2.x.position, 'waxs1_y':waxs2.y.position, 'waxs1_z':waxs2.z.position}) 
-        #RE.md['energy'] = ({'mono_bragg': mono.bragg.position, 'energy': getE(), 'gap': get_gap()})
-        #RE.md['XBPM'] = XBPM_pos() 
         
         DETS=[em1, em2, pil1M, pilW1, pilW2]
         #DETS=[em1, em2, pil1M_ext,pilW1_ext,pilW2_ext]
@@ -424,13 +428,6 @@ class SolutionScatteringExperimentalModule():
             self.ctrl.pump_mvR(vol)
         self.ctrl.wait()
 
-        del RE.md['sample_name']
-        del RE.md['saxs']
-        del RE.md['waxs1']
-        del RE.md['waxs2']
-        del RE.md['energy']
-        del RE.md['XBPM']
-        
             
     def return_sample(self):
         ''' assuming that the sample has just been measured
@@ -443,7 +440,8 @@ class SolutionScatteringExperimentalModule():
         self.move_tube_holder('down')
         
     # delay is after load_sample and measure, this is useful for temperature control    
-    def measure(self, tn, nd=None, vol=50, exp=5, repeats=3, sample_name='test', delay=0):
+    def measure(self, tn, nd=None, vol=50, exp=5, repeats=3, sample_name='test', 
+                delay=0, returnSample=True, washCell=True):
         ''' measure(self, tn, nd, vol, exp, repeats, sample_name='test')
             tn: tube number: 1-18
             nd: needle, "upstream" or "downstream", if need to specify
@@ -459,30 +457,12 @@ class SolutionScatteringExperimentalModule():
         if delay>0:
             countdown("delay before exposure:",delay)
         self.collect_data(vol, exp, repeats, sample_name)
-        self.return_sample()
         
-        self.wash_needle(nd)
-        
-    # delay is after load_sample and measure, this is useful for temperature control    
-    def measure_noreturn(self, tn, nd=None, vol=50, exp=5, repeats=3, sample_name='test', delay=0):
-        ''' measure(self, tn, nd, vol, exp, repeats, sample_name='test')
-            tn: tube number: 1-18
-            nd: needle, "upstream" or "downstream", if need to specify
-            exp: exposure time
-            repeats: # of exposures
-        '''
-        
-        nd = self.verify_needle_for_tube(tn, nd)
-        
-        self.select_flow_cell(self.flowcell_nd[nd])
-        self.prepare_to_load_sample(tn, nd)
-        self.load_sample(vol)
-        if delay>0:
-            countdown("delay before exposure:",delay)
-        self.collect_data(vol, exp, repeats, sample_name)
-          
-        
-        
+        if returnSample:
+            self.return_sample()
+        if returnSample and washCell:
+            self.wash_needle(nd)
+                
     def measure_oscill(self, tn, nd=None, vol=50, exp=5, repeats=3, sample_name='test', delay=0):
         ''' measure(self, tn, nd, vol, exp, repeats, sample_name='test')
             tn: tube number: 1-18
@@ -503,26 +483,8 @@ class SolutionScatteringExperimentalModule():
         
         self.wash_needle(nd)
         
-    def measure_nowash(self, tn, nd=None, vol=50, exp=2, repeats=3, sample_name='test', delay=0):
-        ''' measure(self, tn, nd, vol, exp, repeats, sample_name='test')
-            tn: tube number: 1-18
-            nd: needle, "upstream" or "downstream", if need to specify
-            exp: exposure time
-            repeats: # of exposures
-        '''
-        nd = self.verify_needle_for_tube(tn, nd)
         
-        self.select_flow_cell(self.flowcell_nd[nd])
-        self.prepare_to_load_sample(tn, nd)
-        self.load_sample(vol)
-        if delay>0:
-            countdown("delay before exposure:",delay)
-        self.collect_data(vol, exp, repeats, sample_name)
-        
-        self.return_sample()
-        
-        
-    def measure_list(self, vol=45, exp=2, repeats=3, sample_list="list1", delay=0, nd=None):
+    def measure_list(self, sample_list, vol=45, exp=2, repeats=3, delay=0, nd=None):
         ''' a list of subset of necessary parameters for single sample data collection
         '''
         i=0
@@ -548,9 +510,7 @@ class SolutionScatteringExperimentalModule():
             self.select_tube_pos(a)
             self.return_sample()
             nd=None
-            
-    
-       
+
     def mov_delay(self, length):
         while self.ctrl.ready.get()==0:
             sleep(0.2)
@@ -563,13 +523,6 @@ class SolutionScatteringExperimentalModule():
         pilatus_number_reset(False)
         
         updata_metadata()
-        #change_sample(sample_name)
-        #RE.md['sample_name'] = current_sample 
-        #RE.md['saxs'] = ({'saxs_x':saxs.x.position, 'saxs_y':saxs.y.position, 'saxs_z':saxs.z.position})
-        #RE.md['waxs1'] = ({'waxs1_x':waxs1.x.position, 'waxs1_y':waxs1.y.position, 'waxs1_z':waxs1.z.position})
-        #RE.md['waxs2'] = ({'waxs2_x':waxs2.x.position, 'waxs1_y':waxs2.y.position, 'waxs1_z':waxs2.z.position}) 
-        #RE.md['energy'] = ({'mono_bragg': mono.bragg.position, 'energy': getE(), 'gap': get_gap()})
-        #RE.md['XBPM'] = XBPM_pos() 
         DETS=[em1, em2, pil1M, pilW1, pilW2]
         #pilatus_set_Nimage(repeats)
         set_pil_num_images(repeats)
