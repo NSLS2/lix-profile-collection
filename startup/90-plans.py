@@ -46,6 +46,7 @@ def hplc_scan(detectors, monitors, *, md=None):
 
 def collect_hplc(sample_name,exp):#, CV=24, flowrate=0.5)
     change_sample(sample_name)
+    sol.select_flow_cell('middle')
     #time = CV/flowrate
     #no_of_cts = time * 60/exp
     set_pil_num_images(1)

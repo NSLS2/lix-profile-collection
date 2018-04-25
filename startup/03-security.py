@@ -8,7 +8,7 @@ data_path = None
 collection_lock_file = "/GPFS/xf16id/.lock"
 okay_to_move_file = "/GPFS/xf16id/.okay_to_move"
 
-def login():
+def login(uname = None, pID = None, rID = None):
     """Ask the user for his credentials and proposal information for the data collection"""
     #TODO: Use PASS and LDAP integration when possible.
     global username
@@ -17,6 +17,11 @@ def login():
     global data_path 
 
     correct_info = False
+    if uname != None and pID!=None and rID!=None: 
+      username = uname
+      proposal_id = pID
+      run_id = rID
+      correct_info = True
 
     while not correct_info:
         username = input("Please enter your username: ")
@@ -31,7 +36,6 @@ def login():
     RE.md['run_id'] = run_id
     
     path = '/GPFS/xf16id/exp_path/'
-    #path = '/exp_path/'
     rpath = str(proposal_id)+"/"+str(run_id)+"/"
     data_path = path + rpath
     makedirs(data_path)

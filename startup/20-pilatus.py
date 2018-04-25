@@ -105,7 +105,7 @@ class PilatusFilePlugin(Device, FileStoreIterativeWrite):
         except NameError:
             pass
         else:
-            if self.parent.name == first_Pilatus():
+            if self.parent.name == first_Pilatus() or self.parent.name == first_PilatusExt():
                 caput("XF:16IDC-ES:Sol{ctrl}ready", 1)
 
     def unstage(self):        

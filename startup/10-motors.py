@@ -145,7 +145,7 @@ bpm_pos = XYMotor('XF:16IDB-BI{BPM:1', name='bpm_pos')
 bpm2 = XYMotor('XF:16IDC-BI{BPM:2', name='bpm2')
 
 ## Secondary Source Aperture (SSA)
-ssa = XYMotor('XF:16IDB-OP{Slt:SSA-', name='ssa')
+ssa = XYMotor('XF:16IDB-OP{Slt:SSA', name='ssa')
 
 
 ## Attenuator
@@ -189,6 +189,9 @@ sg1 = SlitsCenterAndGap('XF:16IDC-OP{Slt:G1', name='sg1')
 
 ## Guard Slits 2
 sg2 = SlitsCenterAndGap('XF:16IDC-OP{Slt:G2', name='sg2')
+
+## guard slits on the solution scattering module
+sgs = SlitsCenterAndGap('XF:16IDC-OP{Slt:Gs', name='sgs')
 
 #########################################
 ## In-air transmission measurement module

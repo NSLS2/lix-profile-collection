@@ -11,6 +11,7 @@ from bluesky.callbacks.olog import logbook_cb_factory
 
 #from bluesky.global_state import gs
 
+global DETS 
 
 class CustomRunEngine(RunEngine):
     def __call__(self, *args, **kwargs):
@@ -25,7 +26,7 @@ class CustomRunEngine(RunEngine):
 
 RE = CustomRunEngine()
 
-configure_base(get_ipython().user_ns, db)
+configure_base(get_ipython().user_ns, db, bec=False)
 
 abort = RE.abort
 resume = RE.resume
