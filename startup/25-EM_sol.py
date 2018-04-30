@@ -161,6 +161,29 @@ class SolutionScatteringExperimentalModule():
         else: # odd tube number
             return("downstream")
 
+    def move_door(self, state):
+        """ state = 'open'/'close'
+        """
+        if state not in ['open', 'close']:
+            raise Exception("the door state should be either open or close.")
+            
+        self.ctrl.sv_door_lower.put(state)
+        
+        if state=='open':
+            for i in range(10):
+                if self.DoorOpen.get():
+                    break
+                sleep(0.5)
+            if self.DoorOpen.get()==0:
+                raise Exception("Sample door is not open.")
+        else: 
+            for i in range(10):
+                if self.DoorOpen.get()==0:
+                    break
+                sleep(0.5)
+            if self.DoorOpen.get()==1:
+                raise Exception("Sample door is still open.")
+        
     # homing procedure without encoder strip [obsolete]:
     #     reduce motor current, drive sol.holder_x in the possitive direction to hit the hard stop
     #     move the motor back by 0.5mm, set the current position to 37.5 ("park" position)
@@ -172,6 +195,7 @@ class SolutionScatteringExperimentalModule():
     def home_holder(self):
         mot = sol.holder_x
     
+        self.move_door('open')
         mot.acceleration.put(0.2)
         mot.velocity.put(25)
         caput(mot.prefix+".HLM", mot.position+120)
@@ -179,7 +203,7 @@ class SolutionScatteringExperimentalModule():
         mot.move(mot.position+100)
         while mot.moving:
             sleep(0.5)
-
+            
         # washing well position will be set to zero later
         # the value of the park position is also the distance between "park" and "wash"
         mot.move(mot.position-self.park_pos+0.5)
@@ -201,11 +225,14 @@ class SolutionScatteringExperimentalModule():
         mot.set_current_position(0)
         caput(mot.prefix+".HLM", self.park_pos+0.5)
         caput(mot.prefix+".LLM", self.tube1_pos+self.tube_spc*(self.Ntube-1)-0.5)
+
+        self.move_door('close')
+
         
     def save_config(self):
         pass
 
-    def save_config(self, fn):
+    def load_config(self, fn):
         pass
     
     def select_flow_cell(self, cn):
@@ -220,6 +247,9 @@ class SolutionScatteringExperimentalModule():
             position 1 to 18 from, 1 on the inboard side
             position 0 is the washing well 
         '''
+        # any time the sample holder is moving, the solution EM is no longer ready
+        self.EMready.put(0)
+
         if tn not in range(0,self.Ntube+1) and tn!='park':
             raise RuntimeError('invalid tube position %d, must be 0 (drain) or 1-18, or \'park\' !!' % tn)
         if self.pcr_holder_down.get()!=1:
@@ -227,8 +257,7 @@ class SolutionScatteringExperimentalModule():
 
         self.tube_pos = tn
         if tn=='park':
-            if self.DoorOpen.get()!=1:
-                raise RuntimeError('Attempting to park PCR tube holder while the sample door is closed !!')
+            self.move_door('open')
             self.holder_x.move(self.park_pos)
             print('move to PCR tube holder park position ...')        
         else:
@@ -240,6 +269,12 @@ class SolutionScatteringExperimentalModule():
 
         while self.holder_x.moving:
             sleep(0.5)
+        print('motion completed.')
+        if tn=='park':
+            self.EMready.put(1)
+        elif self.DoorOpen.get()==1:
+            self.move_door('close')
+         
             
     def move_tube_holder(self, pos):
         '''1 argument accepted:
