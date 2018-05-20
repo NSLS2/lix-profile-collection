@@ -80,7 +80,7 @@ class SolutionScatteringExperimentalModule():
     ctrl = SolutionScatteringControlUnit('XF:16IDC-ES:Sol{ctrl}', name='sol_ctrl')
     pcr_v_enable = EpicsSignal("XF:16IDC-ES:Sol{ctrl}SampleAligned")    # 1 means PCR tube holder can go up 
     pcr_holder_down = EpicsSignal("XF:16IDC-ES:Sol{ctrl}HolderDown")
-    EMready = EpicsSignal("XF:16IDC-ES:Sol{ctrl}EMSolready")
+    EMready = EpicsSignal("XF:16IDC-ES:Sol{ctrl}EMSolReady")
     HolderPresent = EpicsSignal("XF:16IDC-ES:Sol{ctrl}HolderPresent")
     DoorOpen = EpicsSignal("XF:16IDC-ES:Sol{ctrl}DoorOpen")
     
@@ -100,12 +100,12 @@ class SolutionScatteringExperimentalModule():
     p4_needle_to_load = {'upstream': 0, 'downstream': 1}
     needle_dirty_flag = {'upstream': True, 'downstream': True}
     tube_holder_pos = "down"
-    bypass_tube_pos_ssr = True  # if true, ignore the optical sensor for tube holder position
+    bypass_tube_pos_ssr = False  # if true, ignore the optical sensor for tube holder position
     
     # need to home holder_x position to 0; use home_holder()
     # tube postion 1 is on the inboard side
     drain_pos = 0.
-    park_pos = 31.0
+    park_pos = 33.0
     
     disable_flow_cell_move = False
     
@@ -149,6 +149,11 @@ class SolutionScatteringExperimentalModule():
         #self.load_config(default_solution_scattering_config_file)
         self.return_piston_pos = self.default_piston_pos
         self.ctrl.pump_spd.put(self.default_pump_speed)
+        
+        self.holder_x.acceleration.put(0.2)
+        self.holder_x.velocity.put(25)
+        self.sample_x.acceleration.put(0.2)
+        self.sample_x.velocity.put(5)
 
     # needle vs tube position
     # this applies for the tube holder that has the alternate tube/empty pattern
@@ -196,11 +201,10 @@ class SolutionScatteringExperimentalModule():
         mot = sol.holder_x
     
         self.move_door('open')
-        mot.acceleration.put(0.2)
         mot.velocity.put(25)
-        caput(mot.prefix+".HLM", mot.position+120)
+        caput(mot.prefix+".HLM", mot.position+160)
         # move holder_x to hard limit toward the door
-        mot.move(mot.position+100)
+        mot.move(mot.position+155)
         while mot.moving:
             sleep(0.5)
             
