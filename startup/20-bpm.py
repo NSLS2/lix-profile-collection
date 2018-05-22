@@ -31,13 +31,13 @@ class TetrAMM(QuadEM):
     port_name = Cpt(Signal, value='TetrAMM')
 
 class NSLS_EM1(NSLS_EM):
-    sumAll = ADCpt(StatsPlugin, 'SumAll:')
-    
+    _default_read_attrs = []
+    _default_configuration_attrs = []
+ 
 
 best = Best('XF:16IDB-CT{Best}',name='best')
 
 em1 = NSLS_EM1('XF:16IDC-ES{NSLS_EM:1}', name='em1')
-em1.read_attrs.append('sumAll.mean_value')
 
 em2 = NSLS_EM('XF:16IDC-ES{NSLS_EM:2}', name='em2')
 tetramm = TetrAMM('XF:16IDC-ES{TETRAMM:1}', name='tetramm')
