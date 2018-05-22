@@ -1,3 +1,4 @@
+import os
 from databroker.assets.handlers_base import HandlerBase
 from databroker.assets.base_registry import DuplicateHandler
 import fabio
@@ -17,7 +18,7 @@ class PilatusCBFHandler(HandlerBase):
         if frame_per_point>1:
             # file name should look like test_000125_SAXS_00001.cbf, instead of test_000125_SAXS.cbf
             template = template[:-4]+"_%05d.cbf"
-        self._path = rpath
+        self._path = os.path.join(rpath, '')
         self._fpp = frame_per_point
         self._template = template
         self._filename = filename
