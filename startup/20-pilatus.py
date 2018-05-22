@@ -39,6 +39,7 @@ class PilatusFilePlugin(Device, FileStoreIterativeWrite):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._datum_kwargs_map = dict()  # store kwargs for each uid
+        self.filestore_spec = 'AD_CBF'
 
     def stage(self):
         global proposal_id
