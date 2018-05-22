@@ -236,92 +236,54 @@ class LIXMicroscopeCameraMulti(MultiExpProsilica):
                write_path_template='/GPFS/xf16id/exp_path/')
     over1 = Cpt(OverlayPlugin, 'Over1:')
 
-def setup_cam(pv, name):
+def setup_cam(pv, name, RGB=False, Multi=1):
+    """ multiple trigger can be used with average plugin from areaDetector
+    """
     try: 
-        cam = StandardProsilica(pv, name=name)
+        if RGB:
+            if Multi<=1:
+                cam = LIXMicroscopeCamera(pv, name=name)
+            else:
+                cam = LIXMicroscopeCameraMulti(pv, trigger_cycle=[[('single trigger', {}) for _ in range(Multi)]], name=name)
+        else:
+            if Multi<=1:
+                cam = StandardProsilica(pv, name=name)
+            else:
+                cam = MultiExpProsilica(pv, trigger_cycle=[[('single trigger', {}) for _ in range(Multi)]], name=name)
     except TimeoutError:
         cam = None
         print("%s is not accessible." % name)
-    
+
+    cam.read_attrs = ['image', 'stats1', 'stats2', 'stats3', 'roi1', 'tiff']
+    cam.stats1.read_attrs = ['total', 'centroid', 'profile_average']
+    cam.stats2.read_attrs = ['total', 'centroid']
+    cam.stats3.read_attrs = ['total', 'centroid']
+    cam.stats1.centroid.read_attrs=['x','y']
+    cam.stats1.profile_average.read_attrs=['x','y']
+    cam.roi1.read_attrs = ['min_xyz', 'size']
+    cam.tiff.read_attrs = [] # we dont need anything other than the image
+    cam.over1.read_attrs = [] # we dont need anything from overlay
+
+    ##### FIX while not corrected on Ophyd - ADBase - validate_asyn_port
+    ##
+    # In the case of the OverlayPlugin, the Overlay object has no port_name
+    # which leads to a empty port_map at asyn_digraph.
+    #
+    for overlay in cam.over1.component_names:
+        if overlay.startswith('overlay'):
+            getattr(cam.over1, overlay).validate_asyn_ports = lambda: None
+            
     return cam
 
-trigger_cycle=[[('single trigger', {}) for _ in range(20)]]
+camFixedAper = setup_cam("XF:16IDA-BI{Cam:FixedApt}", "camFixedAper")    
+camWBM       = setup_cam("XF:16IDA-BI{Cam:WBM}", "camWBM")
+camMono      = setup_cam("XF:16IDA-BI{Cam:Mono}", "camMono")
+camKB        = setup_cam("XF:16IDA-BI{Cam:KB}", "camKB")
+camSS        = setup_cam("XF:16IDA-BI{Cam:SS}", "camSS")
+camAltSS     = setup_cam("XF:16IDA-BI{Cam:AltSS}", "camAltSS")
 
-def setup_cam_Multi(pv, name):
-    try: 
-        cam = MultiExpProsilica(pv, trigger_cycle=[[('single trigger', {}) for _ in range(20)]], name=name)
-    except TimeoutError:
-        cam = None
-        print("%s is not accessible." % name)
-    
-    return cam
-    
-def setup_camRGB(pv, name):
-    try: 
-        cam = LIXMicroscopeCamera(pv, name=name)
-    except TimeoutError:
-        cam = None
-        print("%s is not accessible." % name)
-    
-    return cam
-
-def setup_camRGB_Multi(pv, name):
-    try: 
-        cam = LIXMicroscopeCameraMulti(pv, trigger_cycle=[[('single trigger', {}) for _ in range(20)]], name=name)
-    except TimeoutError:
-        cam = None
-        print("%s is not accessible." % name)
-    
-    return cam
-    
-cam01 = setup_cam("XF:16IDA-BI{FS:1-Cam:1}", "cam01")
-cam02 = setup_cam("XF:16IDA-BI{FS:2-Cam:1}", "cam02")
-cam03 = setup_cam("XF:16IDA-BI{FS:3-Cam:1}", "cam03")
-cam04 = setup_cam("XF:16IDA-BI{FS:4-Cam:1}", "cam04")
-cam05 = setup_cam("XF:16IDB-BI{FS:5-Cam:1}", "cam05")
-cam06 = setup_cam("XF:16IDB-BI{FS:6-Cam:1}", "cam06")
-cam06m = setup_cam_Multi(pv="XF:16IDB-BI{FS:6-Cam:1}", name="cam06m")
-cam05m = setup_cam_Multi(pv="XF:16IDB-BI{FS:5-Cam:1}", name="cam05m")
-
-    
-all_standard_pros = [cam01, cam02, cam03, cam04, cam05, cam05m, cam06,cam06m]
-
-for camera in all_standard_pros:
-    if camera!=None:
-        camera.read_attrs= ['image', 'stats1', 'stats2','stats3']
-        camera.stats1.read_attrs = ['total', 'centroid', 'profile_average']
-        camera.stats2.read_attrs = ['total', 'centroid']
-        camera.stats3.read_attrs = ['total', 'centroid']
-        camera.stats1.centroid.read_attrs=['x','y']
-        camera.stats1.profile_average.read_attrs=['x','y']
-        #camera.tiff.read_attrs = [] # we dont need anything other than the image
-        
-cam_mic = setup_camRGB("XF:16IDC-ES:InAir{Mscp:1-Cam:1}", "cam_mic")
-cam_sol = setup_camRGB("XF:16IDC-BI{Cam:Sol}", "cam_sol")
-cam_overhead = setup_camRGB("XF:16IDC-BI{FS:9-Cam:1}", "cam_mic")
-cam_spare = setup_camRGB("XF:16IDC-BI{Cam:Spare}", "cam_spare")
-cam_sparem = setup_camRGB_Multi("XF:16IDC-BI{Cam:Spare}", "cam_sparem")
-
-
-all_RGB_cam = [cam_sol, cam_overhead, cam_spare, cam_mic, cam_sparem]
-    
-for cam in all_RGB_cam:
-    if cam!=None:
-        cam.read_attrs = ['image', 'stats1', 'stats2', 'stats3', 'roi1', 'tiff']
-        cam.stats1.read_attrs = ['total', 'centroid', 'profile_average']
-        cam.stats2.read_attrs = ['total', 'centroid']
-        cam.stats3.read_attrs = ['total', 'centroid']
-        cam.stats1.centroid.read_attrs=['x','y']
-        cam.stats1.profile_average.read_attrs=['x','y']
-        cam.roi1.read_attrs = ['min_xyz', 'size']
-        cam.tiff.read_attrs = [] # we dont need anything other than the image
-        cam.over1.read_attrs = [] # we dont need anything from overlay
-
-        ##### FIX while not corrected on Ophyd - ADBase - validate_asyn_port
-        ##
-        # In the case of the OverlayPlugin, the Overlay object has no port_name
-        # which leads to a empty port_map at asyn_digraph.
-        #
-        for overlay in cam.over1.component_names:
-            if overlay.startswith('overlay'):
-                getattr(cam.over1, overlay).validate_asyn_ports = lambda: None
+camBHutch    = setup_cam("XF:16IDB-BI{Cam:BHutch}", "camBHutch", RGB=True)
+camSampleTV  = setup_cam("XF:16IDC-BI{Cam:sam_top}", "camSampleTV", RGB=True)
+#camOAM       = setup_cam("XF:16IDC-BI{Cam:OAM}", "camOAM", RGB=True)
+camSol       = setup_cam("XF:16IDC-BI{Cam:Sol}", "camSol", RGB=True)
+#camSpare     = 
