@@ -14,19 +14,17 @@ class HPLC(Device):
     done = Cpt(EpicsSignalRO, 'io3')
     bypass = Cpt(EpicsSignal, '_bypass')
     
-    def __init__(self, *args, reg, read_filepath, write_filepath, **kwargs):
+    def __init__(self, *args, read_filepath, write_filepath, **kwargs):
         self.hplc_status = HPLCStatus.idle
         self._injected_status = None
         self._done_status = None
         self._bypass_status = None
         self._resource = None
-        self.reg = reg
         self._read_filepath = read_filepath
         self._write_filepath = write_filepath
         super().__init__(*args, **kwargs)
 
     def stage(self):
-        # self._resource = self.reg.insert_resource("HPLC1", self._read_filepath)
         self.injected.subscribe(self._injected_changed)
         self.done.subscribe(self._done_changed)
         self.bypass.subscribe(self._bypass_changed)
@@ -107,7 +105,7 @@ class HPLC(Device):
             self._done_changed(1,0)
         self.bypass.set(0)
 
-hplc = HPLC('XF:16IDC-ES:Sol{ctrl}HPLC', name='hplc', reg=None, read_filepath=None, write_filepath=None)
+hplc = HPLC('XF:16IDC-ES:Sol{ctrl}HPLC', name='hplc', read_filepath=None, write_filepath=None)
 
 def read_Shimadzu_section(section):
     """ the chromtographic data section starts with a header

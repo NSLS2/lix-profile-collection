@@ -222,21 +222,18 @@ class StandardProsilica(SingleTrigger, LixProsilicaDetector):
 class StandardProsilicaWithTIFF(StandardProsilica):
     tiff = Cpt(TIFFPluginWithFileStore,
                suffix='TIFF1:',
-               write_path_template='/GPFS/xf16id/exp_path/',
-               reg=db.reg)
+               write_path_template='/GPFS/xf16id/exp_path/')
 
 class LIXMicroscopeCamera(StandardProsilica):
     tiff = Cpt(TIFFPluginWithFileStore,
                suffix='TIFF1:',
-               write_path_template='/GPFS/xf16id/exp_path/',
-               reg=db.reg)
+               write_path_template='/GPFS/xf16id/exp_path/')
     over1 = Cpt(OverlayPlugin, 'Over1:')
     
 class LIXMicroscopeCameraMulti(MultiExpProsilica):
     tiff = Cpt(TIFFPluginWithFileStore,
                suffix='TIFF1:',
-               write_path_template='/GPFS/xf16id/exp_path/',
-               reg=db.reg)
+               write_path_template='/GPFS/xf16id/exp_path/')
     over1 = Cpt(OverlayPlugin, 'Over1:')
 
 def setup_cam(pv, name):

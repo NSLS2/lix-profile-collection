@@ -130,7 +130,7 @@ class PilatusFilePlugin(Device, FileStoreIterativeWrite):
 class LIXPilatus(SingleTrigger, PilatusDetector):
     # this does not get root is input because it is hardcoded above
     file = Cpt(PilatusFilePlugin, suffix="cam1:",
-               write_path_template="", reg=db.reg, root='/')
+               write_path_template="", root='/')
 
     roi1 = Cpt(ROIPlugin, 'ROI1:')
     roi2 = Cpt(ROIPlugin, 'ROI2:')
@@ -243,7 +243,7 @@ class PilatusExtTrigger(PilatusDetector):
 
 class LIXPilatusExt(PilatusExtTrigger):
     file = Cpt(PilatusFilePlugin, suffix="cam1:",
-               write_path_template="", reg=db.reg)
+               write_path_template="")
 
     roi1 = Cpt(ROIPlugin, 'ROI1:')
     roi2 = Cpt(ROIPlugin, 'ROI2:')
