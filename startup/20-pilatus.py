@@ -10,9 +10,7 @@ from ophyd.areadetector.filestore_mixins import FileStoreIterativeWrite
 from ophyd.utils import set_and_wait
 from databroker.assets.handlers_base import HandlerBase
 from ophyd.device import Staged
-
-# shortcut to databroker registry
-reg = db.reg
+from pathlib import Path
 
 import fabio
 import os,time,threading
