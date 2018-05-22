@@ -83,6 +83,7 @@ class PilatusFilePlugin(Device, FileStoreIterativeWrite):
         f_fn = current_sample
         set_and_wait(self.file_path, f_path, timeout=99999)# 12/19/17, changed back to GPFS
         set_and_wait(self.file_name, f_fn, timeout=99999)
+        self._fn = Path(f_path)
                 
         fpp = self.get_frames_per_point()
         # when camserver collects in "multiple" mode, another number is added to the file name
@@ -92,12 +93,11 @@ class PilatusFilePlugin(Device, FileStoreIterativeWrite):
         #    f_tplt = '%s%s_%06d_'+self.parent.detector_id+'_%05d.cbf'
 
         super().stage()
-        res_kwargs = {'template': f_tplt, # self.file_template(),  #
+        res_kwargs = {'template': f_tplt, # self.file_template(),
                       'filename': f_fn, # self.file_name(), 
                       'frame_per_point': fpp,
                       'initial_number': self.file_number.get()}
-        #self._resource = reg.insert_resource('AD_CBF', rpath, res_kwargs, root=path)
-        self._resource = reg.insert_resource('AD_CBF', data_path, res_kwargs, root="/")
+        self._generate_resource(res_kwargs)
        
         try: # this is used by solution scattering only
             sol
@@ -130,7 +130,7 @@ class PilatusFilePlugin(Device, FileStoreIterativeWrite):
 class LIXPilatus(SingleTrigger, PilatusDetector):
     # this does not get root is input because it is hardcoded above
     file = Cpt(PilatusFilePlugin, suffix="cam1:",
-               write_path_template="", reg=db.reg)
+               write_path_template="", reg=db.reg, root='/')
 
     roi1 = Cpt(ROIPlugin, 'ROI1:')
     roi2 = Cpt(ROIPlugin, 'ROI2:')
