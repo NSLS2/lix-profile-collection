@@ -8,7 +8,7 @@ data_path = None
 collection_lock_file = "/GPFS/xf16id/.lock"
 okay_to_move_file = "/GPFS/xf16id/.okay_to_move"
 
-def login(uname = None, pID = None, rID = None):
+def login(uname = None, pID = None, rID = None, debug=True):
     """Ask the user for his credentials and proposal information for the data collection"""
     #TODO: Use PASS and LDAP integration when possible.
     global username
@@ -48,6 +48,15 @@ def login(uname = None, pID = None, rID = None):
     ip = get_ipython()
     ip.magic("logstop")
     ip.magic("logstart -ort %s" % logfile)
+    
+    if debug:
+        def print_time_callback(name, doc):
+            if name =='start':
+                t1 = time.time()
+                print("#STARTDOC : {}".format(t1))
+                print("#STARTDOC : {}".format(time.ctime(t1)))
+        RE.subscribe(print_time_callback)
+
 
 def touch(fname):
     try:

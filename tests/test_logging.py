@@ -3,7 +3,7 @@ import logging
 logger = logging.getLogger('BSUIDEBUG')
 logger.setLevel(logging.DEBUG)
 # create file handler which logs even debug messages
-fh = logging.FileHandler('/home/xf16id/logs/bsui-debug-2018-08-08')
+fh = logging.FileHandler('/home/xf16id/logs/bsui-debug-2018-08-08.txt')
 fh.setLevel(logging.DEBUG)
 # create console handler with a higher log level
 ch = logging.StreamHandler()
