@@ -72,9 +72,14 @@ class PilatusFilePlugin(Device, FileStoreIterativeWrite):
         if PilatusFilePlugin.file_number_reset==1:
             print("resetting file number for ", self.parent.name)
             set_and_wait(self.file_number, 1, timeout=99999)
-        elif self.parent.name == first_Pilatus() or self.parent.name == first_PilatusExt():
+        elif self.parent.name == first_Pilatus():
             next_file_number = np.max([d.file.file_number.get() for d in pilatus_detectors])
             for d in pilatus_detectors:
+                print("setting file number for %s to %d." % (d.name, next_file_number))
+                set_and_wait(d.file.file_number, next_file_number, timeout=99999)
+        elif self.parent.name == first_PilatusExt():
+            next_file_number = np.max([d.file.file_number.get() for d in pilatus_detectors_ext])
+            for d in pilatus_detectors_ext:
                 print("setting file number for %s to %d." % (d.name, next_file_number))
                 set_and_wait(d.file.file_number, next_file_number, timeout=99999)
 
@@ -192,10 +197,15 @@ class PilatusExtTrigger(PilatusDetector):
 
     def stage(self):
         print(self.name, "staging")
-        self.stage_sigs.update([
-            ('cam.trigger_mode', 3), # 2 DOESN'T WORK!
-            ('cam.num_images', self._num_images)
-        ])
+        #self.stage_sigs.update([
+        #    ('cam.trigger_mode', 3), # 2 DOESN'T WORK!
+        #    ('cam.num_images', self._num_images)
+        #])
+        
+        time.sleep(.1)
+        self.cam.trigger_mode.put(3, wait=True)
+        time.sleep(.1)
+        self.cam.num_images.put(self._num_images, wait=True)
         print(self.name, "stage sigs updated")
         super().stage()
         print(self.name, "super staged")
@@ -216,9 +226,15 @@ class PilatusExtTrigger(PilatusDetector):
 
     def unstage(self):
         self._status = None
+        
         self._acquisition_signal.put(0)
+        
         #self.cam.trigger_mode.put(0, wait=True)
         #self.cam.num_images.put(1, wait=True)
+        time.sleep(.1)
+        self.cam.trigger_mode.put(0, wait=True)
+        time.sleep(.1)
+        self.cam.num_images.put(1, wait=True)
         super().unstage()
 
     def trigger(self):
