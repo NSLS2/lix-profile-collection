@@ -26,7 +26,7 @@ class CustomRunEngine(RunEngine):
 
 RE = CustomRunEngine()
 
-configure_base(get_ipython().user_ns, db, bec=False)
+configure_base(get_ipython().user_ns, db, bec=True, pbar=False)
 
 abort = RE.abort
 resume = RE.resume

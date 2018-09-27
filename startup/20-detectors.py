@@ -47,8 +47,8 @@ class MultiExpProsilica(MultiTrigger, LixProsilicaDetector):
     stats1 = Cpt(StatsPlugin, 'Stats1:')
     stats2 = Cpt(StatsPlugin, 'Stats2:')
     stats3 = Cpt(StatsPlugin, 'Stats3:')
-    stats4 = Cpt(StatsPlugin, 'Stats4:')
-    stats5 = Cpt(StatsPlugin, 'Stats5:')
+    #stats4 = Cpt(StatsPlugin, 'Stats4:')
+    #stats5 = Cpt(StatsPlugin, 'Stats5:')
     proc1 = Cpt(ProcessPlugin, 'Proc1:')
 
 
@@ -140,8 +140,8 @@ class StandardProsilica(SingleTrigger, LixProsilicaDetector):
     stats1 = Cpt(StatsPlugin, 'Stats1:')
     stats2 = Cpt(StatsPlugin, 'Stats2:')
     stats3 = Cpt(StatsPlugin, 'Stats3:')
-    stats4 = Cpt(StatsPlugin, 'Stats4:')
-    stats5 = Cpt(StatsPlugin, 'Stats5:')
+    #stats4 = Cpt(StatsPlugin, 'Stats4:')
+    #stats5 = Cpt(StatsPlugin, 'Stats5:')
 
     def stage(self):
         self.cam.acquire.put(0)
@@ -254,36 +254,50 @@ def setup_cam(pv, name, RGB=False, Multi=1):
         cam = None
         print("%s is not accessible." % name)
 
-    cam.read_attrs = ['image', 'stats1', 'stats2', 'stats3', 'roi1', 'tiff']
+    cam.read_attrs = ['image', 'stats1', 'stats2', 'stats3', 'roi1']#, 'tiff']
+    cam.image.read_attrs = ['array_data']
     cam.stats1.read_attrs = ['total', 'centroid', 'profile_average']
     cam.stats2.read_attrs = ['total', 'centroid']
     cam.stats3.read_attrs = ['total', 'centroid']
     cam.stats1.centroid.read_attrs=['x','y']
     cam.stats1.profile_average.read_attrs=['x','y']
     cam.roi1.read_attrs = ['min_xyz', 'size']
-    cam.tiff.read_attrs = [] # we dont need anything other than the image
-    cam.over1.read_attrs = [] # we dont need anything from overlay
+    #cam.tiff.read_attrs = [] # we dont need anything other than the image
+    #cam.over1.read_attrs = [] # we dont need anything from overlay
 
     ##### FIX while not corrected on Ophyd - ADBase - validate_asyn_port
     ##
     # In the case of the OverlayPlugin, the Overlay object has no port_name
     # which leads to a empty port_map at asyn_digraph.
     #
+    '''
     for overlay in cam.over1.component_names:
         if overlay.startswith('overlay'):
             getattr(cam.over1, overlay).validate_asyn_ports = lambda: None
-            
+    '''
     return cam
+
+
+camMono      = setup_cam("XF:16IDA-BI{Cam:Mono}", "camMono")
+camKB        = setup_cam("XF:16IDA-BI{Cam:KB}", "camKB")
 
 camFixedAper = setup_cam("XF:16IDA-BI{Cam:FixedApt}", "camFixedAper")    
 camWBM       = setup_cam("XF:16IDA-BI{Cam:WBM}", "camWBM")
-camMono      = setup_cam("XF:16IDA-BI{Cam:Mono}", "camMono")
+
 camKB        = setup_cam("XF:16IDA-BI{Cam:KB}", "camKB")
-camSS        = setup_cam("XF:16IDA-BI{Cam:SS}", "camSS")
-camAltSS     = setup_cam("XF:16IDA-BI{Cam:AltSS}", "camAltSS")
+camSS        = setup_cam("XF:16IDB-BI{Cam:SS}", "camSS")
+camAltSS     = setup_cam("XF:16IDB-BI{AltSS}", "camAltSS")  # should change the PV name from AltSS to Cam:AltSS
+camSS        = setup_cam("XF:16IDB-BI{Cam:SS}", "camSS")
 
 camBHutch    = setup_cam("XF:16IDB-BI{Cam:BHutch}", "camBHutch", RGB=True)
-camSampleTV  = setup_cam("XF:16IDC-BI{Cam:sam_top}", "camSampleTV", RGB=True)
-#camOAM       = setup_cam("XF:16IDC-BI{Cam:OAM}", "camOAM", RGB=True)
+camSF       = setup_cam("XF:16IDC-BI{Cam:SF}", "camSF")
 camSol       = setup_cam("XF:16IDC-BI{Cam:Sol}", "camSol", RGB=True)
+"""
+camSampleTV  = setup_cam("XF:16IDC-BI{Cam:sam_top}", "camSampleTV", RGB=True)
+camOAM       = setup_cam("XF:16IDA-BI{Cam:OAM}", "camOAM", RGB=True)
+"""
+
+"""
+
 #camSpare     = 
+"""

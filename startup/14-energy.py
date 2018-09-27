@@ -18,10 +18,6 @@ def getE(bragg=None):
     return energy
 
 # Set energy to the given value, if calc_only=false otherwise only calculate
-# when Bragg = 9.6332, Y = -0.1
-# ov is the correction needed to get actual Y value
-# sc ov revised from -10.243 to ov = -28.5609 @ 11th April 2017
-# ov = -11.5113, 2017 Sep 12
 def setE(energy, calc_only=True, ov=-11.5113):
     # Si(111) lattice constant is 5.43095A
     d = 5.43095 
@@ -110,11 +106,11 @@ class Energy(PseudoPositioner):
     # The real (or physical) positioners:
     bragg = Cpt(EpicsMotor, 'XF:16IDA-OP{Mono:DCM-Ax:Bragg}Mtr')
     y = Cpt(EpicsMotor, 'XF:16IDA-OP{Mono:DCM-Ax:Of2}Mtr')
-
+    #initial value=-28.5609
     # Variables
-    ov = Cpt(Signal, value=-28.5609, 
+    ov = Cpt(Signal, value=-29.4153, 
              doc='ov is the correction needed to get actual Y value')
-
+    
     @pseudo_position_argument
     def forward(self, target):
         '''Run a forward (pseudo -> real) calculation'''
@@ -124,7 +120,7 @@ class Energy(PseudoPositioner):
         brg = np.degrees(np.arcsin(lmd*np.sqrt(3.)/(2.*d)))
         y0 = offset/(2.0*np.cos(np.radians(brg)))
         y_calc = y0+self.ov.get()
-
+        
         return self.RealPosition(bragg=brg,
                                  y=y_calc)
 

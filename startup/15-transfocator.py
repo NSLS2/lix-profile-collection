@@ -6,7 +6,7 @@ state_removed = 1
 
 class Transfocator(Device):
     #za = Cpt(EpicsMotor,'-Ax:Z}Mtr')
-    z = Cpt(EpicsMotor,'-Ax:Z1}Mtr')
+    z = Cpt(EpicsMotor,'-Ax:Z}Mtr')
     x1 = Cpt(EpicsMotor,'-Ax:UX}Mtr')
     y1 = Cpt(EpicsMotor,'-Ax:UY}Mtr')
     x2 = Cpt(EpicsMotor,'-Ax:DX}Mtr')

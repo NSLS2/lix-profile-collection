@@ -304,6 +304,7 @@ def first_PilatusExt():
         if det.__class__ == LIXPilatusExt:
             #print(det.name)
             return det.name
+    print("Warning: No Pilatus detectors are being used.")
     return None
 
 for det in pilatus_detectors+pilatus_detectors_ext:

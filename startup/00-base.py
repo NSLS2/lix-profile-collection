@@ -1,3 +1,5 @@
+import faulthandler
+faulthandler.enable()
 import logging,sys
 
 import nslsii
@@ -117,6 +119,7 @@ def configure_base(user_ns, broker_name, *,
         # Set up the BestEffortCallback.
         from bluesky.callbacks.best_effort import BestEffortCallback
         _bec = BestEffortCallback()
+        bec = _bec
         RE.subscribe(_bec)
         if in_jupyter:
             _bec.disable_plots()
@@ -220,7 +223,7 @@ config = {
 }
 
 db = Broker.from_config(config)
-
+bec = None
 
 import ophyd
 ophyd.utils.startup.setup()

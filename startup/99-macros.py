@@ -1,10 +1,50 @@
 from time import sleep 
+from cycler import cycler
+from . import utils
+import operator
 from epics import caget,caput
 from PIL import Image
 import matplotlib.pyplot as plt
 import numpy as np
 import time
 import bluesky.plans as bp
+
+
+def mvc(*args):
+    """
+    Move one or more devices to a setpoint. Wait for all to complete.
+
+    If more than one device is specifed, the movements are done in parallel.
+
+    Parameters
+    ----------
+    args :
+        device1, value1, device2, value2, ...
+
+    Yields
+    ------
+    msg : Msg
+
+    See Also
+    --------
+    :func:`bluesky.plan_stubs.abs_set`
+    :func:`bluesky.plan_stubs.mvr`
+    """
+    group = str(uuid.uuid4())
+    status_objects = []
+
+    cyl = reduce(operator.add,
+                 [cycler(obj, [val]) for
+                  obj, val in partition(2, args)])
+    step, = utils.merge_cycler(cyl)
+    for obj, val in step.items():
+        ret = yield Msg('set', obj, val, group=group)
+        status_objects.append(ret)
+    #yield Msg('wait', None, group=group)
+    return tuple(status_objects)
+
+
+movc = mvc  # synonym
 
 
 def johnHello():

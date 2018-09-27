@@ -92,7 +92,7 @@ class SolutionScatteringExperimentalModule():
     # the flow cells are designated 1 (bottom), 2 and 3
     # needle 1 is connected to the bottom flowcell, needle 2 connected to the top, HPLC middle
     flowcell_nd = {'upstream': 'top', 'downstream': 'bottom'}
-    flowcell_pos = {'bottom': 3.15, 'middle': -1.348, 'top': -5.985}  # 2017/10/11
+    flowcell_pos = {'bottom': 3.95, 'middle': -0.547, 'top': -4.985}  # 2017/10/11
     #{'top': -6.33, 'middle': -1.36, 'bottom': 3.15} # SC changed bottom from 3.78 07/12/17
     # this is the 4-port valve piosition necessary for the wash the needle
     p4_needle_to_wash = {'upstream': 1, 'downstream': 0}
@@ -120,14 +120,14 @@ class SolutionScatteringExperimentalModule():
     drain = {'upstream': ctrl.sv_drain1, 'downstream': ctrl.sv_drain2}
     
     # syringe pump 
-    default_piston_pos = 165
+    default_piston_pos = 170
     default_pump_speed = 1500
     # SC changed the value from 600 on 7/9/17
     default_load_pump_speed = 350     
-    vol_p4_to_cell = {'upstream': -140, 'downstream': -140}
+    vol_p4_to_cell = {'upstream': -140, 'downstream': -145}
     # SC done changes 02/13/18 --> 
     #   downstream value reduced to (92 from 104) 7/9/17, upstream changed from 110 to 100 
-    vol_tube_to_cell = {'upstream': 84, 'downstream': 67} 
+    vol_tube_to_cell = {'upstream': 132, 'downstream': 132} 
     vol_sample_headroom = 13
     
     # these numbers are for the 2016 version tube holder
@@ -137,7 +137,10 @@ class SolutionScatteringExperimentalModule():
     Ntube = 18
     tube1_pos=-18.75    #12/20/17 by JB
     tube_spc = -5.8417     # these are mechanically determined and should not change
-            
+
+    default_dry_time = 30
+    default_wash_repeats = 3
+    
     def __init__(self):
         # important to home the stages !!!!!
         #     home sample y (SmarAct) from controller
@@ -227,6 +230,7 @@ class SolutionScatteringExperimentalModule():
         while mot.moving:
             sleep(0.5)
         mot.set_current_position(0)
+        #caput(mot.prefix+".LLM", self.tube1_pos+self.tube_spc*(self.Ntube-1)-0.5)
         caput(mot.prefix+".HLM", self.park_pos+0.5)
         caput(mot.prefix+".LLM", self.tube1_pos+self.tube_spc*(self.Ntube-1)-0.5)
 
@@ -303,33 +307,19 @@ class SolutionScatteringExperimentalModule():
             self.ctrl.sv_pcr_tubes.put('up')
             self.ctrl.wait()        
             self.tube_holder_pos = "up"
-
-            
-    def dry_needle(self, nd, repeats=3, dry_duration=35):
-        if nd not in ('upstream', 'downstream'):
-            raise RuntimeError('unrecoganized neelde (must be \'upstream\' or \'downstream\') !!', nd)
-        
-        self.select_tube_pos(0) 
-        
-        self.ctrl.vc_4port.put(self.p4_needle_to_wash[nd])
-        self.move_tube_holder('up')
-        
-        self.drain[nd].put('on')
-        self.ctrl.sv_sel.put(self.sel_valve['N2'])
-        self.ctrl.sv_N2.put('on')
-        countdown("drying for ", dry_duration)
-        self.ctrl.sv_N2.put('off')
-        self.drain[nd].put('off')  
-        
-        self.move_tube_holder('down')
     
-    def wash_needle(self, nd, repeats=3, dry_duration=55, option=None):
+    def wash_needle(self, nd, repeats=-1, dry_duration=-1, option=None):
         """ option: "wash only", skip drying
                     "dry only", skip washing
         """
         if nd not in ('upstream', 'downstream'):
             raise RuntimeError('unrecoganized neelde (must be \'upstream\' or \'downstream\') !!', nd)
         
+        if dry_duration<0:
+            dry_duration = self.default_dry_time
+        if repeats<0:
+            repeats = self.default_wash_repeats
+
         self.select_tube_pos(0) 
         
         self.ctrl.vc_4port.put(self.p4_needle_to_wash[nd])
@@ -392,7 +382,7 @@ class SolutionScatteringExperimentalModule():
         self.ctrl.wait()
         
         self.move_tube_holder('down')
-        if self.pcr_holder_up.get()==0:
+        if self.pcr_holder_down.get()==0:
             raise RuntimeError('sample holder is not down!!')
         else:
             print('Sample holder is down.')
@@ -403,24 +393,24 @@ class SolutionScatteringExperimentalModule():
     def collect_data(self, vol=45, exp=2, repeats=3, sample_name='test'):
         global DETS
         pilatus_ct_time(exp)
-        pilatus_number_reset(False)
+        pilatus_number_reset(True)
         
         updata_metadata()
         
         change_sample(sample_name)
-        DETS=[em1, em2, pil1M_ext,pilW1_ext,pilW2_ext]
+        DETS=[em1,em2,pil1M_ext,pilW1_ext,pilW2_ext]
         set_pil_num_images(repeats)
         
         # pump_spd unit is ul/min
         self.ctrl.pump_spd.put(60.*vol/(repeats*exp))
-        print('collecting data, %d of %d repeats ...' % (n+1, repeats))
+        #print('collecting data, %d of %d repeats ...' % (n+1, repeats))
         th = threading.Thread(target=self.ctrl.delayed_mvR, args=(vol, ) )
         th.start() 
         set_pil_num_images(repeats)
-        RE(ct(DETS, num=1))
+        RE(ct(DETS, num=repeats))
         self.ctrl.wait()
         
-        pilatus_number_reset(True)
+        #pilatus_number_reset(False)
         self.ctrl.pump_spd.put(self.default_pump_speed)
         if vol<0:  # odd number of repeats, return sample to original position
             self.ctrl.pump_mvR(vol)

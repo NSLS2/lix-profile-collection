@@ -28,7 +28,7 @@ def h5_fix_sample_name(fn_h5):
     
 def pack_h5(uids, fn=None, fix_sample_name=True):
     """ if only 1 uid is given, use the sample name as the file name
-    any metadata associated with each uid will be retained (e.g. sample vs buffer)
+        any metadata associated with each uid will be retained (e.g. sample vs buffer)
     """
     if isinstance(uids, list):
         if fn is None:
@@ -41,7 +41,7 @@ def pack_h5(uids, fn=None, fix_sample_name=True):
         header = db[uids]
         if fn is None:
             if "sample_name" in list(header.start.keys()):
-                fn = header.start.sample_name
+                fn = header.start['sample_name']
             else:
                 fds = db.get_fields(header)
                 # find the first occurance of _file_file_name in fields
@@ -59,8 +59,8 @@ def pack_h5(uids, fn=None, fix_sample_name=True):
     
     fds = list(set(fds0) & set(fds_ref))
     if 'motors' in list(headers[0].start.keys()):
-        for m in headers[0].start.motors:
-            fds += [m, m+"_user_setpoint"]
+        for m in headers[0].start['motors']:
+            fds += [m] #, m+"_user_setpoint"]
     
     if fn[-3:]!='.h5':
         fn += '.h5'
@@ -71,6 +71,61 @@ def pack_h5(uids, fn=None, fix_sample_name=True):
     # by default the groups in the hdf5 file are named after the scan IDs
     if fix_sample_name:
         h5_fix_sample_name(fn)
+
+def readShimadzuSection(section):
+    """ the chromtographic data section starts with a header
+        followed by 2-column data
+        the input is a collection of strings
+    """
+    xdata = []
+    ydata = []
+    for line in section:
+        tt = line.split()
+        if len(tt)==2:
+            try:
+                x=float(tt[0])
+            except ValueError:
+                continue
+            try:
+                y=float(tt[1])
+            except ValueError:
+                continue
+            xdata.append(x)
+            ydata.append(y)
+    return xdata,ydata
+
+def readShimadzuDatafile(fn):
+    """ read the ascii data from Shimadzu Lab Solutions software
+        the file appear to be split in to multiple sections, each starts with [section name], 
+        and ends with a empty line
+        returns the data in the sections titled 
+            [LC Chromatogram(Detector A-Ch1)] and [LC Chromatogram(Detector B-Ch1)]
+    """
+    fd = open(fn, "r")
+    lines = fd.read().split('\n')
+    fd.close()
+    
+    sections = []
+    while True:
+        try:
+            idx = lines.index('')
+        except ValueError:
+            break
+        if idx>0:
+            sections.append(lines[:idx])
+        lines = lines[idx+1:]
+    
+    data = {}
+    header_str = ''
+    for s in sections:
+        if s[0][:16]=="[LC Chromatogram":
+            x,y = readShimadzuSection(s)
+            data[s[0]] = [x,y]
+        if s[0]=="[Header]" or s[0]=="[Original Files]":
+            header_str += '\n'.join(s[1:])+'\n'
+    
+    return header_str,data
+
 
 def h5_attach_hplc(fn_h5, fn_hplc, grp_name=None):
     """ the hdf5 is assumed to contain a structure like this:
@@ -87,7 +142,7 @@ def h5_attach_hplc(fn_h5, fn_hplc, grp_name=None):
         grp_name = list(f.keys())[0]
     grp = f["%s/hplc/data" % grp_name]
     
-    hdstr, dhplc = read_Shimadzu_datafile(fn_hplc)
+    hdstr, dhplc = readShimadzuDatafile(fn_hplc)
     
     if grp.attrs.get('header') == None:
         grp.attrs.create("header", np.asarray(hdstr, dtype=np.string_))

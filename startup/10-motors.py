@@ -83,7 +83,7 @@ class Microscope(Device):
 
 class WAXSBeamstop(XYMotor):
 	phi = Cpt(EpicsMotor, '-Ax:Z}Mtr')
-
+    
 class SAXSBeamstop(XYMotor):
 	r1 = Cpt(EpicsMotor, '-Ax:R1}Mtr')
 	r2 = Cpt(EpicsMotor, '-Ax:R2}Mtr')
@@ -108,7 +108,10 @@ class WAXS2(Device):
 class StageScanF(Device):
 	x = Cpt(EpicsMotor, '-Ax:X}Mtr')
 	y = Cpt(EpicsMotor, '-Ax:Y}Mtr')
-   
+    
+class Screen(Device):
+    y=Cpt(EpicsMotor, '-Ax:Y}Mtr')
+    
 #######################################################
 ### LIX First Optical Enclosure FOE Optics Hutch A
 #######################################################
@@ -247,6 +250,12 @@ waxs2 = WAXS2('XF:16IDC-ES{Stg:WAXS2-', name='waxs2')
 
 ## SAXS Beamstop
 sbs = SAXSBeamstop('XF:16IDC-ES{BS:SAXS', name='sbs')
+
+## screen
+screen_SS = Screen('XF:16IDB-BI{SCN:SS',name='screen_ss')
+screen_SF = Screen('XF:16IDC-BI{FS:SF',name='screen_sf')
+
+
 
 ## shutter # TODO: Check with Shirish and Lin and remove it
 #shutter = EpicsMotor('XF:16ID-TS{EVR:C1-Out:FP0}Src:Scale-SP', name='shutter')
