@@ -12,7 +12,7 @@ def fetch_scan(**kwargs):
         return headers, db.get_table(headers, fill=True)
 
 def list_scans(**kwargs):
-    headers = db(**kwargs)
+    headers = list(db(**kwargs))
     uids = []
     for h in headers:
         s = "%8s%10s%10s" % (h.start['proposal_id'], h.start['run_id'], h.start['plan_name'])
