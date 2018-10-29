@@ -99,16 +99,6 @@ class XPStraj(Device):
             return err,msg
         return
         
-    #def _traj_state_changed(self, value, old_value, **kwargs):
-    #    """ ExecuteState:  0=Done, 1=Move Start, 2=Executing, 3=Flyback
-    #    """
-    #    if self._traj_status is None:
-    #        return
-    #    if value!=0 and old_value==0:
-    #        self._traj_status._finished()
-    #    elif value==2 and old_value!=2:
-    #        self.start_time = time.time()
-        
     def kickoff(self):
         """
         run the trajectory
