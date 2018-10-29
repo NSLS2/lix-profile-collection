@@ -186,8 +186,9 @@ class PilatusExtTrigger(PilatusDetector):
         self._num_images = 1
         self._acquisition_signal = self.cam.acquire
         self._counter_signal = self.cam.array_counter
-        self._trigger_signal = EpicsSignal('XF:16ID-TS{EVR:C1-Out:FP3}Src:Scale-SP')
-
+        #self._trigger_signal = EpicsSignal('XF:16ID-TS{EVR:C1-Out:FP3}Src:Scale-SP')
+        self._trigger_signal = EpicsSignal('XF:16IDC-ES{Zeb:1}:SOFT_IN:B0')
+        
         self._status = None
         self.first = True
         self.acq_t = 0
@@ -211,16 +212,17 @@ class PilatusExtTrigger(PilatusDetector):
         print(self.name, "super staged")
         self._counter_signal.put(0)
         acq_t = self.cam.acquire_period.get()
-        if acq_t>0.1:
-            self.trig_width = 0.05
-        else:
-            self.trig_width = acq_t/2
-        self.trig_wait = acq_t+0.02-self.trig_width
+        #if acq_t>0.1:
+        #    self.trig_width = 0.05
+        #else:
+        #    self.trig_width = acq_t/2
+        #self.trig_wait = acq_t+0.02-self.trig_width
+        self.trig_wait = acq_t+0.02
         #self._acquisition_signal.put(1) #, wait=True)
         print(self.name, "checking armed status")
         self._acquisition_signal.put(1) #, wait=True)
         while self.armed.get() != 1:
-            time.sleep(0.5)
+            time.sleep(0.1)
 
         print(self.name, "staged")
 
@@ -247,12 +249,18 @@ class PilatusExtTrigger(PilatusDetector):
         # Only one Pilatus has to send the trigger
         if self.name == first_PilatusExt():
             print("triggering")
-            self._trigger_signal.put(4, wait=True) # Force High
-            time.sleep(self.trig_width)
-            self._trigger_signal.put(3, wait=True) # Force Low
+            self._trigger_signal.put(1, wait=True)
+            Timer(self.trig_wait, status._finished, ()).start()
+            self._trigger_signal.put(0, wait=True)
+            #self._trigger_signal.put(4, wait=True) # Force High
+            #time.sleep(self.trig_width)
+            #self._trigger_signal.put(3, wait=True) # Force Low
+        else:
+            status._finished()
 
-        #set up callback to clear status after the end-of-exposure
-        Timer(self.trig_wait, status._finished, ()).start()
+        ##set up callback to clear status after the end-of-exposure
+        #Timer(self.trig_wait, status._finished, ()).start()
+        # do we really need to wait? 
         self.dispatch(f'{self.name}_image', ttime.time())
         return status
 
