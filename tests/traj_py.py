@@ -1,13 +1,10 @@
 import numpy as np
 from collections import ChainMap
 from ophyd import DeviceStatus
-from ophyd import EpicsSignal, EpicsSignalRO, Device, Component 
+from ophyd import EpicsSignal, EpicsMotor, EpicsSignalRO, Device, Component 
 import epics
-from bluesky.preprocessors import (monitor_during_decorator, run_decorator,
-                                   stage_decorator, subs_decorator)
-from bluesky.plan_stubs import (complete, kickoff, collect, monitor, unmonitor,
-                                trigger_and_read)
-from bluesky.callbacks import LivePlot
+import bluesky.preprocessors as bpp
+import bluesky.plan_stubs as bps
 from collections import OrderedDict
 from threading import Thread
 
@@ -19,14 +16,28 @@ from ftplib import FTP
 
 import threading
 
-## make sure PVs and BlueSky names are consistent for XPS motors
+class ScanningExperimentalModule2():
+    """ the zero for Ry must be set correctly so that Rx is pointing in the x direction
+        once homed, this position i1s at -6.0
+    """
+    x = EpicsMotor('XF:16IDC-ES:Scan2{Ax:sX}Mtr', name='ss2_x')
+    x1 = EpicsMotor('XF:16IDC-ES:Scan2{Ax:X}Mtr', name='ss2_x1')
+    y = EpicsMotor('XF:16IDC-ES:Scan2{Ax:sY}Mtr', name='ss2_y')
+    z = EpicsMotor('XF:16IDC-ES:InAir{Mscp:1-Ax:F}Mtr', name='focus')
+    # this is the Standa stepper stage
+    rx = EpicsMotor('XF:16IDC-ES:Scan2{Ax:RX1}Mtr', name='ss2_rx')
+    ry = EpicsMotor('XF:16IDC-ES:Scan2{Ax:RY}Mtr', name='ss2_ry')  
+    
+ss2 = ScanningExperimentalModule2()
+
 
 class XPStraj(Device):
-    def __init__(self, ip_addr, group, name, BSdevice=None):
+    def __init__(self, ip_addr, group, name, 
+                 devices={'scan.rY': ss2.ry, 'scan.Y': ss2.y, 'scan.X': ss2.x}):
         """ ip_addr: IP of the XPS controller
             group: PVT positioner grouped defined in the controller
             name: 
-            BSdevice: the corresponding BlueSky device for the posiitoner group, useful in a scan
+            devices: the corresponding Ophyd device for the posiitoner group, useful in a scan
         """
         super().__init__(name=name)
         self.xps = XPS()
@@ -42,6 +53,14 @@ class XPStraj(Device):
         self.group = group
         self.motors = [mot for mot in objs if (group+'.') in mot] 
         self.Nmot = len(self.motors) 
+        
+        self.devices = devices
+        for m in devices.keys():
+            if m not in self.motors:
+                raise Exception('invalid motor: ', m)
+            print(m, devices[m].name)
+        self.device_names = [devices[k].name for k in devices.keys()]
+        
         self.verified = False
         uname = getpass.getuser()
         self.traj_files = ["TrajScan_FW.trj-%s" % uname, "TrajScan_BK.trj-%s" % uname]
@@ -51,14 +70,17 @@ class XPStraj(Device):
                          'segment_displacement': 0,
                          'segment_duration': 0,
                          'motor': None,
-                         'rampup_distance': 0
+                         'rampup_distance': 0,
+                         'motor2': None
                         }
         self.time_modified = time.time()
         self.start_time = 0
         self._traj_status = None
+        self.detectors = None
+        self.datum = None
         
     def stage(self):
-        pass
+        self.datum = {}
     
     def unstage(self):
         """ abort whatever is still going on??
@@ -99,16 +121,6 @@ class XPStraj(Device):
             return err,msg
         return
         
-    #def _traj_state_changed(self, value, old_value, **kwargs):
-    #    """ ExecuteState:  0=Done, 1=Move Start, 2=Executing, 3=Flyback
-    #    """
-    #    if self._traj_status is None:
-    #        return
-    #    if value!=0 and old_value==0:
-    #        self._traj_status._finished()
-    #    elif value==2 and old_value!=2:
-    #        self.start_time = time.time()
-        
     def kickoff(self):
         """
         run the trajectory
@@ -137,30 +149,75 @@ class XPStraj(Device):
         
         return self._traj_status
         
+    def collect_asset_docs(self):
+        """ adapted from HXN fly scan example
+        """
+        asset_docs_cache = []
+
+        for det in self.detectors:
+            k = f'{det.name}_image'
+            #det.dispatch(k, ttime.time())
+            (name, resource), = det.file.collect_asset_docs()
+            assert name == 'resource'
+            asset_docs_cache.append(('resource', resource))
+            resource_uid = resource['uid']
+            datum_id = '{}/{}'.format(resource_uid, 0)
+            self.datum[k] = [datum_id, ttime.time()]
+            datum = {'resource': resource_uid,
+                     'datum_id': datum_id,
+                     'datum_kwargs': {'point_number': 0}}
+            asset_docs_cache.append(('datum', datum))
+            
+        return tuple(asset_docs_cache)
+            
+        
     def collect(self):
         """
-        save position data
+        save position data, called at the end of a scan (not at the end of a trajectory)
+        this is now recorded in self.readback, as accumulated by self.update_readback()
         """
-        # if self.ExecuteState.get(as_string=True) != 'Done':
-        #     raise RuntimeError('Trajectory execution still in progress. Call complete() first.')
-
-        rd = self.readback_traj()  # positions of the motor when the triggers were generated 
-        print(f'rd: {rd}')
         now = time.time()
-        for i, r in enumerate(rd):
-            yield {'time': time.time(),
-                   'data': {'position': r},
-                   'timestamps': {'position': time.time()},
-                   'seq_num': i+1,
-                  }
+        data = {}
+        ts = {}
+        
+        data[self.traj_par['fast_axis']] = self.read_back['fast_axis']
+        ts[self.traj_par['fast_axis']] = now
+        if self.traj_par['motor2'] is not None:
+            data[self.traj_par['slow_axis']] = self.read_back['slow_axis']
+            ts[self.traj_par['slow_axis']] = now
+
+        for det in self.detectors:
+            k = f'{det.name}_image'
+            (data[k], ts[k]) = self.datum[k]
+            for k,desc in det.read().items():
+                data[k] = desc['value']
+                ts[k] = desc['timestamp']
+                
+        ret = {'time': time.time(),
+               'data': data,
+               'timestamps': ts,
+              }
+        
+        yield ret
 
     def describe_collect(self):
         '''Describe details for the flyer collect() method'''
-        return {self.name: {'position': {'dtype': 'number',
-                                         'shape': (1,),
-                                         'source': 'PVT trajectory readback position'}}}
+        ret = {}
+        ret[self.traj_par['fast_axis']] = {'dtype': 'number',
+                                           'shape': (1,),
+                                           'source': 'PVT trajectory readback position'}
+        if self.traj_par['motor2'] is not None:
+            ret[self.traj_par['slow_axis']] = {'dtype': 'number',
+                                               'shape': (1,),
+                                               'source': 'motor position readback'}
+        for det in self.detectors:
+            ret[f'{det.name}_image'] = det.make_data_key() 
+            for k,desc in det.describe().items():
+                ret[k] = desc
+                
+        return {'primary': ret}
         
-    def define_traj(self, motor, N, dx, dt, Nr=2):
+    def define_traj(self, motor, N, dx, dt, motor2=None, dy=0, Nr=2):
         """ the idea is to use FW/BK trjectories in a scan
             each trajactory involves a single motor only
             relative motion, N segements of length dx from the current position
@@ -183,6 +240,7 @@ class XPStraj(Device):
         if motor not in self.motors:
             print("motor %s not in the list of motors: "%motor, self.motors)
             raise Exception
+        
         err,ret = self.xps.PositionerMaximumVelocityAndAccelerationGet(self.sID, motor)
         mvel,macc = np.asarray(ret.split(','), dtype=np.float)
         midx = self.motors.index(motor)
@@ -240,8 +298,13 @@ class XPStraj(Device):
                          'segment_displacement': dx,
                          'segment_duration': dt,
                          'motor': motor,
-                         'rampup_distance': self.ramp_dist
+                         'rampup_distance': self.ramp_dist,
+                         'motor2': motor2,
+                         'motor2_disp': dy
                         }
+        self.traj_par['fast_axis'] = xps_trj.devices[motor].name
+        if motor2 is not None:
+            self.traj_par['slow_axis'] = motor2.name
         self.time_modified = time.time()
         
     def exec_traj(self, forward=True, clean_event_queue=False):
@@ -260,6 +323,10 @@ class XPStraj(Device):
             traj_fn = self.traj_files[0]
         else:
             traj_fn = self.traj_files[1]
+        
+        # otherwise starting the trajectory might generate an error
+        while self.moving():
+            time.sleep(0.2)
         
         # first set up gathering
         self.xps.GatheringReset(self.sID)        
@@ -285,6 +352,8 @@ class XPStraj(Device):
         self.xps.MultipleAxesPVTExecution (self.sID, self.group, traj_fn, 1)
         self.xps.GatheringStopAndSave(self.sID)
         self.xps.EventExtendedRemove(self.sID, eID)
+        self.update_readback()
+
         if self._traj_status != None:
             self._traj_status._finished()
     
@@ -293,11 +362,102 @@ class XPStraj(Device):
         ndata = int(ret.split(',')[0])
         err,ret = self.xps.GatheringDataMultipleLinesGet(self.sID, 0, ndata)
         return [float(p) for p in ret.split('\n') if p!='']
+    
+    def clear_readback(self):
+        self.read_back = {}
+        self.read_back['fast_axis'] = []
+        if self.traj_par['motor2'] is not None:
+            self.read_back['slow_axis'] = []
+        
+    def update_readback(self):
+        self.read_back['fast_axis'] += self.readback_traj()
+        if self.traj_par['motor2'] is not None:
+            self.read_back['slow_axis'] += [self.traj_par['motor2'].position]
 
-def flyRasterXPS(stepMotor, sStart, sEnd, nStep, 
-                 flyMotor, fStart, fEnd, nSeg):
-    """ collect data on Pilatus detectors
-        monitor on em1,em2
+xps_trj = XPStraj('10.16.2.100', 'scan', 'test')
+
+def raster(detectors, exp_time, fast_axis, f_start, f_end, Nfast, 
+           slow_axis=None, s_start=0, s_end=0, Nslow=1, md=None):
+    """ raster scan in fly mode using detectors with exposure time of exp_time
+        detectors must be a member of pilatus_detectors_ext
+        fly on the fast_axis, step on the slow_axis, both specified as Ophyd motors
+        the fast_axis must be one of member of xps_trj.motors, for now this is hard-coded
+        the specified positions are relative to the current position
+        for the fast_axis are the average positions during detector exposure 
+        
+        use it within the run engine: RE(raster(...))
     """
+    if not set(detectors).issubset(pilatus_detectors_ext):
+        raise Exception("only pilatus_detectors_ext can be used in this raster scan.")
+    if fast_axis.name not in xps_trj.device_names:
+        raise Exception("the fast_axis is not supported in this raster scan: ", fast_axis.name)
+    fast_axis_name = list(xps_trj.devices.keys())[list(xps_trj.devices.values()).index(fast_axis)]
+    # 
+    step_size = (f_end-f_start)/(Nfast-1)
+    dt = exp_time + 0.005    # exposure_period is 5ms longer than exposure_time, as defined in Pilatus
+    xps_trj.define_traj(fast_axis_name, Nfast-1, step_size, dt, motor2=slow_axis)
+    p0_fast = fast_axis.position
+    ready_pos = {}
+    ready_pos[True] = p0_fast+f_start-xps_trj.traj_par['rampup_distance']-step_size/2
+    ready_pos[False] = p0_fast+f_end+xps_trj.traj_par['rampup_distance']+step_size/2
+    xps_trj.clear_readback()
+    
+    if slow_axis is not None:
+        p0_slow = slow_axis.position
+        pos_s = p0_slow+np.linspace(s_start, s_end, Nslow)
+    else:
+        Nslow = 1
+    
+    if not set(detectors).issubset(pilatus_detectors_ext):
+        raise Exception("only pilatus_detectors_ext can be used in this plan.")
+    xps_trj.detectors = detectors
+    
+    pilatus_ct_time(exp_time)
+    set_pil_num_images(Nfast*Nslow)
+    print('setting up to collect %d exposures of %.2f sec ...' % (Nfast*Nslow, exp_time))
+    
+    motor_names = [slow_axis.name, fast_axis.name]
+    #motors = [fast_axis, slow_axis]
+    scan_shape = [Nslow, Nfast]
+    _md = {'shape': tuple(scan_shape),
+           'plan_args': {'detectors': list(map(repr, detectors))},
+           'plan_name': 'raster',
+           'plan_pattern': 'outer_product',
+           'motors': tuple(motor_names),
+           'hints': {},
+           }
+    _md.update(md or {})
+    _md['hints'].setdefault('dimensions', [(('time',), 'primary')])
+        
+    @bpp.stage_decorator([xps_trj] + detectors)
+    @bpp.run_decorator(md=_md)
+    @fast_shutter_decorator()
+    def inner(detectors, fast_axis, ready_pos, slow_axis, Nslow, pos_s):
+        running_forward = True
+        #for mo in monitors:
+        #    yield from bps.monitor(mo)
+        
+        for i in range(Nslow):
+            if slow_axis is not None:
+                yield from mov(fast_axis, ready_pos[running_forward], slow_axis, pos_s[i])
+            else:
+                yield from mov(fast_axis, ready_pos[running_forward])
+
+            xps_trj.select_forward_traj(running_forward)
+            yield from bps.kickoff(xps_trj, wait=True)
+            yield from bps.complete(xps_trj, wait=True)
+            running_forward = not running_forward
+        yield from bps.collect(xps_trj)
+
+        #for mo in monitors:
+        #    yield from bps.unmonitor(mo)
+
+    yield from inner(detectors, fast_axis, ready_pos, slow_axis, Nslow, pos_s)
+        
+    if slow_axis is not None:
+        yield from mov(fast_axis, p0_fast, slow_axis, p0_slow)
+    else:
+        yield from mov(fast_axis, p0_fast)
+
     
     
