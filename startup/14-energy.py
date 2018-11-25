@@ -121,9 +121,7 @@ class Energy(PseudoPositioner):
         y0 = offset/(2.0*np.cos(np.radians(brg)))
         y_calc = y0+self.ov.get()
         
-        return self.RealPosition(bragg=brg,
-                                 y=y_calc)
-
+        return self.RealPosition(bragg=brg, y=y_calc)
 
     @real_position_argument
     def inverse(self, real_pos):
