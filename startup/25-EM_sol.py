@@ -509,7 +509,6 @@ class SolutionScatteringExperimentalModule():
 
 
 def measure_samples(spreadSheet, holderName, exp_time=1, repeats=5, vol=45, check_sname=True):
-#def measure_samples(samples, exp_time=1, repeats=5, vol=45):
     sol.default_wash_repeats=10
     sol.default_dry_time=30
 
