@@ -1,6 +1,6 @@
 from suitcase import hdf5  #,nexus # available in suitcase 0.6
 
-import h5py,json
+import h5py,json,os
 import suitcase
 import numpy as np
 
@@ -26,7 +26,11 @@ def h5_fix_sample_name(fn_h5):
             f.move(g, sn)
     f.close()
     
-def pack_h5(uids, fn=None, fix_sample_name=True):
+def pack_h5(uids, fn=None, fix_sample_name=True, 
+            attach_uv_file=False, delete_old_file=False,
+            fields=['em2_current1_mean_value', 'em2_current2_mean_value',
+                    'pil1M_image', 'pilW1_image', 'pilW2_image', 
+                    'pil1M_ext_image', 'pilW1_ext_image', 'pilW2_ext_image']):
     """ if only 1 uid is given, use the sample name as the file name
         any metadata associated with each uid will be retained (e.g. sample vs buffer)
     """
@@ -53,11 +57,7 @@ def pack_h5(uids, fn=None, fix_sample_name=True):
 
     fds0 = db.get_fields(headers[0])
     # only these fields are considered relevant to be saved in the hdf5 file
-    fds_ref = ['em2_current1_mean_value', 'em2_current2_mean_value',
-               'pil1M_image', 'pilW1_image', 'pilW2_image', 
-               'pil1M_ext_image', 'pilW1_ext_image', 'pilW2_ext_image']
-    
-    fds = list(set(fds0) & set(fds_ref))
+    fds = list(set(fds0) & set(fields))
     if 'motors' in list(headers[0].start.keys()):
         for m in headers[0].start['motors']:
             fds += [m] #, m+"_user_setpoint"]
@@ -65,66 +65,22 @@ def pack_h5(uids, fn=None, fix_sample_name=True):
     if fn[-3:]!='.h5':
         fn += '.h5'
 
+    if delete_old_file:
+        try:
+            os.remove(fn)
+        except OSError:
+            pass
+        
     print(fds)
     hdf5.export(headers, fn, fields=fds, use_uid=False) #, mds= db.mds, use_uid=False) 
     
     # by default the groups in the hdf5 file are named after the scan IDs
     if fix_sample_name:
         h5_fix_sample_name(fn)
-
-def readShimadzuSection(section):
-    """ the chromtographic data section starts with a header
-        followed by 2-column data
-        the input is a collection of strings
-    """
-    xdata = []
-    ydata = []
-    for line in section:
-        tt = line.split()
-        if len(tt)==2:
-            try:
-                x=float(tt[0])
-            except ValueError:
-                continue
-            try:
-                y=float(tt[1])
-            except ValueError:
-                continue
-            xdata.append(x)
-            ydata.append(y)
-    return xdata,ydata
-
-def readShimadzuDatafile(fn):
-    """ read the ascii data from Shimadzu Lab Solutions software
-        the file appear to be split in to multiple sections, each starts with [section name], 
-        and ends with a empty line
-        returns the data in the sections titled 
-            [LC Chromatogram(Detector A-Ch1)] and [LC Chromatogram(Detector B-Ch1)]
-    """
-    fd = open(fn, "r")
-    lines = fd.read().split('\n')
-    fd.close()
-    
-    sections = []
-    while True:
-        try:
-            idx = lines.index('')
-        except ValueError:
-            break
-        if idx>0:
-            sections.append(lines[:idx])
-        lines = lines[idx+1:]
-    
-    data = {}
-    header_str = ''
-    for s in sections:
-        if s[0][:16]=="[LC Chromatogram":
-            x,y = readShimadzuSection(s)
-            data[s[0]] = [x,y]
-        if s[0]=="[Header]" or s[0]=="[Original Files]":
-            header_str += '\n'.join(s[1:])+'\n'
-    
-    return header_str,data
+        
+    if attach_uv_file:
+        # by default the UV file should be saved in /GPFS/xf16id/Windows/
+        h5_attach_hplc(fn, '/GPFS/xf16id/Windows/hplc_export.txt')
 
 
 def h5_attach_hplc(fn_h5, fn_hplc, grp_name=None):
