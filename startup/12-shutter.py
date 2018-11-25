@@ -9,8 +9,16 @@ class FastShutter(Device):
     CLOSE_SHUTTER = "closed"
     SETTLE_TIME = 0.1  # seconds
     output = Cpt(EpicsSignal,'{shutter:1}sts', string=True, put_complete=True)
+    busy = Cpt(EpicsSignal,'{shutter}busy')
 
     def open(self):
+        while True:
+            status = self.busy.get()
+            if status==0:
+                break
+            print('shutter busy, re-try opening in 2 seconds ...')
+            time.sleep(2)
+            
         print("opening shutter ...",)
         #self.output.put(FastShutter.OPEN_SHUTTER)
         self.output.set(FastShutter.OPEN_SHUTTER, settle_time=FastShutter.SETTLE_TIME)
