@@ -17,6 +17,17 @@ import os,time,threading
 from threading import Timer
 from types import SimpleNamespace
 
+# this is used by the CBF file handler        
+from enum import Enum
+class triggerMode(Enum):
+    software_trigger_single_frame = 1
+    software_trigger_multi_frame = 2
+    external_trigger = 3
+    fly_scan = 4
+
+global pilatus_trigger_mode
+pilatus_trigger_mode = triggerMode.software_trigger_single_frame
+
 class PilatusFilePlugin(Device, FileStoreIterativeWrite):
     file_path = ADComponent(EpicsSignalWithRBV, 'FilePath', string=True)
     file_number = ADComponent(EpicsSignalWithRBV, 'FileNumber')
@@ -167,6 +178,8 @@ class LIXPilatus(SingleTrigger, PilatusDetector):
 
     def stage(self):
         self.cam.num_images.put(self._num_images)
+        time.sleep(.1)
+        self.cam.trigger_mode.put(0, wait=True)
         super().stage()
 
     def unstage(self):
@@ -238,7 +251,7 @@ class PilatusExtTrigger(PilatusDetector):
         time.sleep(.1)
         self.cam.num_images.put(1, wait=True)
         super().unstage()
-
+        
     def trigger(self):
         print(self.name+" trigger")
         if self._staged != Staged.yes:
@@ -250,17 +263,12 @@ class PilatusExtTrigger(PilatusDetector):
         if self.name == first_PilatusExt():
             print("triggering")
             self._trigger_signal.put(1, wait=True)
+            ##set up callback to clear status after the end-of-exposure
             Timer(self.trig_wait, status._finished, ()).start()
             self._trigger_signal.put(0, wait=True)
-            #self._trigger_signal.put(4, wait=True) # Force High
-            #time.sleep(self.trig_width)
-            #self._trigger_signal.put(3, wait=True) # Force Low
         else:
             status._finished()
 
-        ##set up callback to clear status after the end-of-exposure
-        #Timer(self.trig_wait, status._finished, ()).start()
-        # do we really need to wait? 
         self.dispatch(f'{self.name}_image', ttime.time())
         return status
 
@@ -329,7 +337,7 @@ def pilatus_number_reset(status):
 def pilatus_ct_time(exp):
     for det in pilatus_detectors:
         det.cam.acquire_time.put(exp)
-        det.cam.acquire_period.put(exp+0.01)
+        det.cam.acquire_period.put(exp+0.005)
 
 def pilatus_set_thresh():
     ene = int(getE()/10*0.5+0.5)*0.01
@@ -339,7 +347,4 @@ def pilatus_set_thresh():
 def set_pil_num_images(num):
     for d in pilatus_detectors+pilatus_detectors_ext:
         d.set_num_images(num)
-
-
-
 

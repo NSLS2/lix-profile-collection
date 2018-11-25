@@ -33,7 +33,7 @@ class PilatusCBFHandler(HandlerBase):
             fn = self._template % (self._path, self._filename, point_number+1)
             img = fabio.open(fn)
             ret.append(img.data)
-        elif pilatus_trigger_mode == triggerMode.software_trigger_multi_frame:
+        elif pilatus_trigger_mode == triggerMode.software_trigger_multi_frame or pilatus_trigger_mode == triggerMode.fly_scan:
             for i in range(self._fpp):
                 fn = self._template % (self._path, self._filename, point_number+1, i) 
                 img = fabio.open(fn)
