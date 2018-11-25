@@ -15,7 +15,10 @@ class ScanningExperimentalModule2():
     x1 = EpicsMotor('XF:16IDC-ES:Scan2{Ax:X}Mtr', name='ss2_x1')
     y = EpicsMotor('XF:16IDC-ES:Scan2{Ax:sY}Mtr', name='ss2_y')
     z = EpicsMotor('XF:16IDC-ES:InAir{Mscp:1-Ax:F}Mtr', name='focus')
-    rx = EpicsMotor('XF:16IDC-ES:Scan2{Ax:RX}Mtr', name='ss2_rx')
+    # this is the SmarAct rotary stage
+    #rx = EpicsMotor('XF:16IDC-ES:Scan2{Ax:RX}Mtr', name='ss2_rx')
+    # this is the Standa stepper stage
+    rx = EpicsMotor('XF:16IDC-ES:Scan2{Ax:RX1}Mtr', name='ss2_rx')
     ry = EpicsMotor('XF:16IDC-ES:Scan2{Ax:RY}Mtr', name='ss2_ry')    
     # this is the position of the rotation center relative to the sample position
     # these values should be adjusted carefully in order for self.mv() to work perfectly
@@ -79,10 +82,10 @@ class ScanningExperimentalModule2():
         if rx0==None:
             change_sample(sample_name)
             RE.md['sample_rotation'] = self.rx.position
-            cam_mic.saveImg('%s%s_1.png' % (data_path, current_sample))
+            camOAM.saveImg('%s%s_1.png' % (data_path, current_sample))
             #RE(grid_scan_fs(DETS, self.x, x1-dx/2, x1+dx/2, Nx, self.y, y1-dy/2, y1+dy/2, Ny))
             RE(mesh(DETS, self.y, y1-dy/2, y1+dy/2, Ny, self.x, x1-dx/2, x1+dx/2, Nx, False))
-            cam_mic.saveImg('%s%s_2.png' % (data_path, current_sample))            
+            camOAM.saveImg('%s%s_2.png' % (data_path, current_sample))            
             mov([self.x, self.y], [x1, y1])
       
         else:
@@ -91,14 +94,14 @@ class ScanningExperimentalModule2():
             RE.md['sample_rotation'] = rx0 
             cam_mic.saveImg('%s%s_1.png' % (data_path,current_sample))
             RE(mesh(DETS, self.x, x1-dx/2, x1+dx/2, Nx, self.y, y1-dy/2, y1+dy/2, Ny, False))
-            cam_mic.saveImg('%s%s_2.png' % (data_path, current_sample))
+            camOAM.saveImg('%s%s_2.png' % (data_path, current_sample))
        
             self.mv(x1, y1, -rx0)
             change_sample(sample_name+"_b")
             RE.md['sample_rotation'] = -rx0 
             cam_mic.saveImg('%s%s_1.png' % (data_path, current_sample))
             RE(mesh(DETS, self.x, x1-dx/2, x1+dx/2, Nx, self.y, y1-dy/2, y1+dy/2, Ny, False))
-            cam_mic.saveImg('%s%s_2.png' % (data_path, current_sample))
+            camOAM.saveImg('%s%s_2.png' % (data_path, current_sample))
             
             self.mv(x1, y1, 0)
       
@@ -179,6 +182,7 @@ if p1.connect()==False and p1.connect()==False:
 elif p2.connect()==False:
     print("Scanning EM #2 is not available: SmarAct 15 probably not running ...")
 else:
-    ss2 = ScanningExperimentalModule2()
+    #ss2 = ScanningExperimentalModule2()
+    pass
 
 del p1,p2

@@ -26,12 +26,15 @@ logger.addHandler(fh)
 # now test teh RE  loop
 
 
+# current x -3.45, +/- 5 
+# current y 5, +/- 5 
+
 import numpy as np
 
 import time
 
-def scan_gel(step=29,sample_name="test2",xstep=10,width=0.25,cts=1):
-    ystep= np.linspace(0,28,step)
+def scan_gel(step=28,sample_name="test2",xstep=10,width=0.25,cts=1):
+    ystep= np.linspace(1,28,step)
     #sample_name="test2"
     i=0
     DETS=[em1, em2, pil1M_ext,pilW1_ext,pilW2_ext]
@@ -41,10 +44,9 @@ def scan_gel(step=29,sample_name="test2",xstep=10,width=0.25,cts=1):
     yorig=ss2.y.position
 
     
-    N = len(ystep)
     logger.info("Starting new step scan")
-    for i, a in enumerate(ystep):
-        logger.info("Step {} of {}".format(i, N))
+    for a in ystep:
+        logger.info("Step {}".format(i))
         ss2.y.move(a)
         change_sample(sample_name+("_%1.2f_y" % a))
         RE(dscan(DETS, xstep, ss2.x, -width,width))
@@ -52,7 +54,14 @@ def scan_gel(step=29,sample_name="test2",xstep=10,width=0.25,cts=1):
     
     ss2.y.move(0)
 
-logger.info("Begin the tests")
-while True:
-    # run forever
-    scan_gel()
+    
+    #ss x 125 changed to 125
+    #ss y 200 changed to 100
+    #crl in 7,6, changed to 8
+
+
+def begin_test():
+    logger.info("Begin the tests")
+    while True:
+        # run forever
+        scan_gel()

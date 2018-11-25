@@ -18,7 +18,7 @@ def getE(bragg=None):
     return energy
 
 # Set energy to the given value, if calc_only=false otherwise only calculate
-def setE(energy, calc_only=True, ov=-11.5113):
+def setE(energy, calc_only=True, ov=-29.4153):
     # Si(111) lattice constant is 5.43095A
     d = 5.43095 
     offset = 20.0

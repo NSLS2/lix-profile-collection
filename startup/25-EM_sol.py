@@ -5,6 +5,8 @@ import threading
 from epics import PV
 import bluesky.plans as bp
 
+global pilatus_trigger_mode
+
 class SolutionScatteringControlUnit(Device):
     reset_pump = Cpt(EpicsSignal, 'pp1c_reset')
     halt_pump = Cpt(EpicsSignal, 'pp1c_halt')
@@ -52,7 +54,7 @@ class SolutionScatteringControlUnit(Device):
     def delayed_mvR(self, dV):
         cur = self.piston_pos.get()
         while self.ready.get()==0:
-            sleep(.2)
+            sleep(.1)
         self.ready.put(0)
         self.piston_pos.put(cur+dV)
         
@@ -92,7 +94,7 @@ class SolutionScatteringExperimentalModule():
     # the flow cells are designated 1 (bottom), 2 and 3
     # needle 1 is connected to the bottom flowcell, needle 2 connected to the top, HPLC middle
     flowcell_nd = {'upstream': 'top', 'downstream': 'bottom'}
-    flowcell_pos = {'bottom': 3.95, 'middle': -0.547, 'top': -4.985}  # 2017/10/11
+    flowcell_pos = {'bottom': 4.8, 'middle': 0.299, 'top': -4.149}  # 2018/10/10
     #{'top': -6.33, 'middle': -1.36, 'bottom': 3.15} # SC changed bottom from 3.78 07/12/17
     # this is the 4-port valve piosition necessary for the wash the needle
     p4_needle_to_wash = {'upstream': 1, 'downstream': 0}
@@ -139,7 +141,7 @@ class SolutionScatteringExperimentalModule():
     tube_spc = -5.8417     # these are mechanically determined and should not change
 
     default_dry_time = 30
-    default_wash_repeats = 3
+    default_wash_repeats = 5
     
     def __init__(self):
         # important to home the stages !!!!!
@@ -388,26 +390,57 @@ class SolutionScatteringExperimentalModule():
             print('Sample holder is down.')
         self.ctrl.pump_mvA(self.return_piston_pos+self.vol_tube_to_cell[nd])
         self.ctrl.wait()
-           
     
-    def collect_data(self, vol=45, exp=2, repeats=3, sample_name='test'):
-        global DETS
+    def getsigmax(self):
+        return caget("XF:16IDC-BI{Cam:Sol}Stats1:MaxValue_RBV-Thresh")
+    
+    def stat1max(self):
+        return caget("XF:16IDC-BI{Cam:Sol}Stats1:MaxValue_RBV")
+    
+    def getthres(self):
+        return caget("XF:16IDC-BI{Cam:Sol}Stats1:MaxValue_RBV-Thresh.INPB")
+    
+    def stat1status(self):
+        g1=0
+        #g2=sefl.stat1max()
+        while True:
+            g2=self.stat1max()
+            th=self.getthres()
+            if g2>=np.int(th):
+                break
+            sleep(0.05)
+        g1=1
+        print('done')
+        
+        
+    def collect_data(self, vol=45, exp=2, repeats=3, sample_name='test', check_sname=True):
         pilatus_ct_time(exp)
         pilatus_number_reset(True)
         
         updata_metadata()
         
-        change_sample(sample_name)
-        DETS=[em1,em2,pil1M_ext,pilW1_ext,pilW2_ext]
+        change_sample(sample_name, check_sname=check_sname)
         set_pil_num_images(repeats)
         
         # pump_spd unit is ul/min
         self.ctrl.pump_spd.put(60.*vol/(repeats*exp))
         #print('collecting data, %d of %d repeats ...' % (n+1, repeats))
         th = threading.Thread(target=self.ctrl.delayed_mvR, args=(vol, ) )
-        th.start() 
+        th.start()
+        #print('sample loaded')
         set_pil_num_images(repeats)
-        RE(ct(DETS, num=repeats))
+        ## Using camera to trigger data acquisition
+        #while True:
+        #    g2 = self.getsigmax()
+        #    if g2==1:
+        #        break
+        #    sleep(0.02)
+        # using Max Value for triggering
+        #self.stat1status()
+        # if using pilXX
+        RE(ct([em1,em2,pil1M,pilW1,pilW2], num=1))
+        # if using pilXX_ext
+        #RE(ct([em1,em2,pil1M_ext,pilW1_ext,pilW2_ext], num=repeats))
         self.ctrl.wait()
         
         #pilatus_number_reset(False)
@@ -416,48 +449,6 @@ class SolutionScatteringExperimentalModule():
             self.ctrl.pump_mvR(vol)
         self.ctrl.wait()
 
-    def collect_oscill_data(self, vol=45, exp=2, repeats=3, sample_name='test'):
-        pilatus_ct_time(exp)
-        pilatus_number_reset(False)
-        
-        updata_metadata()
-        
-        change_sample(sample_name)
-        
-        DETS=[em1, em2, pil1M, pilW1, pilW2]
-        #DETS=[em1, em2, pil1M_ext,pilW1_ext,pilW2_ext]
-        #set_pil_num_images(repeats)
-        
-        # pump_spd unit is ul/min
-        #self.ctrl.pump_spd.put(60.*vol/exp)
-        #for n in range(repeats):
-        #    print('collecting data, %d of %d repeats ...' % (n+1, repeats))
-        #    self.ctrl.pump_mvR(vol)
-        #    RE(count_fs(DETS, num=1))
-        #    self.ctrl.wait()
-        #    vol=-vol
-
-        # pump_spd unit is ul/min
-        self.ctrl.pump_spd.put(60.*vol/exp)
-        #print('collecting data, %d of %d repeats ...' % (n+1, repeats))
-        #self.ctrl.pump_mvR(vol)
-        th = threading.Thread(target=self.ctrl.delayed_oscill_mvR, args=(vol, repeats, ) )
-        th.start() 
-        # single image per trigger
-        #RE(ct(DETS, num=repeats))
-        # take multiple images per trigger
-        #pilatus_set_Nimage(repeats)
-        set_pil_num_images(repeats)
-        RE(ct(DETS, num=1))
-        self.ctrl.wait()
-        
-        pilatus_number_reset(True)
-        self.ctrl.pump_spd.put(self.default_pump_speed)
-        if vol<0:  # odd number of repeats, return sample to original position
-            self.ctrl.pump_mvR(vol)
-        self.ctrl.wait()
-
-            
     def return_sample(self):
         ''' assuming that the sample has just been measured
             dump the sample back into the PCR tube
@@ -470,7 +461,7 @@ class SolutionScatteringExperimentalModule():
         
     # delay is after load_sample and measure, this is useful for temperature control    
     def measure(self, tn, nd=None, vol=50, exp=5, repeats=3, sample_name='test', 
-                delay=0, returnSample=True, washCell=True):
+                delay=0, returnSample=True, washCell=True, check_sname=True):
         ''' measure(self, tn, nd, vol, exp, repeats, sample_name='test')
             tn: tube number: 1-18
             nd: needle, "upstream" or "downstream", if need to specify
@@ -485,60 +476,12 @@ class SolutionScatteringExperimentalModule():
         self.load_sample(vol)
         if delay>0:
             countdown("delay before exposure:",delay)
-        self.collect_data(vol, exp, repeats, sample_name)
+        self.collect_data(vol, exp, repeats, sample_name, check_sname=check_sname)
         
         if returnSample:
             self.return_sample()
         if returnSample and washCell:
-            self.wash_needle(nd)
-                
-    def measure_oscill(self, tn, nd=None, vol=50, exp=5, repeats=3, sample_name='test', delay=0):
-        ''' measure(self, tn, nd, vol, exp, repeats, sample_name='test')
-            tn: tube number: 1-18
-            nd: needle, "upstream" or "downstream", if need to specify
-            exp: exposure time
-            repeats: # of exposures
-        '''
-        
-        nd = self.verify_needle_for_tube(tn, nd)
-        
-        #self.select_flow_cell(self.flowcell_nd[nd])
-        self.prepare_to_load_sample(tn, nd)
-        self.load_sample(vol)
-        if delay>0:
-            countdown("delay before exposure:",delay)
-        self.collect_oscill_data(vol, exp, repeats, sample_name)
-        self.return_sample()
-        
-        self.wash_needle(nd)
-        
-        
-    def measure_list(self, sample_list, vol=45, exp=2, repeats=3, delay=0, nd=None):
-        ''' a list of subset of necessary parameters for single sample data collection
-        '''
-        i=0
-        for a in sample_list[0]:
-            sample_name=sample_list[1][i]
-            nd = self.verify_needle_for_tube(a, nd)
-            self.prepare_to_load_sample(a, nd)
-            #self.load_sample(vol)
-            if delay>0:
-                countdown("delay before exposure:",delay)
-            th1=threading.Thread(target=self.collect_data,args=(vol, exp, repeats, sample_name,))
-            th1.start()
-            i+=1
-            if i<sample_list.shape[1]:
-                c=sample_list[0][i]
-                ndn = self.verify_needle_for_tube(c, nd=None)
-                if nd!=ndn:
-                    #th2=threading.Thread(target=self.wash_needle,args=(ndn,))
-                    #th2.start()
-                    self.wash_needle(ndn)
-                    while th1.is_alive():
-                        th1.join(0.2)
-            self.select_tube_pos(a)
-            self.return_sample()
-            nd=None
+            self.wash_needle(nd)                
 
     def mov_delay(self, length):
         while self.ctrl.ready.get()==0:
@@ -546,7 +489,7 @@ class SolutionScatteringExperimentalModule():
         self.ctrl.ready.put(0)
         mov_all(self.sample_x,-length,wait=False,relative=True)
     
-    ## Revised SC 2nd April
+    ## This is specific to the multi-position holder for "sticky" samples
     def meas_opencell(self, exp, repeats, sample_name='test'):
         pilatus_ct_time(exp)
         pilatus_number_reset(False)
@@ -563,6 +506,37 @@ class SolutionScatteringExperimentalModule():
         RE(count_fs(DETS, num=1))
         self.sample_x.velocity.put(0)
         movr(self.sample_x, length)
+
+
+def measure_samples(spreadSheet, holderName, exp_time=1, repeats=5, vol=45, check_sname=True):
+#def measure_samples(samples, exp_time=1, repeats=5, vol=45):
+    sol.default_wash_repeats=10
+    sol.default_dry_time=30
+
+    samples = get_samples(spreadSheet, holderName, check_sname)
+    uids = []
+    for k,s in samples.items():
+        sol.measure(s['position'], vol=vol, exp=exp_time, repeats=repeats, sample_name=k, check_sname=check_sname)
+        #print(s['position'], k)
+        uids.append(db[-1].start['uid'])
+        
+    # this corresponds to the detector definition is sol.collect()
+    # software trigger, but num_images>1
+    pilatus_trigger_mode = triggerMode.software_trigger_multi_frame
+    pack_h5(uids, fn=holderName)   
+    
+
+def HT_pack_h5(spreadSheet, holderName, run_id):
+    samples = get_samples(spreadSheet, holderName, check_sname=False)
+    uids = []
+    for s in samples.keys():
+        uids.append(list_scans(run_id=run_id, sample_name=s)[0])
+    # this corresponds to the detector definition is sol.collect()
+    # software trigger, but num_images>1
+    pilatus_trigger_mode = triggerMode.software_trigger_multi_frame
+    pack_h5(uids, fn=holderName)
+    
+    
         
         
 p = PV('XF:16IDC-ES:Sol{ctrl}busy') 

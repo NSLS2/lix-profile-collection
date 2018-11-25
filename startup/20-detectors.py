@@ -132,7 +132,7 @@ class StandardProsilica(SingleTrigger, LixProsilicaDetector):
     #           suffix='TIFF1:',
     #           write_path_template='/GPFS/xf16id/data2/')
     image = Cpt(ImagePlugin, 'image1:')
-    #proc1 = Cpt(ProcessPlugin, 'Proc1:')
+    proc1 = Cpt(ProcessPlugin, 'Proc1:')
     roi1 = Cpt(ROIPlugin, 'ROI1:')
     roi2 = Cpt(ROIPlugin, 'ROI2:')
     roi3 = Cpt(ROIPlugin, 'ROI3:')
@@ -249,7 +249,9 @@ def setup_cam(pv, name, RGB=False, Multi=1):
             if Multi<=1:
                 cam = StandardProsilica(pv, name=name)
             else:
-                cam = MultiExpProsilica(pv, trigger_cycle=[[('single trigger', {}) for _ in range(Multi)]], name=name)
+                #cam = MultiExpProsilica(pv, trigger_cycle=[[('single trigger %d'%i, {}) for i in range(Multi)]], name=name)
+                cam = MultiExpProsilica(pv, trigger_cycle=[[('single trigger 1', {}),
+                                                            ('single trigger 2', {})]], name=name)
     except TimeoutError:
         cam = None
         print("%s is not accessible." % name)
@@ -287,7 +289,6 @@ camWBM       = setup_cam("XF:16IDA-BI{Cam:WBM}", "camWBM")
 camKB        = setup_cam("XF:16IDA-BI{Cam:KB}", "camKB")
 camSS        = setup_cam("XF:16IDB-BI{Cam:SS}", "camSS")
 camAltSS     = setup_cam("XF:16IDB-BI{AltSS}", "camAltSS")  # should change the PV name from AltSS to Cam:AltSS
-camSS        = setup_cam("XF:16IDB-BI{Cam:SS}", "camSS")
 
 camBHutch    = setup_cam("XF:16IDB-BI{Cam:BHutch}", "camBHutch", RGB=True)
 camSF       = setup_cam("XF:16IDC-BI{Cam:SF}", "camSF")
