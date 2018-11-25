@@ -33,8 +33,7 @@ class TIFFPluginWithFileStore(TIFFPlugin, FileStoreTIFFIterativeWrite):
 class LixProsilicaDetector(DetectorBase):
     _html_docs = ['prosilicaDoc.html']
     cam = Cpt(cam.ProsilicaDetectorCam, '')
-
-
+    
     
 class MultiExpProsilica(MultiTrigger, LixProsilicaDetector):
     """ useful for taking multiple exposures to average out beam motion
@@ -291,14 +290,11 @@ camSS        = setup_cam("XF:16IDB-BI{Cam:SS}", "camSS")
 camAltSS     = setup_cam("XF:16IDB-BI{AltSS}", "camAltSS")  # should change the PV name from AltSS to Cam:AltSS
 
 camBHutch    = setup_cam("XF:16IDB-BI{Cam:BHutch}", "camBHutch", RGB=True)
-camSF       = setup_cam("XF:16IDC-BI{Cam:SF}", "camSF")
-camSol       = setup_cam("XF:16IDC-BI{Cam:Sol}", "camSol", RGB=True)
+camSF        = setup_cam("XF:16IDC-BI{Cam:SF}", "camSF")
 """
+camSol       = setup_cam("XF:16IDC-BI{Cam:Sol}", "camSol", RGB=True)
 camSampleTV  = setup_cam("XF:16IDC-BI{Cam:sam_top}", "camSampleTV", RGB=True)
 camOAM       = setup_cam("XF:16IDA-BI{Cam:OAM}", "camOAM", RGB=True)
-"""
-
-"""
-
-#camSpare     = 
+camSpare     = setup_cam("XF:16IDA-BI{Cam:Spare}", "camSpare", RGB=True)
+camScope     = setup_cam("XF:16IDA-BI{Cam:Stereo}", "camScope", RGB=True) 
 """
