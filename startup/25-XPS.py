@@ -181,10 +181,10 @@ class XPStraj(Device):
         ts = {}
         
         data[self.traj_par['fast_axis']] = self.read_back['fast_axis']
-        ts[self.traj_par['fast_axis']] = now
+        ts[self.traj_par['fast_axis']] = self.read_back['timestamp']
         if self.traj_par['motor2'] is not None:
             data[self.traj_par['slow_axis']] = self.read_back['slow_axis']
-            ts[self.traj_par['slow_axis']] = now
+            ts[self.traj_par['slow_axis']] = self.read_back['timestamp2']
 
         for det in self.detectors:
             k = f'{det.name}_image'
@@ -331,7 +331,7 @@ class XPStraj(Device):
         # first set up gathering
         self.xps.GatheringReset(self.sID)        
         # pulse is generated when the positioner enters the segment
-        print("setting triggering parameters: %d, %d, %.3f" % (Nr+1, N+Nr+1, dt))
+        print("starting a trajectory with triggering parameters: %d, %d, %.3f ..." % (Nr+1, N+Nr+1, dt))
         self.xps.MultipleAxesPVTPulseOutputSet (self.sID, self.group, Nr+1, N+Nr+1, dt)
         self.xps.MultipleAxesPVTVerification(self.sID, self.group, traj_fn)
         self.xps.GatheringConfigurationSet(self.sID, [motor+".CurrentPosition"])
@@ -358,6 +358,7 @@ class XPStraj(Device):
             self._traj_status._finished()
     
     def readback_traj(self):
+        print('reading back trajectory ...')
         err,ret = self.xps.GatheringCurrentNumberGet(self.sID)
         ndata = int(ret.split(',')[0])
         err,ret = self.xps.GatheringDataMultipleLinesGet(self.sID, 0, ndata)
@@ -366,14 +367,25 @@ class XPStraj(Device):
     def clear_readback(self):
         self.read_back = {}
         self.read_back['fast_axis'] = []
+        self.read_back['timestamp'] = []
         if self.traj_par['motor2'] is not None:
             self.read_back['slow_axis'] = []
+            self.read_back['timestamp2'] = []
         
     def update_readback(self):
         self.read_back['fast_axis'] += self.readback_traj()
+        # start_time is the beginning of the execution
+        # pulse is generated when the positioner enters the segment ??
+        # timestamp correspond to the middle of the segment
+        N = self.traj_par['no_of_segments']
+        Nr = self.traj_par['no_of_rampup_points']
+        dt = self.traj_par['segment_duration']
+        self.read_back['timestamp'] += list(self.start_time + (0.5 + Nr + np.arange(N+1))*dt)
         if self.traj_par['motor2'] is not None:
             self.read_back['slow_axis'] += [self.traj_par['motor2'].position]
+            self.read_back['timestamp2'] += [time.time()]
 
+            
 xps_trj = XPStraj('10.16.2.100', 'scan', 'test')
 
 def raster(detectors, exp_time, fast_axis, f_start, f_end, Nfast, 
