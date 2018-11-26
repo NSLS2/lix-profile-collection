@@ -29,6 +29,7 @@ def h5_fix_sample_name(fn_h5):
 def pack_h5(uids, fn=None, fix_sample_name=True, 
             attach_uv_file=False, delete_old_file=False,
             fields=['em2_current1_mean_value', 'em2_current2_mean_value',
+                    'em1_sum_all_mean_value', 'em2_sum_all_mean_value',
                     'pil1M_image', 'pilW1_image', 'pilW2_image', 
                     'pil1M_ext_image', 'pilW1_ext_image', 'pilW2_ext_image']):
     """ if only 1 uid is given, use the sample name as the file name
@@ -47,15 +48,15 @@ def pack_h5(uids, fn=None, fix_sample_name=True,
             if "sample_name" in list(header.start.keys()):
                 fn = header.start['sample_name']
             else:
-                fds = db.get_fields(header)
+                fds = header.fields()
                 # find the first occurance of _file_file_name in fields
                 f = next((x for x in fds if "_file_file_name" in x), None)
                 if f is None:
                     raise Exception("could not automatically select a file name.")
-                fn = db.get_table(header, fields=[f])[f][1]
+                fn = header.table(fields=[f])[f][1]
         headers = [header]
 
-    fds0 = db.get_fields(headers[0])
+    fds0 = headers[0].fields()
     # only these fields are considered relevant to be saved in the hdf5 file
     fds = list(set(fds0) & set(fields))
     if 'motors' in list(headers[0].start.keys()):
