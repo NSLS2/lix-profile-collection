@@ -187,6 +187,16 @@ class XPStraj(Device):
             ts[self.traj_par['slow_axis']] = self.read_back['timestamp2']
 
         for det in self.detectors:
+            # first make sure that all data file are saved, otherwise next time when the detector is
+            # staged, the files that are not yet saved will be lost
+            while True:
+                Ni = det.cam.num_images.get() 
+                Nc = det.cam.array_counter.get()
+                if Ni==Nc:
+                    break
+                print('data files are still being written for %s, %d -> %d' % (det.name, Nc, Ni))
+                time.sleep(5)
+                
             k = f'{det.name}_image'
             (data[k], ts[k]) = self.datum[k]
             for k,desc in det.read().items():
