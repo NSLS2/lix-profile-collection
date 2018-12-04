@@ -51,7 +51,11 @@ def XBPM_pos(navg=5):
         return ("unknown", "unknown") 
         
 def get_gap():
-    return caget("SR:C16-ID:G1{IVU:1-LEnc}Gap")
+    pv = PV("SR:C16-ID:G1{IVU:1-LEnc}Gap")
+    if pv.connected:
+        return pv.get()
+    else:
+        return np.nan 
         
 # move undulator gap
 def move_gap(g1):

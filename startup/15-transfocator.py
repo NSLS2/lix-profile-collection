@@ -29,6 +29,10 @@ class Transfocator(Device):
         while self.busy.get()>0:   
             sleep(0.2)
     
+    def state(self):
+        self.get_state(silent=True)
+        return self.current_state
+    
     def get_state(self, silent=False):
         if not silent:
             print("inserted lens groups:")

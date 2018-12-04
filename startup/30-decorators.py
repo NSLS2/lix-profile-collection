@@ -4,8 +4,9 @@ import bluesky.preprocessors as bpp
 
 USE_FAST_SHUTTER = True
 
-
 def fast_shutter_wrapper(plan):
+    update_metadata()
+
     if USE_FAST_SHUTTER:
         plan = bpp.pchain(bps.abs_set(fast_shutter.output, FastShutter.OPEN_SHUTTER, settle_time=FastShutter.SETTLE_TIME), plan)
         plan = bpp.finalize_wrapper(plan, 
@@ -13,13 +14,6 @@ def fast_shutter_wrapper(plan):
                                                 FastShutter.CLOSE_SHUTTER,
                                                 settle_time=FastShutter.SETTLE_TIME))
 
-    RE.md['sample_name'] = current_sample 
-    RE.md['saxs'] = ({'saxs_x':saxs.x.position, 'saxs_y':saxs.y.position, 'saxs_z':saxs.z.position})
-    RE.md['waxs1'] = ({'waxs1_x':waxs1.x.position, 'waxs1_y':waxs1.y.position, 'waxs1_z':waxs1.z.position})
-    RE.md['waxs2'] = ({'waxs2_x':waxs2.x.position, 'waxs2_y':waxs2.y.position, 'waxs2_z':waxs2.z.position}) 
-    RE.md['energy'] = ({'mono_bragg': mono.bragg.position, 'energy': getE(), 'gap': get_gap()})    
-    RE.md['XBPM'] = XBPM_pos() 
-    
     return (yield from plan)
 
 fast_shutter_decorator = bpp.make_decorator(fast_shutter_wrapper)

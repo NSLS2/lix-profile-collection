@@ -7,6 +7,11 @@ class XYMotor(Device):
 	x = Cpt(EpicsMotor, '-Ax:X}Mtr')
 	y = Cpt(EpicsMotor, '-Ax:Y}Mtr')
 
+
+class ApertureDev(Device):
+	dx = Cpt(EpicsMotor, '-Ax:X}Mtr')
+	dy = Cpt(EpicsMotor, '-Ax:Y}Mtr')
+    
 class XYZMotor(XYMotor):
 	z = Cpt(EpicsMotor, '-Ax:Z}Mtr')
 
@@ -148,7 +153,7 @@ bpm_pos = XYMotor('XF:16IDB-BI{BPM:1', name='bpm_pos')
 bpm2 = XYMotor('XF:16IDC-BI{BPM:2', name='bpm2')
 
 ## Secondary Source Aperture (SSA)
-ssa = XYMotor('XF:16IDB-OP{Slt:SSA', name='ssa')
+ssa = ApertureDev('XF:16IDB-OP{Slt:SSA', name='ssa')
 
 
 ## Attenuator
