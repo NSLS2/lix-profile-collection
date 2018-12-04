@@ -1,9 +1,38 @@
 from suitcase import hdf5  #,nexus # available in suitcase 0.6
 
 import h5py,json,os
-import suitcase
+import threading
 import numpy as np
+import epics,socket
+from collections import deque
 
+global default_data_path_root
+global substitute_data_path_root
+global CBF_replace_data_path
+global DET_replace_data_path
+
+"""
+def add_to_processing_queue(uid):
+    epics.caput('XF:16IDC-DT{Det:SAXS}cam1:filemover.add_to_queue', uid)
+
+def get_from_processing_queue():
+    epics.caput('XF:16IDC-DT{Det:SAXS}cam1:filemover.get_from_queue', 1)
+    ret = epics.caget('XF:16IDC-DT{Det:SAXS}cam1:filemover.current_item', as_string=True, count=4096)
+    return ret # [s for s in ret.split(' ') if s!='']
+
+def set_dest_h5_dir(dest):
+    if dest!='' and not os.path.exists(dest):
+        raise Exception(f'{dest_dir} does not exist.')
+    epics.caput('XF:16IDC-DT{Det:SAXS}cam1:filemover.dest_h5_dir', dest)
+    
+def get_file_path(header):
+    for fd in list(header.fields()):
+        if fd.find('file_path')>=0:
+            return header.table(fields=[fd])[fd][1]
+    return None
+"""
+
+                    
 def lsh5(hd, prefix='', top_only=False):
     if top_only:
         print(list(hd.keys()))
@@ -26,9 +55,9 @@ def h5_fix_sample_name(fn_h5):
             f.move(g, sn)
     f.close()
     
-def pack_h5(uids, fn=None, fix_sample_name=True, 
+def pack_h5(uids, dest_dir='', fn=None, fix_sample_name=True, 
             attach_uv_file=False, delete_old_file=False,
-            fields=['em2_current1_mean_value', 'em2_current2_mean_value',
+            fields=[#'em2_current1_mean_value', 'em2_current2_mean_value',
                     'em1_sum_all_mean_value', 'em2_sum_all_mean_value',
                     'pil1M_image', 'pilW1_image', 'pilW2_image', 
                     'pil1M_ext_image', 'pilW1_ext_image', 'pilW2_ext_image']):
@@ -66,6 +95,11 @@ def pack_h5(uids, fn=None, fix_sample_name=True,
     if fn[-3:]!='.h5':
         fn += '.h5'
 
+    if dest_dir!='':
+        if not os.path.exists(dest_dir):
+            raise Exception(f'{dest_dir} does not exist.')
+        fn = dest_dir+'/'+fn
+        
     if delete_old_file:
         try:
             os.remove(fn)
@@ -82,6 +116,8 @@ def pack_h5(uids, fn=None, fix_sample_name=True,
     if attach_uv_file:
         # by default the UV file should be saved in /GPFS/xf16id/Windows/
         h5_attach_hplc(fn, '/GPFS/xf16id/Windows/hplc_export.txt')
+    
+    return fn
 
 
 def h5_attach_hplc(fn_h5, fn_hplc, grp_name=None):

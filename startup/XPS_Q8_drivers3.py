@@ -43,7 +43,7 @@ class XPS:
 
         retlist = ret.strip(',EndOfAPI').split(',', 1)
         if retlist[0]!='0':
-            print("returned value for %s: %s" % (command, retlist[0]))
+            print(f"returned value for {command}: ", retlist)
         if len(retlist)==1:
             retlist.append('')
         return retlist

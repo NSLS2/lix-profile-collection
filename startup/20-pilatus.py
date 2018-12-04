@@ -17,16 +17,10 @@ import os,time,threading
 from threading import Timer
 from types import SimpleNamespace
 
-# this is used by the CBF file handler        
-from enum import Enum
-class triggerMode(Enum):
-    software_trigger_single_frame = 1
-    software_trigger_multi_frame = 2
-    external_trigger = 3
-    fly_scan = 4
-
-global pilatus_trigger_mode
-pilatus_trigger_mode = triggerMode.software_trigger_single_frame
+global DET_replace_data_path
+global default_data_path_root
+global substitute_data_path_root
+DET_replace_data_path = True
 
 class PilatusFilePlugin(Device, FileStoreIterativeWrite):
     file_path = ADComponent(EpicsSignalWithRBV, 'FilePath', string=True)
@@ -61,18 +55,6 @@ class PilatusFilePlugin(Device, FileStoreIterativeWrite):
         f_tplt = '%s%s_%06d_'+self.parent.detector_id+'.cbf'
         set_and_wait(self.file_template, f_tplt, timeout=99999)
 
-        # original code by Hugo
-        # this is done now when login()
-        #path = '/GPFS/xf16id/exp_path/'
-        #rpath = str(proposal_id)+"/"+str(run_id)+"/"
-        #fpath = path + rpath
-        #makedirs(fpath)
-
-        # modified by LY
-        # camserver saves data to the local ramdisk, a background process then move them to data_path
-        # interesting to note that camserver saves the data to filename.tmp, then rename it filename after done writing
-        # must have the '/' at the end, since camserver will add it to the RBV
-        # this should done only once for all Pilatus detectors
         if self.parent.name == first_Pilatus() or self.parent.name == first_PilatusExt():
             #print("first Pilatus is %s" % self.parent.name)
             change_path()
@@ -82,7 +64,10 @@ class PilatusFilePlugin(Device, FileStoreIterativeWrite):
         # synchronized to the highest current value
         if PilatusFilePlugin.file_number_reset==1:
             print("resetting file number for ", self.parent.name)
-            set_and_wait(self.file_number, 1, timeout=99999)
+            # it is a bad idea to wait since auto-increment may change this value immediately
+            #set_and_wait(self.file_number, 1, timeout=99999)   
+            self.file_number.put(1)
+            print('done.')
         elif self.parent.name == first_Pilatus():
             next_file_number = np.max([d.file.file_number.get() for d in pilatus_detectors])
             for d in pilatus_detectors:
@@ -94,25 +79,30 @@ class PilatusFilePlugin(Device, FileStoreIterativeWrite):
                 print("setting file number for %s to %d." % (d.name, next_file_number))
                 set_and_wait(d.file.file_number, next_file_number, timeout=99999)
 
-        #set_and_wait(self.file_path, "/ramdisk/", timeout=99999) # 12/19/17, changed back to GPFS
         f_path = data_path
         f_fn = current_sample
-        set_and_wait(self.file_path, f_path, timeout=99999)# 12/19/17, changed back to GPFS
+        # file_path must ends with '/'
+        print('%s: setting file path ...' % self.name)
+        if DET_replace_data_path:
+            f_path = f_path.replace(default_data_path_root, substitute_data_path_root)
+        set_and_wait(self.file_path, f_path, timeout=99999) 
+        #set_and_wait(self.file_path, f_path, timeout=99999)
         set_and_wait(self.file_name, f_fn, timeout=99999)
         self._fn = Path(f_path)
 
         fpp = self.get_frames_per_point()
         # when camserver collects in "multiple" mode, another number is added to the file name
-        # even though the template does not specify it. The template cannot be changed to add this
-        # second number. The template will be revised in the CBF handler if fpp>1
-        #if fpp>1:
-        #    f_tplt = '%s%s_%06d_'+self.parent.detector_id+'_%05d.cbf'
+        # even though the template does not specify it. 
+        # Camserver doesn't like the template to include the second number
+        # The template will be revised in the CBF handler if fpp>1
 
+        print('%s: super().stage() ...' % self.name)
         super().stage()
         res_kwargs = {'template': f_tplt, # self.file_template(),
                       'filename': f_fn, # self.file_name(),
                       'frame_per_point': fpp,
                       'initial_number': self.file_number.get()}
+        print('%s: _generate_resource() ...' % self.name)
         self._generate_resource(res_kwargs)
 
         try: # this is used by solution scattering only

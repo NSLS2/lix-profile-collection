@@ -189,11 +189,15 @@ class XPStraj(Device):
         for det in self.detectors:
             # first make sure that all data file are saved, otherwise next time when the detector is
             # staged, the files that are not yet saved will be lost
+            Ni = det.cam.num_images.get() 
+            Nc1 = 0
             while True:
-                Ni = det.cam.num_images.get() 
                 Nc = det.cam.array_counter.get()
-                if Ni==Nc:
+                if Ni==Nc or Nc==Nc1:  
+                    # either the final file count is reached, or waited for too long (5s) and no new files 
+                    # show up, which can happen if one or more trajectories were cut short during the raster
                     break
+                Nc1 = Nc
                 print('data files are still being written for %s, %d -> %d' % (det.name, Nc, Ni))
                 time.sleep(5)
                 
@@ -317,7 +321,7 @@ class XPStraj(Device):
             self.traj_par['slow_axis'] = motor2.name
         self.time_modified = time.time()
         
-    def exec_traj(self, forward=True, clean_event_queue=False):
+    def exec_traj(self, forward=True, clean_event_queue=False, n_retry=5):
         """
            execuate either the foward or backward trajectory
         """
@@ -359,13 +363,39 @@ class XPStraj(Device):
                     self.xps.EventExtendedRemove(self.sID, ev) 
         eID = self.xps.EventExtendedStart(self.sID)[1]
         self.start_time = time.time()
-        self.xps.MultipleAxesPVTExecution (self.sID, self.group, traj_fn, 1)
+        
+        for i in range(n_retry):
+            [err, ret] = self.xps.MultipleAxesPVTExecution(self.sID, self.group, traj_fn, 1)
+            if err=='0': 
+                break
+            elif i==n_retry-1:
+                self.safe_stop()
+            print(f'An error (code {err}) as occured when starting trajectory execution, retry #{i+1} ...')
+            #if err=='-22': # Group state must be READY                
+            [err, ret] = self.xps.GroupMotionEnable(self.sID, self.group)
+            print(f"attempted to re-enable motion group: ", end='')
+            time.sleep(1)
+        
         self.xps.GatheringStopAndSave(self.sID)
         self.xps.EventExtendedRemove(self.sID, eID)
         self.update_readback()
 
         if self._traj_status != None:
             self._traj_status._finished()
+    
+    def safe_stop(self):
+        fast_shutter.close()
+        
+        # generate enough triggers to complete exposure 
+        det = self.detectors[0]
+        Ni = det.cam.num_images.get() 
+        Nc = det.cam.array_counter.get()
+        """for i in range(Ni-Nc):
+            det.trigger()
+            print('%d more data points to complete exposure ...   ' % (Ni-Nc-i), end='\r')
+            time.sleep(self.traj_par['segment_duration'])     
+        """
+        raise Exception('a hardware error has occured, aborting ... ')
     
     def readback_traj(self):
         print('reading back trajectory ...')

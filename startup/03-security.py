@@ -8,7 +8,10 @@ data_path = None
 collection_lock_file = "/GPFS/xf16id/.lock"
 okay_to_move_file = "/GPFS/xf16id/.okay_to_move"
 
-def login(uname = None, pID = None, rID = None, debug=True):
+current_cycle = '2018-3'
+
+def login(uname = None, pID = None, rID = None, debug=True, 
+          root_path='/GPFS/xf16id', create_proc_dir=False):
     """Ask the user for his credentials and proposal information for the data collection"""
     #TODO: Use PASS and LDAP integration when possible.
     global username
@@ -35,11 +38,15 @@ def login(uname = None, pID = None, rID = None, debug=True):
     RE.md['proposal_id'] = proposal_id
     RE.md['run_id'] = run_id
     
-    path = '/GPFS/xf16id/exp_path/'
+    path = root_path + '/exp_path/'
     rpath = str(proposal_id)+"/"+str(run_id)+"/"
     data_path = path + rpath
     makedirs(data_path)
-    makedirs(data_path+"processed/")
+    
+    if create_proc_dir:
+        proc_path = f"{root_path}/Processing/{current_cycle}/"
+        makedirs(proc_path)
+        makedirs(proc_path+"processed/")
     
     RE.md['data_path'] = data_path
     

@@ -6,7 +6,31 @@ import fabio
 # for backward compatibility, fpp was always 1 before Jan 2018
 #global pilatus_fpp
 #pilatus_fpp = 1
+
+# this is used by the CBF file handler        
+from enum import Enum
+class triggerMode(Enum):
+    software_trigger_single_frame = 1
+    software_trigger_multi_frame = 2
+    external_trigger = 3
+    fly_scan = 4
+
 global pilatus_trigger_mode
+global default_data_path_root
+global substitute_data_path_root
+global CBF_replace_data_path
+
+pilatus_trigger_mode = triggerMode.software_trigger_single_frame
+
+# assuming that the data files always have names with these extensions 
+image_size = {
+    'SAXS': (1043, 981),
+    'WAXS1': (619, 487),
+    'WAXS2': (619, 487)
+}
+
+# if the cbf files have been moved already
+CBF_replace_data_path = True
 
 class PilatusCBFHandler(HandlerBase):
     specs = {'AD_CBF'} | HandlerBase.specs
@@ -15,33 +39,58 @@ class PilatusCBFHandler(HandlerBase):
         if frame_per_point>1:
             # file name should look like test_000125_SAXS_00001.cbf, instead of test_000125_SAXS.cbf
             template = template[:-4]+"_%05d.cbf"
+
         self._path = os.path.join(rpath, '')
+        # this is a workaround for data that are save in /exp_path then moved to /GPFS/xf16id/exp_path
+        if self._path.find(substitute_data_path_root)==0 and CBF_replace_data_path:
+            print(f'replacing path name {substitute_data_path_root} -> {default_data_path_root} ..')
+            self._path = self._path.replace(substitute_data_path_root, default_data_path_root)
+        
         self._fpp = frame_per_point
         self._template = template
         self._filename = filename
         self._initial_number = initial_number
-
+        self._image_size = None
+        for k in image_size:
+            if template.find(k)>=0:
+                self._image_size = image_size[k]
+        if self._image_size is None:
+            raise Exception(f'Unrecognized data file extension in filename template: {template}')
+                
+    def get_data(self, fn):
+        """ the file may not exist
+        """
+        try:
+            img = fabio.open(fn)
+            data = img.data
+            if data.shape!=self._image_size:
+                print(f'got incorrect image size from {fn}: {data.shape}, return an empty frame instead.')
+        except:
+            print(f'could not read {fn}, return an empty frame instead.')
+            data = np.zeros(self._image_size)
+        #print(data.shape)
+        return data
+        
     def __call__(self, point_number):
         start = self._initial_number #+ point_number
         stop = start + 1 
         ret = []
-        #print("CBF handler called: start=%d, stop=%d" % (start, stop))
-        #print("  ", self._initial_number, point_number, self._fpp)
-        #print("  ", self._template )
+        print("CBF handler called: start=%d, stop=%d" % (start, stop))
+        print("  ", self._initial_number, point_number, self._fpp)
+        print("  ", self._template, self._path, self._initial_number)
      
         if pilatus_trigger_mode == triggerMode.software_trigger_single_frame:
             fn = self._template % (self._path, self._filename, point_number+1)
-            img = fabio.open(fn)
-            ret.append(img.data)
+            ret.append(self.get_data(fn))
         elif pilatus_trigger_mode == triggerMode.software_trigger_multi_frame or pilatus_trigger_mode == triggerMode.fly_scan:
             for i in range(self._fpp):
                 fn = self._template % (self._path, self._filename, point_number+1, i) 
-                img = fabio.open(fn)
-                ret.append(img.data)
+                #data = self.get_data(fn)
+                #print(f"{i}: {data.shape}")
+                ret.append(self.get_data(fn))
         elif pilatus_trigger_mode == triggerMode.external_trigger:
             fn = self._template % (self._path, self._filename, start, point_number)
-            img = fabio.open(fn)
-            ret.append(img.data)
+            ret.append(self.get_data(fn))
         
         return np.array(ret).squeeze()
 

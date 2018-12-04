@@ -39,6 +39,7 @@ def change_sample(sample_name=None, check_sname=True, exception=True):
             raise Exception()
 
     current_sample = sample_name
+    RE.md['sample_name'] = current_sample 
         
     return ret
     
