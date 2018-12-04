@@ -124,7 +124,10 @@ class MultiExpProsilica(MultiTrigger, LixProsilicaDetector):
     def saveImg(self, fn):
         size_x,size_y = self.cam.size.get()
         d = self.snapshot(ROIs=[[0, size_x, 0, size_y]])[0]
-        imageio.imwrite(fn, d)    
+        if d is None:
+            print(f'failed to get image data from {self.name}')
+        else:
+            imageio.imwrite(fn, d)    
     
 class StandardProsilica(SingleTrigger, LixProsilicaDetector):
     #tiff = Cpt(TIFFPluginWithFileStore,
@@ -178,9 +181,15 @@ class StandardProsilica(SingleTrigger, LixProsilicaDetector):
             raise(ValueError("valid ROI numbers are 1-4"))
        
             
-    def snapshot(self,showWholeImage=False, ROIs=None, showROI=False):
+    def snapshot(self,showWholeImage=False, ROIs=None, showROI=False, retry=3):
         # array_data.value may have different shapes (mono/Bayer vs RGB)\
-        img = np.asarray(self.image.array_data.value)
+        for i in range(retry):
+            img = np.asarray(self.image.array_data.value)
+            if len(img)>0:
+                break
+            if i==retry-1:
+                return None
+        
         if self.image.array_size.depth.get()>0:  # RGB
             img = img.reshape([self.image.array_size.depth.value,
                                self.image.array_size.height.value,
