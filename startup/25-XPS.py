@@ -141,11 +141,15 @@ class XPStraj(Device):
         
     def complete(self):
         """
-        Return a status object tied to 'done'.
+            according to run_engine.py: Tell a flyer, 'stop collecting, whenever you are ready'.
+            Return a status object tied to 'done'.
         """
-        #if self._traj_status is None:
-        #    raise RuntimeError("must call kickoff() before complete()")
-        self._traj_status.done = not self.moving()
+        if self._traj_status is None:
+            raise RuntimeError("must call kickoff() before complete()")
+        while not self._traj_status.done:
+            print(f"{time.asctime()}: waiting for the trajectory to finish ...   ", end='')
+            time.sleep(1)
+        print("Done.")
         
         return self._traj_status
         
@@ -379,10 +383,11 @@ class XPStraj(Device):
         self.xps.GatheringStopAndSave(self.sID)
         self.xps.EventExtendedRemove(self.sID, eID)
         self.update_readback()
+        print('end of trajectory execution, ', end='')
 
         if self._traj_status != None:
             self._traj_status._finished()
-    
+            
     def safe_stop(self):
         fast_shutter.close()
         
