@@ -44,7 +44,7 @@ def login(uname = None, pID = None, rID = None, debug=True,
     makedirs(data_path)
     
     if create_proc_dir:
-        proc_path = f"{root_path}/Processing/{current_cycle}/"
+        proc_path = f"{root_path}/Processing/{current_cycle}/{proposal_id}/{run_id}/"
         makedirs(proc_path)
         makedirs(proc_path+"processed/")
     
