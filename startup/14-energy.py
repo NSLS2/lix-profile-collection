@@ -50,44 +50,6 @@ def XBPM_pos(navg=5):
     except:
         return ("unknown", "unknown") 
         
-def get_gap():
-    pv = PV("SR:C16-ID:G1{IVU:1-LEnc}Gap")
-    if pv.connected:
-        return pv.get()
-    else:
-        return np.nan 
-        
-# move undulator gap
-def move_gap(g1):
-    # leave limit-check to undulator control
-    caput("SR:C16-ID:G1{IVU:1-Mtr:2}Inp:Pos", g1)
-    sleep(0.2)
-    g1 = caget("SR:C16-ID:G1{IVU:1-Mtr:2}Inp:Pos")
-    print("moving to undulator gap of %.3f mm ." % g1)
-    sys.stdout.flush()
-
-    # go
-    caput("SR:C16-ID:G1{IVU:1-Mtr:2}Sw:Go", 1)
-    while True:
-        g2 = get_gap()
-        clear_output(wait=True)
-        print("current gap is %.3f mm\r" % g2)
-        sys.stdout.flush()
-        sleep(0.5)
-        servo_state = caget("SR:C16-ID:G1{IVU:1-Mtr:1}Sw:Serv-On")
-        servo_state += caget("SR:C16-ID:G1{IVU:1-Mtr:2}Sw:Serv-On")
-        servo_state += caget("SR:C16-ID:G1{IVU:1-Mtr:3}Sw:Serv-On")
-        servo_state += caget("SR:C16-ID:G1{IVU:1-Mtr:4}Sw:Serv-On")
-        sleep(1)
-        servo_state += caget("SR:C16-ID:G1{IVU:1-Mtr:1}MvSt")
-        servo_state += caget("SR:C16-ID:G1{IVU:1-Mtr:2}MvSt")
-        servo_state += caget("SR:C16-ID:G1{IVU:1-Mtr:3}MvSt")
-        servo_state += caget("SR:C16-ID:G1{IVU:1-Mtr:4}MvSt")
-        #if np.fabs(g1-g2)<0.01:
-        if servo_state==0:
-            break
-        sleep(0.5)
-    print("Done. servo_state=%d" % servo_state)
 
 # arcsec to radians conversion
 def arcsec_rad(x):

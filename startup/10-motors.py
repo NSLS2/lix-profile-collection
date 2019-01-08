@@ -164,8 +164,6 @@ atn2x = EpicsMotor('XF:16IDB-OP{Fltr:Atn-Ax:X2}Mtr', name='atn2x')
 # Absorber Set #3
 atn3x = EpicsMotor('XF:16IDB-OP{Fltr:Atn-Ax:X3}Mtr', name='atn3x')
 
-IVU_gap = EpicsMotor('SR:C16-ID:G1{IVU:1-Mtr:2}Inp:Pos', name='ivu_gap')
-
 ## Alternative SSA
 assa = SlitsCenterAndGap('XF:16IDB-OP{Slt:aSSA', name="aSSA")
 
@@ -260,36 +258,3 @@ sbs = SAXSBeamstop('XF:16IDC-ES{BS:SAXS', name='sbs')
 screen_SS = Screen('XF:16IDB-BI{SCN:SS',name='screen_ss')
 screen_SF = Screen('XF:16IDC-BI{FS:SF',name='screen_sf')
 
-
-
-## shutter # TODO: Check with Shirish and Lin and remove it
-#shutter = EpicsMotor('XF:16ID-TS{EVR:C1-Out:FP0}Src:Scale-SP', name='shutter')
-
-#class Gap(PseudoPositioner):
-#    # The pseudo positioner axes
-#    gap = Cpt(PseudoSingle, limits=(-5.71, 20))
-#    
-#
-#    # The real (or physical) positioners:
-#    gap_set = Cpt(EpicsMotor, 'SR:C16-ID:G1{IVU:1-Mtr:2}Inp:Pos')
-#    gap_actual=caget('SR:C16-ID:G1{IVU:1-LEnc}Gap')
-#    gap_go = Cpt(EpicsMotor, 'SR:C16-ID:G1{IVU:1-Mtr:2}Sw:Go')
-
-    
-#    @pseudo_position_argument
-#    def forward(self, target):
-#        '''Run a forward (pseudo -> real) calculation'''
-#        gp = target.gap
-#        g_call=1
-#        
-#        return self.RealPosition(gap_set=gp,
-#                                 gap_go=g_call)
-
-#    @real_position_argument
-#    def inverse(self, real_pos):
-#        '''Run an inverse (real -> pseudo) calculation'''
-#        calc_gap = real_pos.gap_actual
-#        return self.PseudoPosition(gap=calc_gap)
-
-#pseudo_gap = Gap('', name='gap')
-#gap = pseudo_gap.gap
