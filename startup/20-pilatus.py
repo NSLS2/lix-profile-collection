@@ -138,15 +138,15 @@ class LIXPilatus(SingleTrigger, PilatusDetector):
     file = Cpt(PilatusFilePlugin, suffix="cam1:",
                write_path_template="", root='/')
 
-    roi1 = Cpt(ROIPlugin, 'ROI1:')
-    roi2 = Cpt(ROIPlugin, 'ROI2:')
-    roi3 = Cpt(ROIPlugin, 'ROI3:')
-    roi4 = Cpt(ROIPlugin, 'ROI4:')
+    #roi1 = Cpt(ROIPlugin, 'ROI1:')
+    #roi2 = Cpt(ROIPlugin, 'ROI2:')
+    #roi3 = Cpt(ROIPlugin, 'ROI3:')
+    #roi4 = Cpt(ROIPlugin, 'ROI4:')
 
-    stats1 = Cpt(StatsPlugin, 'Stats1:')
-    stats2 = Cpt(StatsPlugin, 'Stats2:')
-    stats3 = Cpt(StatsPlugin, 'Stats3:')
-    stats4 = Cpt(StatsPlugin, 'Stats4:')
+    #stats1 = Cpt(StatsPlugin, 'Stats1:')
+    #stats2 = Cpt(StatsPlugin, 'Stats2:')
+    #stats3 = Cpt(StatsPlugin, 'Stats3:')
+    #stats4 = Cpt(StatsPlugin, 'Stats4:')
 
     reset_file_number = Cpt(Signal, name='reset_file_number', value=1)
     HeaderString = Cpt(EpicsSignal, "cam1:HeaderString")
@@ -267,15 +267,15 @@ class LIXPilatusExt(PilatusExtTrigger):
     file = Cpt(PilatusFilePlugin, suffix="cam1:",
                write_path_template="")
 
-    roi1 = Cpt(ROIPlugin, 'ROI1:')
-    roi2 = Cpt(ROIPlugin, 'ROI2:')
-    roi3 = Cpt(ROIPlugin, 'ROI3:')
-    roi4 = Cpt(ROIPlugin, 'ROI4:')
+    #roi1 = Cpt(ROIPlugin, 'ROI1:')
+    #roi2 = Cpt(ROIPlugin, 'ROI2:')
+    #roi3 = Cpt(ROIPlugin, 'ROI3:')
+    #roi4 = Cpt(ROIPlugin, 'ROI4:')
 
-    stats1 = Cpt(StatsPlugin, 'Stats1:')
-    stats2 = Cpt(StatsPlugin, 'Stats2:')
-    stats3 = Cpt(StatsPlugin, 'Stats3:')
-    stats4 = Cpt(StatsPlugin, 'Stats4:')
+    #stats1 = Cpt(StatsPlugin, 'Stats1:')
+    #stats2 = Cpt(StatsPlugin, 'Stats2:')
+    #stats3 = Cpt(StatsPlugin, 'Stats3:')
+    #stats4 = Cpt(StatsPlugin, 'Stats4:')
 
     reset_file_number = Cpt(Signal, name='reset_file_number', value=1)
     HeaderString = Cpt(EpicsSignal, "cam1:HeaderString")   # was missing before 2018
@@ -285,16 +285,22 @@ class LIXPilatusExt(PilatusExtTrigger):
         super().__init__(*args, **kwargs)
 
 
-pil1M = LIXPilatus("XF:16IDC-DT{Det:SAXS}", name="pil1M", detector_id="SAXS")
-pilW1 = LIXPilatus("XF:16IDC-DT{Det:WAXS1}", name="pilW1", detector_id="WAXS1")
-pilW2 = LIXPilatus("XF:16IDC-DT{Det:WAXS2}", name="pilW2", detector_id="WAXS2")
+try:
+    pil1M = LIXPilatus("XF:16IDC-DT{Det:SAXS}", name="pil1M", detector_id="SAXS")
+    pilW1 = LIXPilatus("XF:16IDC-DT{Det:WAXS1}", name="pilW1", detector_id="WAXS1")
+    pilW2 = LIXPilatus("XF:16IDC-DT{Det:WAXS2}", name="pilW2", detector_id="WAXS2")
 
-pil1M_ext = LIXPilatusExt("XF:16IDC-DT{Det:SAXS}", name="pil1M_ext", detector_id="SAXS")
-pilW1_ext = LIXPilatusExt("XF:16IDC-DT{Det:WAXS1}", name="pilW1_ext", detector_id="WAXS1")
-pilW2_ext = LIXPilatusExt("XF:16IDC-DT{Det:WAXS2}", name="pilW2_ext", detector_id="WAXS2")
+    pil1M_ext = LIXPilatusExt("XF:16IDC-DT{Det:SAXS}", name="pil1M_ext", detector_id="SAXS")
+    pilW1_ext = LIXPilatusExt("XF:16IDC-DT{Det:WAXS1}", name="pilW1_ext", detector_id="WAXS1")
+    pilW2_ext = LIXPilatusExt("XF:16IDC-DT{Det:WAXS2}", name="pilW2_ext", detector_id="WAXS2")
 
-pilatus_detectors = [pil1M, pilW1, pilW2]
-pilatus_detectors_ext = [pil1M_ext, pilW1_ext, pilW2_ext]
+    pilatus_detectors = [pil1M, pilW1, pilW2]
+    pilatus_detectors_ext = [pil1M_ext, pilW1_ext, pilW2_ext]
+except:
+    print("Could not initilize Pilatus detectors ...")
+    pilatus_detectors = []
+    pilatus_detectors_ext = []
+    
 
 def first_Pilatus():
     #print("checking first Pialtus")
@@ -315,10 +321,6 @@ def first_PilatusExt():
 
 for det in pilatus_detectors+pilatus_detectors_ext:
     det.read_attrs = ['file']
-
-#def pilatus_set_Nimage(n):
-#    for det in pilatus_detectors:
-#        det.cam.num_images.put(n)
 
 def pilatus_number_reset(status):
     val = 1 if status else 0
