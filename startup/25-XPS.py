@@ -430,9 +430,11 @@ class XPStraj(Device):
             self.read_back['slow_axis'] += [self.traj_par['motor2'].position]
             self.read_back['timestamp2'] += [time.time()]
 
-            
-xps_trj = XPStraj('10.16.2.100', 'scan', 'test')
-
+try:
+    xps_trj = XPStraj('10.16.2.100', 'scan', 'test')
+except:
+    print('Cannot connect to XPS.')
+    
 def raster(detectors, exp_time, fast_axis, f_start, f_end, Nfast, 
            slow_axis=None, s_start=0, s_end=0, Nslow=1, md=None):
     """ raster scan in fly mode using detectors with exposure time of exp_time
