@@ -26,3 +26,20 @@ RE.subscribe(print_scanid_stop, 'stop')
 
 # For debug purpose to see the metadata being stored
 #RE.subscribe('start', print_md)
+
+
+## enable live table
+bec.enable_table()
+#bec.disable_table()
+## disable plots
+#bec.enable_plots()
+bec.disable_plots()
+
+## add hints (choose from feilds given by dev.describe()), e.g: 
+# ss2.y.hints = {'fields': ['ss2_y', 'ss2_y_user_setpoint']}
+# em1.hints = {'fields': ['em1_current1_mean_value', 'em1_current2_mean_value']}
+## or specify explicitly
+#RE(relative_scan(DETS, ss2.y, -1,1, 10), LiveTable(['ss2_y', 'ss2_y_user_setpoint']))
+
+
+
