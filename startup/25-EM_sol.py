@@ -417,8 +417,6 @@ class SolutionScatteringExperimentalModule():
         pilatus_ct_time(exp)
         pilatus_number_reset(True)
         
-        updata_metadata()
-        
         change_sample(sample_name, check_sname=check_sname)
         set_pil_num_images(repeats)
         
@@ -494,9 +492,7 @@ class SolutionScatteringExperimentalModule():
         pilatus_ct_time(exp)
         pilatus_number_reset(False)
         
-        updata_metadata()
         DETS=[em1, em2, pil1M, pilW1, pilW2]
-        #pilatus_set_Nimage(repeats)
         set_pil_num_images(repeats)
         length=7.5
         #self.ctrl.wait()
