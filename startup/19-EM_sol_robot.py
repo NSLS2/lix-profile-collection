@@ -215,7 +215,7 @@ class EM_Sol_Robot():
 rbt = EM_Sol_Robot()
 
 def testRobot(sMode='A',nbgn=1,nend=20,nloop=1):
-  if sMode not in ['A','B','C','D'] or nloop<1:
+  if sMode not in ['A','B','C','D','E'] or nloop<1:
     raise Exception("Parameter Error")
 
   rbt.powerOn()
@@ -229,11 +229,13 @@ def testRobot(sMode='A',nbgn=1,nend=20,nloop=1):
       if sMode=='A':
         rbt.loadTray(nTray)
         rbt.unloadTray(nTray)
+        
       elif sMode=='B':
         rbt.loadTray(nTray)
         rbt.mount()
         rbt.unmount()
         rbt.unloadTray(nTray)
+         
       elif sMode=='C':
         rbt.loadTray(nTray)
         if nTray==20:
@@ -242,6 +244,16 @@ def testRobot(sMode='A',nbgn=1,nend=20,nloop=1):
           rbt.unloadTray(nTray+2)
         else:
           rbt.unloadTray(nTray+1)
+        
+      elif sMode=='E':
+        rbt.loadTray(nTray)
+        rbt.mount()
+        sol.select_tube_pos(0)
+        time.sleep(2)
+        sol.select_tube_pos('park')
+        rbt.unmount()
+        rbt.unloadTray(nTray)
+        
       else:
         rbt.loadTray(nTray)
         rbt.mount()
