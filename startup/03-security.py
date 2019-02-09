@@ -8,7 +8,7 @@ data_path = None
 collection_lock_file = "/GPFS/xf16id/.lock"
 okay_to_move_file = "/GPFS/xf16id/.okay_to_move"
 
-current_cycle = '2018-3'
+current_cycle = '2019-1'
 
 def login(uname = None, pID = None, rID = None, debug=True, 
           root_path='/GPFS/xf16id', create_proc_dir=False):
@@ -18,6 +18,7 @@ def login(uname = None, pID = None, rID = None, debug=True,
     global proposal_id
     global run_id
     global data_path 
+    global proc_path
 
     correct_info = False
     if uname != None and pID!=None and rID!=None: 
@@ -42,14 +43,14 @@ def login(uname = None, pID = None, rID = None, debug=True,
     rpath = str(proposal_id)+"/"+str(run_id)+"/"
     data_path = path + rpath
     makedirs(data_path)
-    
+    RE.md['data_path'] = data_path
+
+    proc_path = f"{root_path}/Processing/{current_cycle}/{proposal_id}/{run_id}/"
+    RE.md['proc_path'] = proc_path
     if create_proc_dir:
-        proc_path = f"{root_path}/Processing/{current_cycle}/{proposal_id}/{run_id}/"
         makedirs(proc_path)
         makedirs(proc_path+"processed/")
-    
-    RE.md['data_path'] = data_path
-    
+        
     dw,mo,da,tt,yr = time.asctime().split()
     logfile = data_path+("log-%s." % username)+yr+mo+("%02d_" % int(da))+tt
     ip = get_ipython()
@@ -122,6 +123,7 @@ def logoff():
     global proposal_id
     global run_id
     global data_path 
+    global proc_path
 
     """Clear the login information"""
     if (input("Are you sure you want to logout? [Y, N]: ") in ['Y', 'y']):
@@ -129,11 +131,13 @@ def logoff():
         proposal_id = None
         run_id = None
         data_path = None
+        proc_path = None
 
         del RE.md['owner']
         del RE.md['proposal_id']
         del RE.md['run_id']      
         del RE.md['data_path']      
+        del RE.md['proc_path']      
 
         ip = get_ipython()
         ip.magic("logstop")

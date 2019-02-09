@@ -2,7 +2,7 @@ import glob,re
 
 current_sample="test"
 
-def check_sample_name(sample_name):    
+def check_sample_name(sample_name, check_for_duplicate=True):    
     if len(sample_name)>42:  # file name length limit for Pilatus detectors
         print("Error: the sample name is too long:", len(sample_name))
         return False
@@ -13,10 +13,11 @@ def check_sample_name(sample_name):
 
     if data_path is None:
         change_path()
-    fl = glob.glob(data_path+sample_name+"_000*")
-    if len(fl)>0:
-        print("Error: files already exist for this sample name: ", sample_name)
-        return False
+    if check_for_duplicate:
+        fl = glob.glob(data_path+sample_name+"_000*")
+        if len(fl)>0:
+            print("Error: files already exist for this sample name: ", sample_name)
+            return False
 
     return True
     
@@ -34,7 +35,7 @@ def change_sample(sample_name=None, check_sname=True, exception=True):
     if sample_name is None or sample_name == "":
         sample_name = "test"
     elif check_sname:
-        ret = check_sample_name(sample_name)
+        ret = check_sample_name(sample_name, exception)
         if ret==False and exception:
             raise Exception()
 
@@ -79,7 +80,9 @@ def get_samples(spreadSheet, holderName, check_sname=True):
             continue
         elif d['bufferName'][i] is not np.nan:
             sample['bufferName'] = d['bufferName'][i]
-            samples[sampleName] = sample
+        samples[sampleName] = sample
+
+    return samples
 
     for k,s in samples.items():
         # make sure that the buffer exists and is in the same row as the sample

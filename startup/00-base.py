@@ -145,11 +145,6 @@ def configure_base(user_ns, broker_name, *,
             from bluesky.utils import install_qt_kicker
             install_qt_kicker()
 
-    if epics_context:
-        # Create a context in the underlying EPICS client.
-        from ophyd import setup_ophyd
-        setup_ophyd()
-
     if not ophyd_logging:
         # Turn on error-level logging, particularly useful for knowing when
         # pyepics callbacks fail.
@@ -225,9 +220,6 @@ config = {
 db = Broker.from_config(config)
 bec = None
 
-import ophyd
-ophyd.utils.startup.setup()
-
 
 #import bluesky
 #from ophyd import *
@@ -245,3 +237,22 @@ def is_ipython():
     elif 'IPython' in sys.modules:
         ip = True # Shell
     return ip
+
+
+# def setup_LIX(user_ns, mode):
+#     ns = {}
+#     ns.update(lix_base())
+#     if mode == 'scanning':
+#         user_ns['motor'] = EpicsMotor(...)
+# 
+#     elif mode == 'solution':
+#         ...
+# 
+#     user_ns.update(ns)
+#     return list(ns)
+# 
+# 
+# def new_login():
+#     ...
+# 
+#     setup_LIX(ip.user_ns, ...)

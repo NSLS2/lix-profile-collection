@@ -1,4 +1,5 @@
-from ophyd import (EpicsSignal, Device, Component as Cpt)
+from ophyd import (EpicsSignal, Device, Component as Cpt, DerivedSignal)
+from nslsii.devices import TwoButtonShutter
 import time, sys 
 
 global sim_on
@@ -26,13 +27,15 @@ class MaxiGauge:
             return 1.1e3
         else:
             return float(msg)
+
+    
                    
 class MKSGauge:
     """ can read pressure, status of the gauge "OFF", "NO GAUGE"
         turn on and off
     """
     def __init__(self, devName):
-        self.pres_sig = EpicsSignal(devName+'P:Raw-I')
+        self.pres_sig = EpicsSignal (devName+'P:Raw-I')
         self.power_ctrl = EpicsSignal(devName+'Pwr-Cmd')
 
     def pressure(self):

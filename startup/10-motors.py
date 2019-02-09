@@ -7,10 +7,11 @@ class XYMotor(Device):
 	x = Cpt(EpicsMotor, '-Ax:X}Mtr')
 	y = Cpt(EpicsMotor, '-Ax:Y}Mtr')
 
-
+""" note that the piezo slits PVs are incorrectly named X/Y, instead of dX/dY
+""" 
 class ApertureDev(Device):
-	dx = Cpt(EpicsMotor, '-Ax:X}Mtr')
-	dy = Cpt(EpicsMotor, '-Ax:Y}Mtr')
+	dx = Cpt(EpicsMotor, '-Ax:dX}Mtr')
+	dy = Cpt(EpicsMotor, '-Ax:dY}Mtr')
     
 class XYZMotor(XYMotor):
 	z = Cpt(EpicsMotor, '-Ax:Z}Mtr')
@@ -150,10 +151,11 @@ mps = Blades('XF:16IDA-OP{Slt:1', name='mps')
 ## Beam Position Monitor
 bpm_pos = XYMotor('XF:16IDB-BI{BPM:1', name='bpm_pos')
 
-bpm2 = XYMotor('XF:16IDC-BI{BPM:2', name='bpm2')
+bpm2_pos = XYMotor('XF:16IDC-BI{BPM:2', name='bpm2')
 
 ## Secondary Source Aperture (SSA)
-ssa = ApertureDev('XF:16IDB-OP{Slt:SSA', name='ssa')
+#ssa = ApertureDev('XF:16IDB-OP{Slt:SSA', name='ssa')
+ssa1 = ApertureDev('XF:16IDB-OP{Slt:SSA1', name='ssa')
 
 
 ## Attenuator

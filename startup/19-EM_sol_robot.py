@@ -102,7 +102,7 @@ class EM_Sol_Robot():
 
 	def runTask(self,cmd,timeout):
 		cmdLists = ['Load', 'Mount', 'Unmount', 'Unload', 
-                'Initialize', 'Home', 'Idle',
+                'Initialize', 'Home', 'Push', 'Idle',
                 'OpenStorageDoor', 'ShutStorageDoor', 'OpenGripper', 'CloseGripper']
 		if cmd not in cmdLists:
 			raise Exception(cmd+" is not a valid Task.")
@@ -114,10 +114,6 @@ class EM_Sol_Robot():
 
 	def powerOn(self):
 		self.runTask('Initialize', self.CMD_TIMEOUT)
-
-
-	def powerOff(self):
-		self.runTask('DisablePower', self.CMD_TIMEOUT)
 
 
 	def goHome(self):
@@ -164,7 +160,9 @@ class EM_Sol_Robot():
 
 			if cmd=="Unload":
 				if not bLoaded:
-					raise Exception("FATAL: Unload Failed. Tray lost during unloading")
+					ret=self.push(nTube)
+					if ret==False:                   
+						raise Exception("FATAL: Unload Failed. Tray lost during unloading")
 
 		return
 
@@ -202,7 +200,12 @@ class EM_Sol_Robot():
 					raise Exception("Unmount Failed. Did not pick the tray")
 		return
 
-
+	def push(self,nTube):
+		setParameter("nTray", nTube)
+		tskStat, sampleStat, exception = self.runTask("Push", self.CMD_TIMEOUT)
+		return True if tskStat.lower()=="done" else False
+                
+    
 	def sleep(self):
 		cmdList = ['Initialize','Home','Idle']
 		for cmd in cmdList:

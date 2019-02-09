@@ -48,3 +48,37 @@ def print_time(msg):
         else:
             print_time.waiting = False
             print(now.strftime("%H:%M:%S.%f")[:-3], msg)
+
+
+def setPV(pv_name, value, readback_pv_name=None, poll_time=0.25, time_out=5, retry=5):
+    """ It has been observed that sometimes EPICS PVs set value somehow gets lost when 
+        using caput(). This function attempts to correct this problem by trying for 
+        multiple times until the value has changed.
+    """
+    if readback_pv_name is None:
+        readback_pv_name = pv_name
+    for i in range(retry):
+        caput(pv_name, value)
+        for t in range(int(time_out/poll_time)):
+            ret = caget(readback_pv_name)
+            if ret==value:
+                return
+            time.sleep(poll_time)
+        print(f"failed to set {pv_name} to {value}, retry # {i+1}")
+    raise Exception(f'setPV(), giving up after {retry} tries.')
+
+def setSignal(signal, value, readback_signal=None, poll_time=0.25, time_out=5, retry=5):
+    if readback_signal is None:
+        readback_signal = signal
+    for i in range(retry):
+        signal.put(value)
+        for t in range(int(time_out/poll_time)):
+            ret = readback_signal.get()
+            if ret==value:
+                return
+            time.sleep(poll_time)
+        print(f"failed to set {signal} to {value}, retry # {i+1}")
+    raise Exception(f'setSignal(), giving up after {retry} tries.')
+    
+            
+            
