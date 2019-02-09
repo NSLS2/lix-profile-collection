@@ -14,13 +14,16 @@ from pathlib import Path
 
 import fabio
 import os,time,threading
-from threading import Timer
 from types import SimpleNamespace
 
+global DETS
 global DET_replace_data_path
 global default_data_path_root
 global substitute_data_path_root
 DET_replace_data_path = True
+
+global pilatus_trigger_lock
+pilatus_trigger_lock = threading.Lock()
 
 class PilatusFilePlugin(Device, FileStoreIterativeWrite):
     file_path = ADComponent(EpicsSignalWithRBV, 'FilePath', string=True)
@@ -105,14 +108,6 @@ class PilatusFilePlugin(Device, FileStoreIterativeWrite):
         print('%s: _generate_resource() ...' % self.name)
         self._generate_resource(res_kwargs)
 
-        try: # this is used by solution scattering only
-            sol
-        except NameError:
-            pass
-        else:
-            if self.parent.name == first_Pilatus() or self.parent.name == first_PilatusExt():
-                caput("XF:16IDC-ES:Sol{ctrl}ready", 1)
-
     def unstage(self):
         super().unstage()
         ##12/19/17 commented out
@@ -126,8 +121,8 @@ class PilatusFilePlugin(Device, FileStoreIterativeWrite):
         #self.filemover_target_dir.put(data_path)
         #self.filemover_move.put(1)
         ##12/19/17 commented out
-        if self.parent.name == first_Pilatus() or self.parent.name == first_PilatusExt():
-            release_lock()
+        #if self.parent.name == first_Pilatus() or self.parent.name == first_PilatusExt():
+        #    release_lock()
 
     def get_frames_per_point(self):
         #return self.parent.cam.num_images.get()   # always return 1 before 2018
@@ -167,19 +162,24 @@ class LIXPilatus(SingleTrigger, PilatusDetector):
         self._num_images = num_images
 
     def stage(self):
+        if self._staged == Staged.yes:
+            return
+
         self.cam.num_images.put(self._num_images)
         time.sleep(.1)
         self.cam.trigger_mode.put(0, wait=True)
         super().stage()
 
     def unstage(self):
+        if self._staged == Staged.no:
+            return
+
         self.cam.num_images.put(1, wait=True)
         super().unstage()
 
 
 ############## below is based on code written by Bruno
 ############## hardware triggering for Pilatus detectors
-
 class PilatusExtTrigger(PilatusDetector):
     armed = Cpt(EpicsSignal, "cam1:Armed")
 
@@ -200,6 +200,9 @@ class PilatusExtTrigger(PilatusDetector):
         self._num_images = num_images
 
     def stage(self):
+        if self._staged == Staged.yes:
+            return
+
         print(self.name, "staging")
         #self.stage_sigs.update([
         #    ('cam.trigger_mode', 3), # 2 DOESN'T WORK!
@@ -230,12 +233,12 @@ class PilatusExtTrigger(PilatusDetector):
         print(self.name, "staged")
 
     def unstage(self):
-        self._status = None
+        if self._staged == Staged.no:
+            return
         
+        self._status = None
         self._acquisition_signal.put(0)
         
-        #self.cam.trigger_mode.put(0, wait=True)
-        #self.cam.num_images.put(1, wait=True)
         time.sleep(.1)
         self.cam.trigger_mode.put(0, wait=True)
         time.sleep(.1)
@@ -251,11 +254,13 @@ class PilatusExtTrigger(PilatusDetector):
         status = DeviceStatus(self)
         # Only one Pilatus has to send the trigger
         if self.name == first_PilatusExt():
+            while pilatus_trigger_lock.locked():
+                time.sleep(0.05)
             print("triggering")
             self._trigger_signal.put(1, wait=True)
-            ##set up callback to clear status after the end-of-exposure
-            Timer(self.trig_wait, status._finished, ()).start()
             self._trigger_signal.put(0, wait=True)
+            ##set up callback to clear status after the end-of-exposure
+            threading.Timer(self.trig_wait, status._finished, ()).start()
         else:
             status._finished()
 
@@ -340,3 +345,12 @@ def set_pil_num_images(num):
     for d in pilatus_detectors+pilatus_detectors_ext:
         d.set_num_images(num)
 
+def stage_pilatus():
+    for det in DETS:
+        if det.__class__ == LIXPilatusExt or det.__class__ == LIXPilatus:
+            det.stage()
+            
+def unstage_pilatus():
+    for det in DETS:
+        if det.__class__ == LIXPilatusExt or det.__class__ == LIXPilatus:
+            det.unstage()
