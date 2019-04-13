@@ -37,4 +37,4 @@ class Attenuator():
             print("full beam")
             self.att_factor=100
             
-Attn= Attenuator()
+#Attn= Attenuator()

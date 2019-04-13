@@ -4,7 +4,7 @@ from IPython import get_ipython
 username = None
 proposal_id = None
 run_id = None
-data_path = None
+data_path = ""
 collection_lock_file = "/GPFS/xf16id/.lock"
 okay_to_move_file = "/GPFS/xf16id/.okay_to_move"
 
@@ -130,7 +130,7 @@ def logoff():
         username = None
         proposal_id = None
         run_id = None
-        data_path = None
+        data_path = ""
         proc_path = None
 
         del RE.md['owner']

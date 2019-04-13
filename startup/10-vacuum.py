@@ -387,7 +387,6 @@ class VacuumSystem:
             raise Exception("Unknown valveType: ", valveType)
 
 # Maxi gauge controller IOC running on xf16idc-ioc1
-            
 ESVacSys = VacuumSystem(MKSGauge("XF:16IDC-VA{ES-TCG:1}"))
 ESVacSys.appendManifold("EMmf", 
                         ["XF:16IDC-VA{ES-EV:3}", "XF:16IDC-VA{ES-EV:SoftPump3}"], 

@@ -5,7 +5,6 @@ class Region(Device):
     upper_limit = Cpt(EpicsSignal, "UpperLimit")
     luminescence = Cpt(EpicsSignalRO, "Luminescence")
 
-
 class USB4000(Device):
     region1 = Cpt(Region, "Region1:")
     region2 = Cpt(Region, "Region2:")
@@ -65,5 +64,4 @@ class USB4000(Device):
         if (old_value < 100.0) and (value == 100.0):
             self._acquiring_status._finished()
 
-
-usb4000 = USB4000("SA0000-03:", name="usb4000")
+#usb4000 = USB4000("SA0000-03:", name="usb4000")

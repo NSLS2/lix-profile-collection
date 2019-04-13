@@ -80,5 +80,4 @@ def setSignal(signal, value, readback_signal=None, poll_time=0.25, time_out=5, r
         print(f"failed to set {signal} to {value}, retry # {i+1}")
     raise Exception(f'setSignal(), giving up after {retry} tries.')
     
-            
-            
+    

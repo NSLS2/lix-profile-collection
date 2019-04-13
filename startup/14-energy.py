@@ -1,7 +1,19 @@
-from ophyd import (PseudoPositioner, PseudoSingle, EpicsMotor, Signal)
+from ophyd import (PseudoPositioner, PseudoSingle, EpicsMotor, Signal, EpicsSignalRO)
 from ophyd import (Component as Cpt)
 from ophyd.pseudopos import (pseudo_position_argument, real_position_argument)
 from time import sleep
+
+class MonoDCM(Device):
+    bragg = Cpt(EpicsMotor, '-Ax:Bragg}Mtr')
+    x = Cpt(EpicsMotor, '-Ax:X}Mtr')
+    y = Cpt(EpicsMotor, '-Ax:Of2}Mtr')
+    pitch2 = Cpt(EpicsMotor, '-Ax:P2}Mtr')
+    roll2 = Cpt(EpicsMotor, '-Ax:R2}Mtr')
+    fine_pitch = Cpt(EpicsMotor, '-Ax:PF2}Mtr')
+    ccm_fine_pitch = Cpt(EpicsMotor, '-Ax:CCM_PF}Mtr')
+    pitch2_rb = Cpt(EpicsSignalRO, '-Ax:PF_RDBK}Mtr.RBV')
+
+mono = MonoDCM("XF:16IDA-OP{Mono:DCM", name="dcm")
 
 # Calculate X-ray energy using the current theta position or from given argument    
 def getE(bragg=None):

@@ -13,4 +13,3 @@ class Vortex(Device):
 # Saturn interface for Vortex MCA detector
 vortex = Vortex('XF:16IDC-ES{Det:Sat}:', name='vortex')
 vortex.read_attrs = ['mca.spectrum', 'mca.preset_live_time', 'mca.rois.roi0.count', 'mca.rois.roi1.count']
-
