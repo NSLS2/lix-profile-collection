@@ -6,7 +6,8 @@ def update_metadata():
                         })
     RE.md['energy'] = ({'mono_bragg': mono.bragg.position,
                         'energy': getE(), 
-                        'gap': get_gap()})
+                        'gap': IVUgap.position
+                       })
     RE.md['optics'] = ({'wbm_y': wbm.y.position,
                         'wbm_pitch': wbm.pitch.position,
                         'dcm_y2': mono.y.position,
@@ -23,9 +24,12 @@ def update_metadata():
                      'y1': crl.y2.position,
                      'z': crl.z.position,
                     })
-    RE.md['slits'] = ({'SSA': {'dx': ssa.dx.position, 'dy': ssa.dy.position}, 
+    RE.md['slits'] = ({'SSA': {'dx': ssa1.dx.position, 'dy': ssa1.dy.position}, 
                        'DDA': {'x': dda.x.position, 'y': dda.y.position, 'dx': dda.dx.position, 'dy': dda.dy.position },
                        'Sg': {'x': sg2.x.position, 'y': sg2.y.position, 'dx': sg2.dx.position, 'dy': sg2.dy.position },
                       })
+    RE.md['BPM'] = ({'stage position': {'x': bpm_pos.x.position, 'y': bpm_pos.y.position},
+                     'beam position': {'x': best.x_mean.get(), 'y': best.y_mean.get()}
+                    })
     RE.md['XBPM'] = XBPM_pos() 
     print('Done.')
