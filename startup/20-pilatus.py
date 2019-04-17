@@ -1,4 +1,4 @@
-from ophyd import ( Component as Cpt, ADComponent,
+from ophyd import ( Component as Cpt, ADComponent, Signal,
                     EpicsSignal, EpicsSignalRO, EpicsSignalWithRBV,
                     ROIPlugin, StatsPlugin, ImagePlugin,
                     SingleTrigger, PilatusDetector, Device)
@@ -20,7 +20,7 @@ global DETS
 global DET_replace_data_path
 global default_data_path_root
 global substitute_data_path_root
-DET_replace_data_path = True
+DET_replace_data_path = False
 
 global pilatus_trigger_lock
 pilatus_trigger_lock = threading.Lock()
@@ -31,6 +31,7 @@ class PilatusFilePlugin(Device, FileStoreIterativeWrite):
     file_name = ADComponent(EpicsSignalWithRBV, 'FileName', string=True)
     file_template = ADComponent(EpicsSignalWithRBV, 'FileTemplate', string=True)
     file_number_reset = 1
+    sub_directory = None
     enable = SimpleNamespace(get=lambda: True)
 
     # this is not necessary to record since it contains the UID for the scan, useful
@@ -82,7 +83,10 @@ class PilatusFilePlugin(Device, FileStoreIterativeWrite):
                 print("setting file number for %s to %d." % (d.name, next_file_number))
                 set_and_wait(d.file.file_number, next_file_number, timeout=99999)
 
-        f_path = data_path
+        if PilatusFilePlugin.sub_directory is not None:
+            f_path = data_path+PilatusFilePlugin.sub_directory
+        else:
+            f_path = data_path
         f_fn = current_sample
         # file_path must ends with '/'
         print('%s: setting file path ...' % self.name)
@@ -143,7 +147,7 @@ class LIXPilatus(SingleTrigger, PilatusDetector):
     #stats3 = Cpt(StatsPlugin, 'Stats3:')
     #stats4 = Cpt(StatsPlugin, 'Stats4:')
 
-    reset_file_number = Cpt(Signal, name='reset_file_number', value=1)
+    #reset_file_number = Cpt(Signal, name='reset_file_number', value=1)
     HeaderString = Cpt(EpicsSignal, "cam1:HeaderString")
     ThresholdEnergy = Cpt(EpicsSignal, "cam1:ThresholdEnergy")
 
@@ -156,7 +160,7 @@ class LIXPilatus(SingleTrigger, PilatusDetector):
         """ set threshold
         """
         set_and_wait(self.ThresholdEnergy, ene)
-        caput(self.prefix+"cam1:ThresholdApply", 1)
+        self.cam.threshold_apply.put(1)
 
     def set_num_images(self, num_images):
         self._num_images = num_images
@@ -199,7 +203,7 @@ class PilatusExtTrigger(PilatusDetector):
     def set_num_images(self, num_images):
         self._num_images = num_images
 
-    def stage(self):
+    def stage(self, multitrigger=True):
         if self._staged == Staged.yes:
             return
 
@@ -209,22 +213,23 @@ class PilatusExtTrigger(PilatusDetector):
         #    ('cam.num_images', self._num_images)
         #])
         
+        acq_t = self.cam.acquire_period.get()
+
+        if multitrigger:
+            self.cam.trigger_mode.put(3, wait=True)   # ExtMTrigger in camserver
+            self.trig_wait = acq_t+0.02
+        else:
+            self.cam.trigger_mode.put(2, wait=True)   # ExtTrigger in camserver
+            self.trig_wait = acq_t*self._num_images+0.02
+
         time.sleep(.1)
-        self.cam.trigger_mode.put(3, wait=True)
-        time.sleep(.1)
+
         self.cam.num_images.put(self._num_images, wait=True)
         print(self.name, "stage sigs updated")
         super().stage()
         print(self.name, "super staged")
         self._counter_signal.put(0)
-        acq_t = self.cam.acquire_period.get()
-        #if acq_t>0.1:
-        #    self.trig_width = 0.05
-        #else:
-        #    self.trig_width = acq_t/2
-        #self.trig_wait = acq_t+0.02-self.trig_width
-        self.trig_wait = acq_t+0.02
-        #self._acquisition_signal.put(1) #, wait=True)
+
         print(self.name, "checking armed status")
         self._acquisition_signal.put(1) #, wait=True)
         while self.armed.get() != 1:
@@ -255,7 +260,7 @@ class PilatusExtTrigger(PilatusDetector):
         # Only one Pilatus has to send the trigger
         if self.name == first_PilatusExt():
             while pilatus_trigger_lock.locked():
-                time.sleep(0.05)
+                time.sleep(0.005)
             print("triggering")
             self._trigger_signal.put(1, wait=True)
             self._trigger_signal.put(0, wait=True)
@@ -282,7 +287,7 @@ class LIXPilatusExt(PilatusExtTrigger):
     #stats3 = Cpt(StatsPlugin, 'Stats3:')
     #stats4 = Cpt(StatsPlugin, 'Stats4:')
 
-    reset_file_number = Cpt(Signal, name='reset_file_number', value=1)
+    #reset_file_number = Cpt(Signal, name='reset_file_number', value=1)
     HeaderString = Cpt(EpicsSignal, "cam1:HeaderString")   # was missing before 2018
 
     def __init__(self, *args, **kwargs):
@@ -335,6 +340,13 @@ def pilatus_ct_time(exp):
     for det in pilatus_detectors:
         det.cam.acquire_time.put(exp)
         det.cam.acquire_period.put(exp+0.005)
+        
+def pilatus_use_sub_directory(sd=None):
+    if sd is not None:
+        if sd[-1]!='/':
+            sd += '/'
+        makedirs(data_path+sd)
+    PilatusFilePlugin.sub_directory = sd
 
 def pilatus_set_thresh():
     ene = int(getE()/10*0.5+0.5)*0.01
@@ -345,9 +357,11 @@ def set_pil_num_images(num):
     for d in pilatus_detectors+pilatus_detectors_ext:
         d.set_num_images(num)
 
-def stage_pilatus():
+def stage_pilatus(multitrigger=True):
     for det in DETS:
-        if det.__class__ == LIXPilatusExt or det.__class__ == LIXPilatus:
+        if det.__class__ == LIXPilatusExt:
+            det.stage(multitrigger=multitrigger)
+        elif det.__class__ == LIXPilatus:
             det.stage()
             
 def unstage_pilatus():

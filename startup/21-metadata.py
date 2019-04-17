@@ -17,6 +17,7 @@ def update_metadata():
                         'vfm_y1': vfm.y1.position,
                         'vfm_y2': vfm.y2.position,
                         })
+    '''
     RE.md['CRL'] = ({'state': crl.state(), 
                      'x1': crl.x1.position,
                      'y1': crl.y1.position,
@@ -24,7 +25,8 @@ def update_metadata():
                      'y1': crl.y2.position,
                      'z': crl.z.position,
                     })
-    RE.md['slits'] = ({'SSA': {'dx': ssa1.dx.position, 'dy': ssa1.dy.position}, 
+    '''
+    RE.md['slits'] = ({#'SSA': {'dx': ssa1.dx.position, 'dy': ssa1.dy.position}, 
                        'DDA': {'x': dda.x.position, 'y': dda.y.position, 'dx': dda.dx.position, 'dy': dda.dy.position },
                        'Sg': {'x': sg2.x.position, 'y': sg2.y.position, 'dx': sg2.dx.position, 'dy': sg2.dy.position },
                       })
