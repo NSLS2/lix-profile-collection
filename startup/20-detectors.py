@@ -126,12 +126,16 @@ class StandardProsilica(SingleTrigger, DetectorBase):
         d = self.snapshot(ROIs=[[0, size_x, 0, size_y]])[0]
         imageio.imwrite(fn, d)    
         
-    def watch_for_change(self, max_thresh=0, sigma_thresh=0, lock=None, poll_rate=0.05):
+    def watch_for_change(self, max_thresh=0, sigma_thresh=0, lock=None, poll_rate=0.05, timeout=10):
         """ lock should have been acquired before this function is called
             when a change is observed, release the lock and return
         """
+        t1 = time.time()
         while True:
-            if self.stat1.max_value.get()>max_thresh and self.stat1.sigma.get()>sigma_thresh:
+            if self.stats1.max_value.get()>max_thresh and self.stats1.sigma.get()>sigma_thresh:
+                break
+            t2 = time.time()
+            if t2-t1>timeout:
                 break
             time.sleep(poll_rate)
         if lock is not None:

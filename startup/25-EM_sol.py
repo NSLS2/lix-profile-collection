@@ -27,7 +27,8 @@ class SolutionScatteringControlUnit(Device):
     vc_4port = Cpt(EpicsSignal, "vc_4port_valve")
     serial_busy = Cpt(EpicsSignal, "busy")
     ready = Cpt(EpicsSignal, "ready")
-    
+    pause_request = Cpt(EpicsSignal, "pause")
+ 
     def halt(self):
         self.halt_pump.put(1)
         self.water_pump.put('off')
@@ -72,7 +73,6 @@ class SolutionScatteringControlUnit(Device):
             self.wait()
             dV=-dO
         
-        
 default_solution_scattering_config_file = '/GPFS/xf16id/config.solution'
 # y position of the middle flow-cell
 # y spacing between flow cells
@@ -94,7 +94,7 @@ class SolutionScatteringExperimentalModule():
     # the flow cells are designated 1 (bottom), 2 and 3
     # needle 1 is connected to the bottom flowcell, needle 2 connected to the top, HPLC middle
     flowcell_nd = {'upstream': 'top', 'downstream': 'bottom'}
-    flowcell_pos = {'bottom': 4.8, 'middle': 0.299, 'top': -4.149}  # 2018/10/10
+    flowcell_pos = {'bottom': 4.1893, 'middle': -0.298, 'top': -4.77}  # 2018/10/10
     #{'top': -6.33, 'middle': -1.36, 'bottom': 3.15} # SC changed bottom from 3.78 07/12/17
     # this is the 4-port valve piosition necessary for the wash the needle
     p4_needle_to_wash = {'upstream': 1, 'downstream': 0}
@@ -127,10 +127,11 @@ class SolutionScatteringExperimentalModule():
     # SC changed the value from 600 on 7/9/17
     default_load_pump_speed = 350     
     vol_p4_to_cell = {'upstream': -140, 'downstream': -145}
-    # SC done changes 02/13/18 --> 
-    #   downstream value reduced to (92 from 104) 7/9/17, upstream changed from 110 to 100 
-    vol_tube_to_cell = {'upstream': 132, 'downstream': 132} 
-    vol_sample_headroom = 13
+    # 2019/02/14, chaned from 132 to 127
+    vol_tube_to_cell = {'upstream': 122, 'downstream': 121} 
+    vol_sample_headroom = 5 #2019/02/14 reduced from 13
+    vol_flowcell_headroom=15 #2019/02/14 
+    camera_trigger_thresh = 20
     
     # these numbers are for the 2016 version tube holder
     #tube1_pos = -15.95     # relative to well position
@@ -142,6 +143,9 @@ class SolutionScatteringExperimentalModule():
 
     default_dry_time = 30
     default_wash_repeats = 5
+    
+    # set up camera 
+    cam = setup_cam("XF:16IDC-BI{Cam:Sol}", "camSol")
     
     def __init__(self):
         # important to home the stages !!!!!
@@ -177,23 +181,11 @@ class SolutionScatteringExperimentalModule():
         if state not in ['open', 'close']:
             raise Exception("the door state should be either open or close.")
             
-        self.ctrl.sv_door_lower.put(state)
-        
         if state=='open':
-            for i in range(10):
-                if self.DoorOpen.get():
-                    break
-                sleep(0.5)
-            if self.DoorOpen.get()==0:
-                raise Exception("Sample door is not open.")
+            setSignal(sol.ctrl.sv_door_lower, 1, sol.DoorOpen)
         else: 
-            for i in range(10):
-                if self.DoorOpen.get()==0:
-                    break
-                sleep(0.5)
-            if self.DoorOpen.get()==1:
-                raise Exception("Sample door is still open.")
-        
+            setSignal(sol.ctrl.sv_door_lower, 0, sol.DoorOpen)
+            
     # homing procedure without encoder strip [obsolete]:
     #     reduce motor current, drive sol.holder_x in the possitive direction to hit the hard stop
     #     move the motor back by 0.5mm, set the current position to 37.5 ("park" position)
@@ -258,7 +250,7 @@ class SolutionScatteringExperimentalModule():
             position 0 is the washing well 
         '''
         # any time the sample holder is moving, the solution EM is no longer ready
-        self.EMready.put(0)
+        setSignal(self.EMready, 0)
 
         if tn not in range(0,self.Ntube+1) and tn!='park':
             raise RuntimeError('invalid tube position %d, must be 0 (drain) or 1-18, or \'park\' !!' % tn)
@@ -281,7 +273,7 @@ class SolutionScatteringExperimentalModule():
             sleep(0.5)
         print('motion completed.')
         if tn=='park':
-            self.EMready.put(1)
+            setSignal(self.EMready, 1)
         elif self.DoorOpen.get()==1:
             self.move_door('close')
          
@@ -351,6 +343,19 @@ class SolutionScatteringExperimentalModule():
 
         self.move_tube_holder('down')
         
+    def reload_syringe_pump(self):
+        # make room to load sample from the PCR tube
+        if np.fabs(self.ctrl.piston_pos.get()-self.default_piston_pos)<1.:
+            return
+        
+        print(time.asctime(), ": reloading the syringe pump.")
+        self.ctrl.pump_spd.put(self.default_pump_speed)
+        self.ctrl.valve_pos.put("res")
+        self.ctrl.pump_mvA(self.default_piston_pos)
+        self.ctrl.wait()
+        print(time.asctime(), ": finished reloading the syringe pump.")
+    
+    
     def prepare_to_load_sample(self, tn, nd=None):
         nd = self.verify_needle_for_tube(tn, nd)    
         if self.needle_dirty_flag[nd]:
@@ -379,41 +384,38 @@ class SolutionScatteringExperimentalModule():
         a=self.return_piston_pos
         self.ctrl.pump_spd.put(self.default_load_pump_speed)
         self.move_tube_holder('up') 
-        self.ctrl.pump_mvR(vol+self.vol_sample_headroom)
+        self.ctrl.pump_mvR(vol)
         #self.ctrl.pump_mvR(self.vol_tube_to_cell[nd]) ## load the sample fron the PCR tube into the cell
         self.ctrl.wait()
-        
         self.move_tube_holder('down')
         if self.pcr_holder_down.get()==0:
             raise RuntimeError('sample holder is not down!!')
         else:
             print('Sample holder is down.')
+        #self.ctrl.pump_mvA(self.return_piston_pos+self.vol_tube_to_cell[nd])
+        #self.ctrl.wait()
+    
+    def prepare_to_measure(self, nd, wait=True):
+        """ move the sample from the injection needle to just before the sample cell
+            self.return_piston_pos is the piston position before the sample aspirated into the needle 
+        """
         self.ctrl.pump_mvA(self.return_piston_pos+self.vol_tube_to_cell[nd])
-        self.ctrl.wait()
+        if wait:
+            self.ctrl.wait()
     
-    def getsigmax(self):
-        return caget("XF:16IDC-BI{Cam:Sol}Stats1:MaxValue_RBV-Thresh")
+    def prepare_to_return_sample(self, wait=True):
+        """ move the sample back to the injection needle
+            self.return_piston_pos is the piston position before the sample aspirated into the needle 
+        """
+        self.ctrl.pump_mvA(self.return_piston_pos)#+self.load_vol)
+        if wait:
+            self.ctrl.wait()
     
-    def stat1max(self):
-        return caget("XF:16IDC-BI{Cam:Sol}Stats1:MaxValue_RBV")
-    
-    def getthres(self):
-        return caget("XF:16IDC-BI{Cam:Sol}Stats1:MaxValue_RBV-Thresh.INPB")
-    
-    def stat1status(self):
-        g1=0
-        #g2=sefl.stat1max()
-        while True:
-            g2=self.stat1max()
-            th=self.getthres()
-            if g2>=np.int(th):
-                break
-            sleep(0.05)
-        g1=1
-        print('done')
-        
         
     def collect_data(self, vol=45, exp=2, repeats=3, sample_name='test', check_sname=True):
+        global DETS
+        DETS=[em1,em2,pil1M_ext,pilW1_ext,pilW2_ext]
+        
         pilatus_ct_time(exp)
         pilatus_number_reset(True)
         
@@ -421,32 +423,23 @@ class SolutionScatteringExperimentalModule():
         set_pil_num_images(repeats)
         
         # pump_spd unit is ul/min
-        self.ctrl.pump_spd.put(60.*vol/(repeats*exp))
-        #print('collecting data, %d of %d repeats ...' % (n+1, repeats))
-        th = threading.Thread(target=self.ctrl.delayed_mvR, args=(vol, ) )
-        th.start()
-        #print('sample loaded')
-        set_pil_num_images(repeats)
-        ## Using camera to trigger data acquisition
-        #while True:
-        #    g2 = self.getsigmax()
-        #    if g2==1:
-        #        break
-        #    sleep(0.02)
-        # using Max Value for triggering
-        #self.stat1status()
-        # if using pilXX
-        RE(ct([em1,em2,pil1M,pilW1,pilW2], num=1))
-        # if using pilXX_ext
-        #RE(ct([em1,em2,pil1M_ext,pilW1_ext,pilW2_ext], num=repeats))
+        self.ctrl.pump_spd.put(60.*vol/(repeats*exp)) # *0.85) # this was necesary when there is a delay between frames
+        
+        
+        # stage the pilatus detectors first to be sure that the detector are ready
+        stage_pilatus(multitrigger=False)
+        pilatus_trigger_lock.acquire()
+        self.ctrl.pump_mvR(vol+self.vol_flowcell_headroom)
+        # monitor sample arrival on the camera
+        threading.Thread(target=self.cam.watch_for_change,
+                         args=(0, self.camera_trigger_thresh, pilatus_trigger_lock,)).start()
+        RE(ct(DETS, num=1))
         self.ctrl.wait()
         
-        #pilatus_number_reset(False)
         self.ctrl.pump_spd.put(self.default_pump_speed)
-        if vol<0:  # odd number of repeats, return sample to original position
-            self.ctrl.pump_mvR(vol)
-        self.ctrl.wait()
-
+    
+    #self.select_flow_cell(self.flowcell_nd[nd])
+    
     def return_sample(self):
         ''' assuming that the sample has just been measured
             dump the sample back into the PCR tube
@@ -459,27 +452,64 @@ class SolutionScatteringExperimentalModule():
         
     # delay is after load_sample and measure, this is useful for temperature control    
     def measure(self, tn, nd=None, vol=50, exp=5, repeats=3, sample_name='test', 
-                delay=0, returnSample=True, washCell=True, check_sname=True):
-        ''' measure(self, tn, nd, vol, exp, repeats, sample_name='test')
-            tn: tube number: 1-18
-            nd: needle, "upstream" or "downstream", if need to specify
+                delay=0, returnSample=True, washCell=True, concurrentOp=False):
+        ''' tn: tube number: 1-18
             exp: exposure time
             repeats: # of exposures
-        '''
+            returnSample: if False, the sample is washed into the drain, can save time
+            concurrentOp: wash the other cell while the scattering measurement takes place
+            washCell: wash cell after the measurements, ignored if running concurrent ops 
+            delay: pause after load_sample, may be useful for temperature control    
+        '''        
         
-        nd = self.verify_needle_for_tube(tn, nd)
+        nd = self.verify_needle_for_tube(tn,nd)
+        # this should have been completed already in normal ops
+        if self.needle_dirty_flag[nd]:
+            self.wash_needle(nd)
+            
+        self.select_tube_pos(tn)                
+        # load_sample() knows which injection needle to use
+        # headroom may need to be adjusted depending on the mode of operations
+        # can be minimal if sample cam is used to trigger data collection, but never zero
+        print('loading')
+        self.load_sample(vol + self.vol_sample_headroom)
+        print('done')
+        # this is where operations can be concurrent on both flow channels
+        if concurrentOp:
+            # the other needle
+            nd1 = self.verify_needle_for_tube(tn+1,nd)
+            th = threading.Thread(target=self.wash_needle, args=(nd1, ) )
+            th.start()        
         
+        # move the sample to just before the flow cell
         self.select_flow_cell(self.flowcell_nd[nd])
-        self.prepare_to_load_sample(tn, nd)
-        self.load_sample(vol)
+        self.prepare_to_measure(nd)
         if delay>0:
             countdown("delay before exposure:",delay)
-        self.collect_data(vol, exp, repeats, sample_name, check_sname=check_sname)
+        
+        print('****************')
+        print('collecting data %s' %sample_name)
+        self.collect_data(vol, exp, repeats, sample_name)
         
         if returnSample:
+            # move the sample back to the end of the injection needle
+            self.prepare_to_return_sample()
+        
+        if concurrentOp:
+            # get the syringe pump ready for the next step
+            self.reload_syringe_pump()
+            # make sure wash_needel() is completed for the other needle
+            th.join()  
+        # end of concurrent operations
+        
+        if returnSample:
+            self.select_tube_pos(tn)                
             self.return_sample()
-        if returnSample and washCell:
-            self.wash_needle(nd)                
+        if washCell and not concurrentOp:  
+            th = threading.Thread(target=self.wash_needle, args=(nd, ) )
+            th.start()        
+            self.reload_syringe_pump()
+            th.join()                
 
     def mov_delay(self, length):
         while self.ctrl.ready.get()==0:
@@ -503,35 +533,6 @@ class SolutionScatteringExperimentalModule():
         self.sample_x.velocity.put(0)
         movr(self.sample_x, length)
 
-
-def measure_samples(spreadSheet, holderName, exp_time=1, repeats=5, vol=45, check_sname=True):
-    sol.default_wash_repeats=10
-    sol.default_dry_time=30
-
-    samples = get_samples(spreadSheet, holderName, check_sname)
-    uids = []
-    for k,s in samples.items():
-        sol.measure(s['position'], vol=vol, exp=exp_time, repeats=repeats, sample_name=k, check_sname=check_sname)
-        #print(s['position'], k)
-        uids.append(db[-1].start['uid'])
-        
-    # this corresponds to the detector definition is sol.collect()
-    # software trigger, but num_images>1
-    pilatus_trigger_mode = triggerMode.software_trigger_multi_frame
-    pack_h5(uids, fn=holderName)   
-    
-
-def HT_pack_h5(spreadSheet, holderName, run_id):
-    samples = get_samples(spreadSheet, holderName, check_sname=False)
-    uids = []
-    for s in samples.keys():
-        uids.append(list_scans(run_id=run_id, sample_name=s)[0])
-    # this corresponds to the detector definition is sol.collect()
-    # software trigger, but num_images>1
-    pilatus_trigger_mode = triggerMode.software_trigger_multi_frame
-    pack_h5(uids, fn=holderName)
-    
-    
         
         
 p = PV('XF:16IDC-ES:Sol{ctrl}busy') 
@@ -540,5 +541,4 @@ if p.connect():
     sol = SolutionScatteringExperimentalModule()
 else:
     print("solution scattering EM is not available.")
-    
 del p

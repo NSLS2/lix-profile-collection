@@ -102,7 +102,7 @@ class EM_Sol_Robot():
 
 	def runTask(self,cmd,timeout):
 		cmdLists = ['Load', 'Mount', 'Unmount', 'Unload', 
-                'Initialize', 'Home', 'Push', 'Idle',
+                'Initialize', 'PowerOff', 'Home', 'Push', 'Idle',
                 'OpenStorageDoor', 'ShutStorageDoor', 'OpenGripper', 'CloseGripper']
 		if cmd not in cmdLists:
 			raise Exception(cmd+" is not a valid Task.")
@@ -115,6 +115,8 @@ class EM_Sol_Robot():
 	def powerOn(self):
 		self.runTask('Initialize', self.CMD_TIMEOUT)
 
+	def powerOff(self):
+		self.runTask('PowerOff', self.CMD_TIMEOUT)
 
 	def goHome(self):
  		self.runTask('Home', self.CMD_TIMEOUT)
