@@ -1,9 +1,7 @@
-
 from collections import OrderedDict
 from ophyd.signal import (EpicsSignal, EpicsSignalRO)
 from ophyd.device import Device
 from ophyd.device import (Component as C, DynamicDeviceComponent as DDC)
-
 
 class Channel(Device):
     '''Bimorph Channel'''
@@ -34,8 +32,6 @@ def add_channels(range_, **kwargs):
         defn[attr] = (Channel, ':U{}'.format(ch), kwargs)
 
     return defn
-
-
 
 class Bimorph(Device):
     '''Bimorph HV Power Source'''
