@@ -14,6 +14,7 @@ class triggerMode(Enum):
     software_trigger_multi_frame = 2
     external_trigger = 3
     fly_scan = 4
+    #external_trigger_multi_frame = 5  # this is unnecessary, difference is fpp
 
 global pilatus_trigger_mode
 global default_data_path_root
@@ -30,13 +31,15 @@ image_size = {
 }
 
 # if the cbf files have been moved already
-CBF_replace_data_path = True
+CBF_replace_data_path = False
 
 class PilatusCBFHandler(HandlerBase):
     specs = {'AD_CBF'} | HandlerBase.specs
 
     def __init__(self, rpath, template, filename, frame_per_point=1, initial_number=1):
-        if frame_per_point>1:
+        #if frame_per_point>1:
+        print(f'Initializing CBF handler for {pilatus_trigger_mode} ...')
+        if pilatus_trigger_mode != triggerMode.software_trigger_single_frame and frame_per_point>1: 
             # file name should look like test_000125_SAXS_00001.cbf, instead of test_000125_SAXS.cbf
             template = template[:-4]+"_%05d.cbf"
 
@@ -79,16 +82,17 @@ class PilatusCBFHandler(HandlerBase):
         print("  ", self._initial_number, point_number, self._fpp)
         print("  ", self._template, self._path, self._initial_number)
      
-        if pilatus_trigger_mode == triggerMode.software_trigger_single_frame:
+        if pilatus_trigger_mode == triggerMode.software_trigger_single_frame or self._fpp == 1:
             fn = self._template % (self._path, self._filename, point_number+1)
             ret.append(self.get_data(fn))
-        elif pilatus_trigger_mode == triggerMode.software_trigger_multi_frame or pilatus_trigger_mode == triggerMode.fly_scan:
+        elif pilatus_trigger_mode in [triggerMode.software_trigger_multi_frame,
+                                      triggerMode.fly_scan]:
             for i in range(self._fpp):
                 fn = self._template % (self._path, self._filename, point_number+1, i) 
                 #data = self.get_data(fn)
                 #print(f"{i}: {data.shape}")
                 ret.append(self.get_data(fn))
-        elif pilatus_trigger_mode == triggerMode.external_trigger:
+        elif pilatus_trigger_mode==triggerMode.external_trigger:
             fn = self._template % (self._path, self._filename, start, point_number)
             ret.append(self.get_data(fn))
         
