@@ -369,6 +369,9 @@ class XPStraj(Device):
         self.start_time = time.time()
         
         for i in range(n_retry):
+            # can this generate some triggers and then fail? if so this failure should kill the run
+            # as there is no book keeping to know which images from the detectors are garbage
+            # and the postions and image sequences will be off
             [err, ret] = self.xps.MultipleAxesPVTExecution(self.sID, self.group, traj_fn, 1)
             if err=='0': 
                 break
@@ -427,7 +430,7 @@ class XPStraj(Device):
         dt = self.traj_par['segment_duration']
         self.read_back['timestamp'] += list(self.start_time + (0.5 + Nr + np.arange(N+1))*dt)
         if self.traj_par['motor2'] is not None:
-            self.read_back['slow_axis'] += [self.traj_par['motor2'].position]
+            self.read_back['slow_axis'] += [self.traj_par['motor2'].position] # * N_fast
             self.read_back['timestamp2'] += [time.time()]
 
 try:
@@ -464,11 +467,9 @@ def raster(detectors, exp_time, fast_axis, f_start, f_end, Nfast,
     if slow_axis is not None:
         p0_slow = slow_axis.position
         pos_s = p0_slow+np.linspace(s_start, s_end, Nslow)
-    else:
-        Nslow = 1
-    
-    if not set(detectors).issubset(pilatus_detectors_ext):
-        raise Exception("only pilatus_detectors_ext can be used in this plan.")
+    elif Nslow != 1:
+        raise Exception(f"invlaid input, did not pass slow_axis, but passed Nslow != 1 ({Nslow})")
+
     xps_trj.detectors = detectors
     
     pilatus_ct_time(exp_time)
