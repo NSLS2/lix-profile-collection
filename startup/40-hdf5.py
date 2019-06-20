@@ -108,6 +108,7 @@ def pack_h5(uids, dest_dir='', fn=None, fix_sample_name=True,
         
     if attach_uv_file:
         # by default the UV file should be saved in /GPFS/xf16id/Windows/
+        # ideally this should be specified, as the default file is overwritten quickly
         h5_attach_hplc(fn, '/GPFS/xf16id/Windows/hplc_export.txt')
     
     print(f"finished packing {fn} ...")
@@ -129,8 +130,10 @@ def h5_attach_hplc(fn_h5, fn_hplc, grp_name=None):
         grp_name = list(f.keys())[0]
     # this group is created by suitcase if using flyer-based hplc_scan
     # otherwise it has to be created first
-    #grp = f["%s/hplc/data" % grp_name]
-    grp = f.create_group(f"{grp_name}/hplc/data")
+    if 'hplc' in f[f"{grp_name}"].keys():
+        grp = f["%s/hplc/data" % grp_name]
+    else:
+        grp = f.create_group(f"{grp_name}/hplc/data")
     
     hdstr, dhplc = readShimadzuDatafile(fn_hplc)
     
@@ -220,11 +223,12 @@ def pack_and_move(data_type, uid, dest_dir):
             del dt,dt_exp            
     elif data_type=="HPLC":
         uids = [uid]
-        #if db[uid].start['plan_name']!="hplc_scan":
-        #    print("not HPLC data ...")
-        #    return
-        # this was software_trigger_single_frame when using the flyer-based hplc_scan
-        pilatus_trigger_mode = triggerMode.software_trigger_multi_frame
+        if db[uid].start['plan_name']=="hplc_scan":
+            # this was software_trigger_single_frame when using the flyer-based hplc_scan
+            pilatus_trigger_mode = triggerMode.software_trigger_single_frame
+        else:
+            # data collected using ct
+            pilatus_trigger_mode = triggerMode.software_trigger_multi_frame
         fn = pack_h5_with_lock(uid, dest_dir=dest_dir, attach_uv_file=True)
         if fn is not None and dt_exp is not None:
             print('procesing ...')

@@ -495,7 +495,6 @@ class SolutionScatteringExperimentalModule():
         self.ctrl.wait()       
         self.move_tube_holder('down')
         
-    # delay is after load_sample and measure, this is useful for temperature control    
     def measure(self, tn, nd=None, vol=50, exp=5, repeats=3, sample_name='test', 
                 delay=0, returnSample=True, washCell=True, concurrentOp=False):
         ''' tn: tube number: 1-18

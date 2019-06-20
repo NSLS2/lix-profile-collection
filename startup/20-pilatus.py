@@ -83,8 +83,11 @@ class PilatusFilePlugin(Device, FileStoreIterativeWrite):
 
         if PilatusFilePlugin.sub_directory is not None:
             f_path = data_path+PilatusFilePlugin.sub_directory
+            RE.md['subdir'] = PilatusFilePlugin.sub_directory
         else:
             f_path = data_path
+            if 'subdir' in RE.md.keys():
+                del RE.md['subdir']
         f_fn = current_sample
         # file_path must ends with '/'
         print('%s: setting file path ...' % self.name)
