@@ -3,8 +3,6 @@ from ophyd import ( Component as Cpt, ADComponent, Signal,
                     ROIPlugin, StatsPlugin, ImagePlugin,
                     SingleTrigger, PilatusDetector, Device)
 
-# deprecated
-#from ophyd.areadetector.filestore_mixins import FileStoreBulkWrite
 from ophyd.areadetector.filestore_mixins import FileStoreIterativeWrite
 
 from ophyd.utils import set_and_wait
@@ -12,15 +10,14 @@ from databroker.assets.handlers_base import HandlerBase
 from ophyd.device import Staged
 from pathlib import Path
 
-import fabio
 import os,time,threading
 from types import SimpleNamespace
 
 global DETS
-global DET_replace_data_path
-global default_data_path_root
-global substitute_data_path_root
-DET_replace_data_path = False
+#global DET_replace_data_path
+#global default_data_path_root
+#global substitute_data_path_root
+#DET_replace_data_path = False
 
 global pilatus_trigger_lock
 pilatus_trigger_lock = threading.Lock()
@@ -32,6 +29,7 @@ class PilatusFilePlugin(Device, FileStoreIterativeWrite):
     file_template = ADComponent(EpicsSignalWithRBV, 'FileTemplate', string=True)
     file_number_reset = 1
     sub_directory = None
+    froot = data_file_path.gpfs
     enable = SimpleNamespace(get=lambda: True)
 
     # this is not necessary to record since it contains the UID for the scan, useful
@@ -90,8 +88,10 @@ class PilatusFilePlugin(Device, FileStoreIterativeWrite):
         f_fn = current_sample
         # file_path must ends with '/'
         print('%s: setting file path ...' % self.name)
-        if DET_replace_data_path:
-            f_path = f_path.replace(default_data_path_root, substitute_data_path_root)
+        #if DET_replace_data_path:
+        if self.froot == data_file_path.ramdisk:
+            #f_path = f_path.replace(default_data_path_root, substitute_data_path_root)
+            f_path = f_path.replace(data_file_path.gpfs.value, data_file_path.ramdisk.value) 
         set_and_wait(self.file_path, f_path, timeout=99999) 
         #set_and_wait(self.file_path, f_path, timeout=99999)
         set_and_wait(self.file_name, f_fn, timeout=99999)

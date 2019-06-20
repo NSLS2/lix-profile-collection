@@ -1,8 +1,26 @@
 import glob,re
+from enum import Enum
+
+#global default_data_path_root
+#global substitute_data_path_root
+
+class data_file_path(Enum):
+    gpfs = '/GPFS/xf16id/exp_path'
+    ramdisk = '/exp_path'
+
+#default_data_path_root = '/GPFS/xf16id/exp_path/'
+#substitute_data_path_root = '/exp_path/'
+# DET_use_substitue_data_path: 
+#     if true, save data into substitue path, but eventaully moved to the default path
+#     the idea is that /exp_path would be the RAM disk on P1M_PPU
+#     value assigned in 20-pilatus.py
+# CBF_replace_data_path:
+#     to let the CBF file handler know whether the files have been moved
+#     value assigned in 33-CBFhandler.py
 
 current_sample="test"
 
-def check_sample_name(sample_name, check_for_duplicate=True):    
+def check_sample_name(sample_name, sub_dir=None, check_for_duplicate=True, check_dir=False):    
     if len(sample_name)>42:  # file name length limit for Pilatus detectors
         print("Error: the sample name is too long:", len(sample_name))
         return False
@@ -12,9 +30,19 @@ def check_sample_name(sample_name, check_for_duplicate=True):
         return False
 
     if check_for_duplicate:
-        fl = glob.glob(data_path+sample_name+"_000*")
+        f_path = data_path
+        if sub_dir is not None:
+            f_path += ('/'+sub_dir+'/')
+        #if DET_replace_data_path:
+            #f_path = data_path.replace(default_data_path_root, substitute_data_path_root)
+        if PilatusFilePlugin.froot == data_file_path.ramdisk:
+            f_path = data_path.replace(data_file_path.gpfs.value, data_file_path.ramdisk.value)
+        if check_dir:
+            fl = glob.glob(f_path+sample_name)
+        else:
+            fl = glob.glob(f_path+sample_name+"_000*")
         if len(fl)>0:
-            print("Error: files already exist for this sample name: ", sample_name)
+            print(f"Error: name already exists: {sample_name} at {f_path}")
             return False
 
     return True
@@ -33,7 +61,7 @@ def change_sample(sample_name=None, check_sname=True, exception=True):
     if sample_name is None or sample_name == "":
         sample_name = "test"
     elif check_sname:
-        ret = check_sample_name(sample_name, exception)
+        ret = check_sample_name(sample_name) #, exception)
         if ret==False and exception:
             raise Exception()
 

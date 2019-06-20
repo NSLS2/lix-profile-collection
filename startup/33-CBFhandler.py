@@ -17,9 +17,9 @@ class triggerMode(Enum):
     #external_trigger_multi_frame = 5  # this is unnecessary, difference is fpp
 
 global pilatus_trigger_mode
-global default_data_path_root
-global substitute_data_path_root
-global CBF_replace_data_path
+#global default_data_path_root
+#global substitute_data_path_root
+#global CBF_replace_data_path
 
 pilatus_trigger_mode = triggerMode.software_trigger_single_frame
 
@@ -27,14 +27,15 @@ pilatus_trigger_mode = triggerMode.software_trigger_single_frame
 image_size = {
     'SAXS': (1043, 981),
     'WAXS1': (619, 487),
-    'WAXS2': (619, 487)
+    'WAXS2': (1043, 981)
 }
 
 # if the cbf files have been moved already
-CBF_replace_data_path = False
+#CBF_replace_data_path = False
 
 class PilatusCBFHandler(HandlerBase):
     specs = {'AD_CBF'} | HandlerBase.specs
+    froot = data_file_path.gpfs 
 
     def __init__(self, rpath, template, filename, frame_per_point=1, initial_number=1):
         #if frame_per_point>1:
@@ -42,24 +43,34 @@ class PilatusCBFHandler(HandlerBase):
         if pilatus_trigger_mode != triggerMode.software_trigger_single_frame and frame_per_point>1: 
             # file name should look like test_000125_SAXS_00001.cbf, instead of test_000125_SAXS.cbf
             template = template[:-4]+"_%05d.cbf"
-
-        self._path = os.path.join(rpath, '')
-        # this is a workaround for data that are save in /exp_path then moved to /GPFS/xf16id/exp_path
-        if self._path.find(substitute_data_path_root)==0 and CBF_replace_data_path:
-            print(f'replacing path name {substitute_data_path_root} -> {default_data_path_root} ..')
-            self._path = self._path.replace(substitute_data_path_root, default_data_path_root)
         
-        self._fpp = frame_per_point
         self._template = template
+        self._fpp = frame_per_point
         self._filename = filename
         self._initial_number = initial_number
         self._image_size = None
+        self._default_path = os.path.join(rpath, '')
+        self._path = ""
+        
         for k in image_size:
             if template.find(k)>=0:
                 self._image_size = image_size[k]
         if self._image_size is None:
             raise Exception(f'Unrecognized data file extension in filename template: {template}')
-                
+
+        for fr in data_file_path:
+            if self._default_path.find(fr.value)==0:
+                self._dir = self._default_path[len(fr.value):]
+                return
+        raise Exception(f"invalid file path: {self._default_path}")
+    
+    def update_path(self):
+        # this is a workaround for data that are save in /exp_path then moved to /GPFS/xf16id/exp_path
+        if not self.froot in data_file_path:
+            raise Exception(f"invalid froot: {self.froot}")
+        self._path = self.froot.value+self._dir 
+        print(f"updating path, will read data from {self._path} ...")
+    
     def get_data(self, fn):
         """ the file may not exist
         """
@@ -67,7 +78,7 @@ class PilatusCBFHandler(HandlerBase):
             img = fabio.open(fn)
             data = img.data
             if data.shape!=self._image_size:
-                print(f'got incorrect image size from {fn}: {data.shape}, return an empty frame instead.')
+                print(f'got incorrect image size from {fn}: {data.shape}') #, return an empty frame instead.')
         except:
             print(f'could not read {fn}, return an empty frame instead.')
             data = np.zeros(self._image_size)
@@ -81,6 +92,7 @@ class PilatusCBFHandler(HandlerBase):
         print("CBF handler called: start=%d, stop=%d" % (start, stop))
         print("  ", self._initial_number, point_number, self._fpp)
         print("  ", self._template, self._path, self._initial_number)
+        self.update_path()
      
         if pilatus_trigger_mode == triggerMode.software_trigger_single_frame or self._fpp == 1:
             fn = self._template % (self._path, self._filename, point_number+1)

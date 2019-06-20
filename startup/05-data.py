@@ -1,20 +1,5 @@
 import time
 
-global default_data_path_root
-global substitute_data_path_root
-global CBF_replace_data_path
-global DET_replace_data_path
-
-default_data_path_root = '/GPFS/xf16id/exp_path/'
-substitute_data_path_root = '/exp_path/'
-# DET_use_substitue_data_path: 
-#     if true, save data into substitue path, but eventaully moved to the default path
-#     the idea is that /exp_path would be the RAM disk on P1M_PPU
-#     value assigned in 20-pilatus.py
-# CBF_replace_data_path:
-#     to let the CBF file handler know whether the files have been moved
-#     value assigned in 33-CBFhandler.py
-
 last_scan_uid = None
 last_scan_id = None
 
