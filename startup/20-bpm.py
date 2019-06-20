@@ -37,12 +37,12 @@ class NSLS_EM1(NSLS_EM):
 
 best = Best('XF:16IDB-CT{Best}',name='best')
 
-#em1 = NSLS_EM1('XF:16IDC-ES{NSLS_EM:1}', name='em1')
-#em1.read_attrs = ['current1', 'current2', 'current3', 'current4', 'sum_all']
-#em1.sum_all.mean_value.kind = 'hinted'
-
 em2 = NSLS_EM1('XF:16IDC-ES{NSLS_EM:2}', name='em2')
 em2.read_attrs = ['current1', 'current2', 'current3', 'current4', 'sum_all']
 em2.sum_all.mean_value.kind = 'hinted'
+
+em1 = NSLS_EM1('XF:16IDC-ES{NSLS_EM:1}', name='em1')
+em1.read_attrs = ['current1', 'current2', 'current3', 'current4', 'sum_all']
+em1.sum_all.mean_value.kind = 'hinted'
 
 #tetramm = TetrAMM('XF:16IDC-ES{TETRAMM:1}', name='tetramm')

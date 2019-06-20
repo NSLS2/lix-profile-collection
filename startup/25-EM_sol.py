@@ -94,7 +94,8 @@ class SolutionScatteringExperimentalModule():
     # the flow cells are designated 1 (bottom), 2 and 3
     # needle 1 is connected to the bottom flowcell, needle 2 connected to the top, HPLC middle
     flowcell_nd = {'upstream': 'top', 'downstream': 'bottom'}
-    flowcell_pos = {'bottom': 4.1893, 'middle': -0.298, 'top': -4.77}  # 2018/10/10
+    flowcell_pos = {'bottom': 3.75, 'middle': -0.8, 'top': -5.25}  # New cell changed by JB
+    #flowcell_pos = {'bottom': 4.2893, 'middle': -0.176, 'top': -4.68}  # 2018/10/10
     #{'top': -6.33, 'middle': -1.36, 'bottom': 3.15} # SC changed bottom from 3.78 07/12/17
     # this is the 4-port valve piosition necessary for the wash the needle
     p4_needle_to_wash = {'upstream': 1, 'downstream': 0}
@@ -131,7 +132,9 @@ class SolutionScatteringExperimentalModule():
     vol_tube_to_cell = {'upstream': 122, 'downstream': 121} 
     vol_sample_headroom = 5 #2019/02/14 reduced from 13
     vol_flowcell_headroom=15 #2019/02/14 
-    camera_trigger_thresh = 20
+    #mean_thresh = {'upstream': 75, 'downstream': 80} # Mean thresh added on 5/25/19 by SC
+    #min_thresh = {'upstream': 12, 'downstream': 12} # Mean thresh added on 5/25/19 by SC
+    #camera_trigger_thresh = 20
     
     # these numbers are for the 2016 version tube holder
     #tube1_pos = -15.95     # relative to well position
@@ -145,7 +148,7 @@ class SolutionScatteringExperimentalModule():
     default_wash_repeats = 5
     
     # set up camera 
-    cam = setup_cam("XF:16IDC-BI{Cam:Sol}", "camSol")
+    cam = setup_cam("XF:16IDA-BI{Cam:OAM}", "camOAM")
     
     def __init__(self):
         # important to home the stages !!!!!
@@ -237,6 +240,13 @@ class SolutionScatteringExperimentalModule():
     def load_config(self, fn):
         pass
     
+    def floating_threshold(self):
+        base_mean=self.cam.stats1.mean_value.get() 
+        base_min=self.cam.stats1.min_value.get() 
+        mean_thresh = base_mean + 15 
+        min_thresh = base_min + 15 
+        return mean_thresh,min_thresh
+    
     def select_flow_cell(self, cn):
         if self.disable_flow_cell_move:
             print("flow cell motion disabled !!!")
@@ -255,7 +265,8 @@ class SolutionScatteringExperimentalModule():
         if tn not in range(0,self.Ntube+1) and tn!='park':
             raise RuntimeError('invalid tube position %d, must be 0 (drain) or 1-18, or \'park\' !!' % tn)
         if self.pcr_holder_down.get()!=1:
-            raise RuntimeError('Cannot move holder when it is not down!!')
+            self.move_tube_holder("down")
+            #raise RuntimeError('Cannot move holder when it is not down!!')
 
         self.tube_pos = tn
         if tn=='park':
@@ -278,19 +289,24 @@ class SolutionScatteringExperimentalModule():
             self.move_door('close')
          
             
-    def move_tube_holder(self, pos):
+    def move_tube_holder(self, pos, retry=5):
         '''1 argument accepted:
            'up' or 'down'
            up allowed only when the hodler is anligned to needle
         '''
         if pos=='down':
             print('moving PCR tube holder down ...')
-            self.ctrl.sv_pcr_tubes.put('down')
-            self.ctrl.wait() 
-            # wait for the pneumatic actuator to settle
-            #addtition of new position sensor for sample holder actuator 12/2017:
-            while self.pcr_holder_down.get()!=1:
-                    sleep(0.5)
+            while retry>0:
+                self.ctrl.sv_pcr_tubes.put('down')
+                self.ctrl.wait() 
+                # wait for the pneumatic actuator to settle
+                #addtition of new position sensor for sample holder actuator 12/2017:
+                if self.pcr_holder_down.get()==1:
+                    break
+                sleep(0.5)
+                retry -= 1
+            if retry==0:
+                raise Exception("could not move the holder down.")
             self.tube_holder_pos = "down"                
         elif pos=='up':
             # if self.pcr_v_enable.get()==0 and (self.holder_x.position**2>1e-4 and self.tube_pos!=12):
@@ -361,7 +377,23 @@ class SolutionScatteringExperimentalModule():
         if self.needle_dirty_flag[nd]:
             self.wash_needle(nd)
         self.select_tube_pos(tn)
-        
+    
+    def load_water(self,nd=None):
+        #loading water for reference measurement
+        self.ctrl.vc_4port.put(self.p4_needle_to_load[nd])
+        # make room to load sample from teh PCR tube
+        self.ctrl.pump_spd.put(self.default_pump_speed)
+        self.ctrl.valve_pos.put("res")
+        print('loading water')
+        self.ctrl.pump_mvA(self.default_piston_pos)
+        self.ctrl.wait()
+        self.ctrl.valve_pos.put("sam")
+        print('towards cell')
+        # fill the tubing with water only upto the end of the flow channel
+        self.ctrl.pump_mvR(self.vol_p4_to_cell[nd]) 
+        self.ctrl.wait()
+        self.ctrl.pump_mvR(-45)
+    
     def load_sample(self, vol, nd=None):
         nd = self.verify_needle_for_tube(self.tube_pos, nd)
         if nd not in ('upstream', 'downstream'):
@@ -376,6 +408,7 @@ class SolutionScatteringExperimentalModule():
         self.ctrl.pump_mvA(self.default_piston_pos)
         self.ctrl.wait()
         self.ctrl.valve_pos.put("sam")
+        print('4p valve to flowcell')
         # fill the tubing with water only upto the end of the flow channel
         self.ctrl.pump_mvR(self.vol_p4_to_cell[nd]) 
         self.ctrl.wait()
@@ -384,6 +417,7 @@ class SolutionScatteringExperimentalModule():
         a=self.return_piston_pos
         self.ctrl.pump_spd.put(self.default_load_pump_speed)
         self.move_tube_holder('up') 
+        print("loading sample")
         self.ctrl.pump_mvR(vol)
         #self.ctrl.pump_mvR(self.vol_tube_to_cell[nd]) ## load the sample fron the PCR tube into the cell
         self.ctrl.wait()
@@ -399,6 +433,7 @@ class SolutionScatteringExperimentalModule():
         """ move the sample from the injection needle to just before the sample cell
             self.return_piston_pos is the piston position before the sample aspirated into the needle 
         """
+        print("moving sample closer to cell")
         self.ctrl.pump_mvA(self.return_piston_pos+self.vol_tube_to_cell[nd])
         if wait:
             self.ctrl.wait()
@@ -414,11 +449,14 @@ class SolutionScatteringExperimentalModule():
         
     def collect_data(self, vol=45, exp=2, repeats=3, sample_name='test', check_sname=True):
         global DETS
+        mean_thresh, min_thresh = self.floating_threshold() 
         DETS=[em1,em2,pil1M_ext,pilW1_ext,pilW2_ext]
+        nd = self.verify_needle_for_tube(self.tube_pos, nd=None)
         
         pilatus_ct_time(exp)
         pilatus_number_reset(True)
-        
+        #print(self.mean_thresh[nd])
+        #print(self.min_thresh[nd])
         change_sample(sample_name, check_sname=check_sname)
         set_pil_num_images(repeats)
         
@@ -430,15 +468,22 @@ class SolutionScatteringExperimentalModule():
         stage_pilatus(multitrigger=False)
         pilatus_trigger_lock.acquire()
         self.ctrl.pump_mvR(vol+self.vol_flowcell_headroom)
-        # monitor sample arrival on the camera
+        # monitor sample arrival on the camera [update on 5/25/19 to use mean and min thresh]
         threading.Thread(target=self.cam.watch_for_change,
-                         args=(0, self.camera_trigger_thresh, pilatus_trigger_lock,)).start()
-        RE(ct(DETS, num=1))
-        self.ctrl.wait()
+                         args=(mean_thresh, min_thresh, pilatus_trigger_lock,)).start()
+        #args=(self.mean_thresh[nd], self.min_thresh[nd], pilatus_trigger_lock,)).start() Threshold changed from fixed to floating --SC 6/10/19
         
+        em1.averaging_time.put(0.25)
+        em2.averaging_time.put(0.25)
+        em1.acquire.put(1)
+        em2.acquire.put(1)
+        sd.monitors = [em1.sum_all.mean_value, em2.sum_all.mean_value]
+        RE(ct([pil1M_ext,pilW1_ext,pilW2_ext], num=1))
+        sd.monitors = []
+        
+        self.ctrl.wait()
         self.ctrl.pump_spd.put(self.default_pump_speed)
     
-    #self.select_flow_cell(self.flowcell_nd[nd])
     
     def return_sample(self):
         ''' assuming that the sample has just been measured
@@ -534,7 +579,8 @@ class SolutionScatteringExperimentalModule():
         movr(self.sample_x, length)
 
         
-        
+# this should be moved to startup.py for solution scattering        
+"""
 p = PV('XF:16IDC-ES:Sol{ctrl}busy') 
 sleep(1)  # after 2017C1 shtdown, this delay becomes necessary
 if p.connect():
@@ -542,3 +588,4 @@ if p.connect():
 else:
     print("solution scattering EM is not available.")
 del p
+"""

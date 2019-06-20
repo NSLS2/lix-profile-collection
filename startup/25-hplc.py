@@ -10,8 +10,6 @@ from bluesky.plan_stubs import (complete, kickoff, collect, monitor, unmonitor,
                                 trigger_and_read)
 from bluesky.callbacks import LivePlot
 
-default_hplc_export_file = 'File\tZ:\\hplc_export.txt'
-
 class HPLCStatus(str, Enum):
     idle = "idle"
     waiting_injected = "waiting_injected"
@@ -163,6 +161,7 @@ def hplc_scan(detectors, monitors, *, md=None):
 
     return (yield from inner())
 
+"""
 def collect_hplc(sample_name, exp):#, CV=24, flowrate=0.5)
     change_sample(sample_name)
     sol.select_flow_cell('middle')
@@ -172,6 +171,6 @@ def collect_hplc(sample_name, exp):#, CV=24, flowrate=0.5)
     pilatus_ct_time(exp)
     update_metadata()
     RE(hplc_scan(detectors=[pil1M, pilW1, pilW2, em1, em2], monitors=[]))
-
+"""
         
 hplc = HPLC('XF:16IDC-ES:Sol{ctrl}HPLC', name='hplc', read_filepath=None, write_filepath=None)

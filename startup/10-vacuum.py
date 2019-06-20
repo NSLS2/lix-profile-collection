@@ -261,7 +261,7 @@ class VacuumSystem:
         while True:
             P0 = self.pressure(secName)
             t1 = time.time()
-            print("pressure in %s: %.3f, time lapses: %d     \r"%(secName,P0,t1-t0), end="")
+            print("pressure in %s: %.3f, time elapsed: %d     \r"%(secName,P0,t1-t0), end="")
             sys.stdout.flush()
             time.sleep(1)
             if P0<10.:
@@ -285,7 +285,7 @@ class VacuumSystem:
         while True:
             P0 = self.pressure(secName)
             t1 = time.time()
-            print("pressure in %s: %.3f, time lapses: %d    \r"%(secName,P0,t1-t0), end="")
+            print("pressure in %s: %.3f, time elapsed: %d    \r"%(secName,P0,t1-t0), end="")
             sys.stdout.flush()
             time.sleep(1)
             if P0>500.:

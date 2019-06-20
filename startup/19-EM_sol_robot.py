@@ -102,7 +102,7 @@ class EM_Sol_Robot():
 
 	def runTask(self,cmd,timeout):
 		cmdLists = ['Load', 'Mount', 'Unmount', 'Unload', 
-                'Initialize', 'PowerOff', 'Home', 'Push', 'Idle',
+                'Initialize', 'PowerOff', 'Home', 'Push', 'Idle','Park',
                 'OpenStorageDoor', 'ShutStorageDoor', 'OpenGripper', 'CloseGripper']
 		if cmd not in cmdLists:
 			raise Exception(cmd+" is not a valid Task.")
@@ -119,8 +119,18 @@ class EM_Sol_Robot():
 		self.runTask('PowerOff', self.CMD_TIMEOUT)
 
 	def goHome(self):
- 		self.runTask('Home', self.CMD_TIMEOUT)
+		cmdList = ['Initialize','Home']
+		for cmd in cmdList:
+			tskStat, sampleStat, exception = self.runTask(cmd, self.CMD_TIMEOUT)
+			if (tskStat.lower()!="done"):
+				raise Exception(cmd+" "+tskStat+" with exception "+exception)
 
+	def park(self):
+		cmdList = ['Initialize','Home','Park','PowerOff']
+		for cmd in cmdList:
+			tskStat, sampleStat, exception = self.runTask(cmd, self.CMD_TIMEOUT)
+			if (tskStat.lower()!="done"):
+				raise Exception(cmd+" "+tskStat+" with exception "+exception)
 
 	def loadTray(self,nTube):
 		if nTube<1 or nTube>20:
@@ -228,8 +238,8 @@ def testRobot(sMode='A',nbgn=1,nend=20,nloop=1):
   for n in range(1,nloop+1):
     for nTray in range(nbgn,nend+1):
       setParameter("nTray", nTray)
-      if nTray==13:
-        continue
+      #if nTray==13:
+      #  continue
 
       if sMode=='A':
         rbt.loadTray(nTray)
@@ -245,8 +255,8 @@ def testRobot(sMode='A',nbgn=1,nend=20,nloop=1):
         rbt.loadTray(nTray)
         if nTray==20:
           rbt.unloadTray(1)
-        elif nTray==12:
-          rbt.unloadTray(nTray+2)
+        #elif nTray==12:
+        #  rbt.unloadTray(nTray+2)
         else:
           rbt.unloadTray(nTray+1)
         
@@ -265,8 +275,8 @@ def testRobot(sMode='A',nbgn=1,nend=20,nloop=1):
         rbt.unmount()
         if nTray==20:
           rbt.unloadTray(1)
-        elif nTray==12:
-          rbt.unloadTray(nTray+2)
+        #elif nTray==12:
+        #  rbt.unloadTray(nTray+2)
         else:
           rbt.unloadTray(nTray+1)
 

@@ -16,29 +16,49 @@ from ftplib import FTP
 
 import threading
 
-class ScanningExperimentalModule2():
-    """ the zero for Ry must be set correctly so that Rx is pointing in the x direction
-        once homed, this position i1s at -6.0
+class PositioningStack():
+    # coarse x, Misumi
+    xc = EpicsMotor('XF:16IDC-ES:Scan{Ax:XC}Mtr', name='ss_xc')
+    # Newport pusher
+    z = EpicsMotor('XF:16IDC-ES:Scan{Ax:Z}Mtr', name='ss_z')
+
+class PositioningStackNonMicroscope(PositioningStack):
+    """ 
+        NOTE: if USR50 is used as Ry, , the zero position must be set correctly so that Rx is 
+        pointing in the x direction once homed, this position is at -6.0
     """
-    x = EpicsMotor('XF:16IDC-ES:Scan2{Ax:sX}Mtr', name='ss2_x')
-    x1 = EpicsMotor('XF:16IDC-ES:Scan2{Ax:X}Mtr', name='ss2_x1')
-    y = EpicsMotor('XF:16IDC-ES:Scan2{Ax:sY}Mtr', name='ss2_y')
-    z = EpicsMotor('XF:16IDC-ES:InAir{Mscp:1-Ax:F}Mtr', name='focus')
+    # coarse y, Kohzu
+    #yc = EpicsMotor('XF:16IDC-ES:Scan1{Ax:YC}Mtr', name='ss1_yc')
     # this is the Standa stepper stage
-    rx = EpicsMotor('XF:16IDC-ES:Scan2{Ax:RX1}Mtr', name='ss2_rx')
-    ry = EpicsMotor('XF:16IDC-ES:Scan2{Ax:RY}Mtr', name='ss2_ry')  
+    #rx = EpicsMotor('XF:16IDC-ES:Scan1{Ax:RX}Mtr', name='ss1_rx')
+    ry = EpicsMotor('XF:16IDC-ES:Scan1{Ax:RY}Mtr', name='ss1_ry')  
     
-ss2 = ScanningExperimentalModule2()
+class PositioningStackMicroscope(PositioningStack):
+    """ this is the stack assembled in Apr 2019
+        
+    """
+    # Newport
+    x = EpicsMotor('XF:16IDC-ES:Scan2{Ax:X}Mtr', name='ss2_x')
+    y = EpicsMotor('XF:16IDC-ES:Scan2{Ax:Y}Mtr', name='ss2_y')
+    ry = EpicsMotor('XF:16IDC-ES:Scan2{Ax:RY}Mtr', name='ss2_ry')  
+    # SmarAct stages
+    sx = EpicsMotor('XF:16IDC-ES:Scan2-Gonio{Ax:sX}Mtr', name='ss2_sx')
+    sz = EpicsMotor('XF:16IDC-ES:Scan2-Gonio{Ax:sZ}Mtr', name='ss2_sz')
+    tx = EpicsMotor('XF:16IDC-ES:Scan2-Gonio{Ax:tX}Mtr', name='ss2_tx')
+    tz = EpicsMotor('XF:16IDC-ES:Scan2-Gonio{Ax:tZ}Mtr', name='ss2_tz')
 
 
 class XPStraj(Device):
-    def __init__(self, ip_addr, group, name, 
-                 devices={'scan.rY': ss2.ry, 'scan.Y': ss2.y, 'scan.X': ss2.x}):
+    def __init__(self, ip_addr, group, name, devices=None):
         """ ip_addr: IP of the XPS controller
             group: PVT positioner grouped defined in the controller
             name: 
             devices: the corresponding Ophyd device for the posiitoner group, useful in a scan
         """
+        
+        if devices is None:
+            raise Exception("devices is None: the corelation between XPS and bs motor names must be defined.")
+        
         super().__init__(name=name)
         self.xps = XPS()
         self.ip_addr = ip_addr
@@ -433,11 +453,17 @@ class XPStraj(Device):
             self.read_back['slow_axis'] += [self.traj_par['motor2'].position] # * N_fast
             self.read_back['timestamp2'] += [time.time()]
 
+            
+# this section below will be moved to startup.py
+'''                        
+# this should be created based on experimental configuration       
+ss = PositioningStackMicroscope()
+            
 try:
-    xps_trj = XPStraj('10.16.2.100', 'scan', 'test')
+    xps_trj = XPStraj('10.16.2.100', 'scan', 'test', devices={'scan.rY': ss.ry, 'scan.Y': ss.y, 'scan.X': ss.x})
 except:
     print('Cannot connect to XPS.')
-    
+
 def raster(detectors, exp_time, fast_axis, f_start, f_end, Nfast, 
            slow_axis=None, s_start=0, s_end=0, Nslow=1, md=None):
     """ raster scan in fly mode using detectors with exposure time of exp_time
@@ -518,6 +544,6 @@ def raster(detectors, exp_time, fast_axis, f_start, f_end, Nfast,
         yield from mov(fast_axis, p0_fast, slow_axis, p0_slow)
     else:
         yield from mov(fast_axis, p0_fast)
-
+'''
     
     

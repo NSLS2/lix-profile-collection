@@ -1,5 +1,5 @@
 from ophyd import (SingleTrigger, MultiTrigger, TIFFPlugin,
-                   ImagePlugin, StatsPlugin, DetectorBase, HDF5Plugin,
+                   ImagePlugin, StatsPlugin, TransformPlugin, DetectorBase, HDF5Plugin,
                    ROIPlugin, OverlayPlugin, ProcessPlugin, AreaDetector)
 
 import ophyd.areadetector.cam as cam
@@ -21,7 +21,7 @@ class TIFFPluginWithFileStore(TIFFPlugin, FileStoreTIFFIterativeWrite):
         global proposal_id
         global run_id
         path = '/GPFS/xf16id/exp_path/'
-        rpath = str(proposal_id)+"/"+str(run_id)+"/"
+        rpath = str(proposal_id)+"/"+str(run_id)+"/tif/"
         makedirs(path+rpath)
         self.write_path_template = path+rpath
         super().stage()
@@ -35,8 +35,9 @@ class StandardProsilica(SingleTrigger, DetectorBase):
                write_path_template='/GPFS/xf16id/exp_path/',   # this is updated when the plug in is staged
                reg=db.reg)
     image = Cpt(ImagePlugin, 'image1:')
-    over1 = Cpt(OverlayPlugin, 'Over1:')
-    proc1 = Cpt(ProcessPlugin, 'Proc1:')
+    trans = Cpt(TransformPlugin, 'Trans1:')
+    over = Cpt(OverlayPlugin, 'Over1:')
+    proc = Cpt(ProcessPlugin, 'Proc1:')
     roi1 = Cpt(ROIPlugin, 'ROI1:')
     roi2 = Cpt(ROIPlugin, 'ROI2:')
     roi3 = Cpt(ROIPlugin, 'ROI3:')
@@ -129,10 +130,11 @@ class StandardProsilica(SingleTrigger, DetectorBase):
     def watch_for_change(self, max_thresh=0, sigma_thresh=0, lock=None, poll_rate=0.05, timeout=10):
         """ lock should have been acquired before this function is called
             when a change is observed, release the lock and return
+            05/25/19 moved to min and mean from max and sigma
         """
         t1 = time.time()
         while True:
-            if self.stats1.max_value.get()>max_thresh and self.stats1.sigma.get()>sigma_thresh:
+            if self.stats1.mean_value.get()>max_thresh or self.stats1.min_value.get()>sigma_thresh:
                 break
             t2 = time.time()
             if t2-t1>timeout:
@@ -148,16 +150,16 @@ def setup_cam(pv, name):
         cam = None
         print("%s is not accessible." % name)
 
-    cam.read_attrs = ['image', 'stats1', 'stats2', 'stats3', 'roi1']#, 'tiff']
-    cam.image.read_attrs = ['array_data']
+    cam.read_attrs = ['image', 'stats1', 'stats2', 'stats3', 'roi1', 'tiff', 'over', 'trans']
+    cam.image.read_attrs = [] #'array_data']
     cam.stats1.read_attrs = ['total', 'centroid', 'profile_average']
     cam.stats2.read_attrs = ['total', 'centroid']
     cam.stats3.read_attrs = ['total', 'centroid']
     cam.stats1.centroid.read_attrs=['x','y']
     cam.stats1.profile_average.read_attrs=['x','y']
     cam.roi1.read_attrs = ['min_xyz', 'size']
-    #cam.tiff.read_attrs = [] # we dont need anything other than the image
-    #cam.over1.read_attrs = [] # we dont need anything from overlay
+    cam.tiff.read_attrs = [] # we dont need anything other than the image
+    cam.over.read_attrs = [] # we dont need anything from overlay
 
     return cam
 
@@ -173,10 +175,12 @@ camAltSS     = setup_cam("XF:16IDB-BI{AltSS}", "camAltSS")  # should change the 
 
 camBHutch    = setup_cam("XF:16IDB-BI{Cam:BHutch}", "camBHutch")
 camSF        = setup_cam("XF:16IDC-BI{Cam:SF}", "camSF")
+camSol        = setup_cam("XF:16IDC-BI{Cam:Sol}", "camSol")
+#camOAM       = setup_cam("XF:16IDA-BI{Cam:OAM}", "camOAM")
 """
-camSol       = setup_cam("XF:16IDC-BI{Cam:Sol}", "camSol")
+
 camSampleTV  = setup_cam("XF:16IDC-BI{Cam:sam_top}", "camSampleTV")
 camOAM       = setup_cam("XF:16IDA-BI{Cam:OAM}", "camOAM")
 camSpare     = setup_cam("XF:16IDA-BI{Cam:Spare}", "camSpare")
-camScope     = setup_cam("XF:16IDA-BI{Cam:Stereo}", "camScope") 
+camScope     = setup_cam("XF:16IDC-BI{Cam:Stereo}", "camScope") 
 """

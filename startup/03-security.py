@@ -8,7 +8,7 @@ data_path = ""
 collection_lock_file = "/GPFS/xf16id/.lock"
 okay_to_move_file = "/GPFS/xf16id/.okay_to_move"
 
-current_cycle = '2019-1'
+current_cycle = '2019-2'
 
 def login(uname = None, pID = None, rID = None, debug=True, 
           root_path='/GPFS/xf16id', create_proc_dir=False):
