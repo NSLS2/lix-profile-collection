@@ -115,7 +115,7 @@ def pack_h5(uids, dest_dir='', fn=None, fix_sample_name=True,
     return fn
 
 
-def h5_attach_hplc(fn_h5, fn_hplc, grp_name=None):
+def h5_attach_hplc(fn_h5, fn_hplc, chapter_num=-1, grp_name=None):
     """ the hdf5 is assumed to contain a structure like this:
         LIX_104
         == hplc
@@ -128,14 +128,23 @@ def h5_attach_hplc(fn_h5, fn_hplc, grp_name=None):
     f = h5py.File(fn_h5, "r+")
     if grp_name == None:
         grp_name = list(f.keys())[0]
+
+    hdstr, dhplc = readShimadzuDatafile(fn_hplc, chapter_num=chapter_num )
+    # 3rd line of the header contains the HPLC data file name, which is based on the sample name 
+    sname = hdstr.split('\n')[2].split('\\')[-1][:-4]
+    if grp_name!=sname:
+        print(f"mismatched sample name: {sname} vs grp_name")
+        f.close()
+        return
+    
     # this group is created by suitcase if using flyer-based hplc_scan
     # otherwise it has to be created first
+    # it is also possible that there was a previous attempt to populate the data
+    # but the data source/shape is incorrect -> delete group first
     if 'hplc' in f[f"{grp_name}"].keys():
         grp = f["%s/hplc/data" % grp_name]
     else:
         grp = f.create_group(f"{grp_name}/hplc/data")
-    
-    hdstr, dhplc = readShimadzuDatafile(fn_hplc)
     
     if grp.attrs.get('header') == None:
         grp.attrs.create("header", np.asarray(hdstr, dtype=np.string_))
@@ -146,7 +155,8 @@ def h5_attach_hplc(fn_h5, fn_hplc, grp_name=None):
     for k in dhplc.keys():
         d = np.asarray(dhplc[k]).T
         if k in existing_keys:
-            print("warning: %s already exists." % k)
+            print("warning: %s already exists, deleting ..." % k)
+            del grp[k]
         dset = grp.require_dataset(k, d.shape, d.dtype)
         dset[:] = d
     

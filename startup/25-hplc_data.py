@@ -20,13 +20,23 @@ def readShimadzuSection(section):
             ydata.append(y)
     return xdata,ydata
 
-def writeShimadzuDatafile(fn, sections):
+def writeShimadzuDatafile(fn, sections, hdrstr=None):
     """ warning: there is no error checking
         sections is a dictionary, each item correspond to a section, the key is the section name
     """
     fd = open(fn, "w+")
+    if hdrstr is not None:
+        fd.write(hdrstr + '\r\n' + '\r\n')
     for k,s in sections.items():
         fd.write(k + '\r\n' + '\r\n'.join(s) + '\r\n' + '\r\n')
+    fd.close()
+
+def truncateShimadzuDatafile(fn1, fn2):
+    fd = open(fn1, "r")
+    txt = fd.read().split('[Header]')[-1]
+    fd.close()
+    fd = open(fn2, "w+")
+    fd.write('[Header]'+txt) 
     fd.close()
     
 def readShimadzuDatafile(fn, chapter_num=-1, return_all_sections=False):

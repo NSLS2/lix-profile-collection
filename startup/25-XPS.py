@@ -38,14 +38,14 @@ class PositioningStackMicroscope(PositioningStack):
         
     """
     # Newport
-    x = EpicsMotor('XF:16IDC-ES:Scan2{Ax:X}Mtr', name='ss2_x')
-    y = EpicsMotor('XF:16IDC-ES:Scan2{Ax:Y}Mtr', name='ss2_y')
-    ry = EpicsMotor('XF:16IDC-ES:Scan2{Ax:RY}Mtr', name='ss2_ry')  
+    x = EpicsMotor('XF:16IDC-ES:Scan2{Ax:X}Mtr', name='ss_x')
+    y = EpicsMotor('XF:16IDC-ES:Scan2{Ax:Y}Mtr', name='ss_y')
+    ry = EpicsMotor('XF:16IDC-ES:Scan2{Ax:RY}Mtr', name='ss_ry')  
     # SmarAct stages
-    sx = EpicsMotor('XF:16IDC-ES:Scan2-Gonio{Ax:sX}Mtr', name='ss2_sx')
-    sz = EpicsMotor('XF:16IDC-ES:Scan2-Gonio{Ax:sZ}Mtr', name='ss2_sz')
-    tx = EpicsMotor('XF:16IDC-ES:Scan2-Gonio{Ax:tX}Mtr', name='ss2_tx')
-    tz = EpicsMotor('XF:16IDC-ES:Scan2-Gonio{Ax:tZ}Mtr', name='ss2_tz')
+    sx = EpicsMotor('XF:16IDC-ES:Scan2-Gonio{Ax:sX}Mtr', name='ss_sx')
+    sz = EpicsMotor('XF:16IDC-ES:Scan2-Gonio{Ax:sZ}Mtr', name='ss_sz')
+    tx = EpicsMotor('XF:16IDC-ES:Scan2-Gonio{Ax:tX}Mtr', name='ss_tx')
+    tz = EpicsMotor('XF:16IDC-ES:Scan2-Gonio{Ax:tZ}Mtr', name='ss_tz')
 
 
 class XPStraj(Device):
