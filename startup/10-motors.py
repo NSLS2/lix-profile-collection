@@ -65,16 +65,36 @@ class StageScan(Device):
 class Tilt(Device):
     rx = Cpt(EpicsMotor, '-Ax:RX}Mtr')
     ry = Cpt(EpicsMotor, '-Ax:RY}Mtr')
+    
+class Microscope(PseudoPositioner):
+    x = Cpt(EpicsMotor, 'XF:16IDC-ES:InAir{Mscp:1-Ax:X}Mtr')
+    y = Cpt(EpicsMotor, 'XF:16IDC-ES:InAir{Mscp:1-Ax:Y}Mtr')
+    kz1 = Cpt(EpicsMotor, 'XF:16IDC-ES:InAir{Mscp:1-Ax:kz1}Mtr')
+    kz2 = Cpt(EpicsMotor, 'XF:16IDC-ES:InAir{Mscp:1-Ax:kz2}Mtr')
+    Rx = Cpt(PseudoSingle, limits=(-2, 2))
+    Ry = Cpt(PseudoSingle, limits=(-2, 2))
+    # this is the distance between the two pushers
+    Lx = 100
+    # this is the distance between the pushers and the 3rd support
+    Ly = 165
+    #focus = Cpt(EpicsMotor, '-Ax:F}Mtr')
+    #polarizer = Cpt(EpicsMotor, '-Ax:Pol}Mtr')
+    #zoom = Cpt(EpicsMotor, '-Ax:Zm}Mtr')
+    
+    @pseudo_position_argument
+    def forward(self, pos):
+        """pos is a self.PseudoPosition"""
+        ps = np.radians(pos.Rx)*self.Ly*2
+        pd = np.radians(pos.Ry)*self.Lx
+        return self.RealPosition(kz1 = (ps+pd)/2, kz2 = (ps-pd)/2, x=self.x.position, y=self.y.position)
 
+    @real_position_argument
+    def inverse(self, pos):
+        """pos is self.RealPosition"""
+        pRx = np.degrees((pos.kz1 - pos.kz2)/self.Lx)
+        pRy = np.degrees(0.5*(pos.kz1 + pos.kz2)/self.Ly)
+        return self.PseudoPosition(Rx=pRx, Ry=pRy)
 
-class Microscope(Device):
-    x = Cpt(EpicsMotor, '-Ax:X}Mtr')
-    y = Cpt(EpicsMotor, '-Ax:Y}Mtr')
-    rx = Cpt(EpicsMotor, '-Ax:Rx}Mtr')
-    ry = Cpt(EpicsMotor, '-Ax:Ry}Mtr')
-    focus = Cpt(EpicsMotor, '-Ax:F}Mtr')
-    polarizer = Cpt(EpicsMotor, '-Ax:Pol}Mtr')
-    zoom = Cpt(EpicsMotor, '-Ax:Zm}Mtr')
     
 class Screen(Device):
     y=Cpt(EpicsMotor, '-Ax:Y}Mtr')
@@ -171,4 +191,4 @@ sbs = XYMotor('XF:16IDC-ES{BS:SAXS', name='sbs')
 screen_SS = Screen('XF:16IDB-BI{SCN:SS',name='screen_ss')
 screen_SF = Screen('XF:16IDC-BI{FS:SF',name='screen_sf')
 
-microscope = Microscope('XF:16IDC-ES:InAir{Mscp:1', name='microscope')
+microscope = Microscope(name='microscope', concurrent=True)

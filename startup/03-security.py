@@ -52,7 +52,7 @@ def login(uname = None, pID = None, rID = None, debug=True,
         makedirs(proc_path+"processed/")
         
     dw,mo,da,tt,yr = time.asctime().split()
-    logfile = data_path+("log-%s." % username)+yr+mo+("%02d_" % int(da))+tt
+    logfile = data_path+("log-%s." % username)+yr+mo+("%02d_" % int(da))+tt.replace(':', '')
     ip = get_ipython()
     ip.magic("logstop")
     ip.magic("logstart -ort %s" % logfile)
