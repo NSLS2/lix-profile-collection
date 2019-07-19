@@ -1,4 +1,4 @@
-from suitcase import hdf5  #,nexus # available in suitcase 0.6
+#from suitcase import hdf5  #,nexus # available in suitcase 0.6
 
 import h5py,json,os
 import threading
@@ -100,7 +100,7 @@ def pack_h5(uids, dest_dir='', fn=None, fix_sample_name=True,
             pass
         
     print(fds)
-    hdf5.export(headers, fn, fields=fds, use_uid=False) #, mds= db.mds, use_uid=False) 
+    hdf5_export(headers, fn, fields=fds, use_uid=False) #, mds= db.mds, use_uid=False) 
     
     # by default the groups in the hdf5 file are named after the scan IDs
     if fix_sample_name:
