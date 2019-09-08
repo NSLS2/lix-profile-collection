@@ -53,10 +53,10 @@ before_install:
   - cp lix-test.yml ~/.config/databroker/lix.yml
   # We will be running a default profile without copying the startup/*.py files
   # into it; the startup files will be executed by explicit commands. But to
-  # satisfy the automatic resolution of the "R_*.txt" files, we will have
+  # satisfy the automatic resolution of the data/config files, we will have
   # to copy them into the "default" profile dir.
-  # - mkdir -p ~/.ipython/profile_default
-  # - cp -v R_*.txt ~/.ipython/profile_default/
+  - mkdir -p ~/.ipython/profile_default/
+  - cp -Rv data_files/ ~/.ipython/profile_default/
 
 install:
   - env | sort -u
