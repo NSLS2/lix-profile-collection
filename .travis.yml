@@ -1,0 +1,81 @@
+dist: xenial
+language: python
+services:
+  - mongodb
+  - xvfb
+sudo: false
+
+addons:
+  apt:
+    packages:
+      - qtbase5-dev
+
+env:
+  global:
+    - MPLBACKEND: Qt5Agg
+    - BS_PROFILE: collection
+    - BS_ENV_VERSION: 2019C3.0.1
+  matrix:
+    - _CONDA_CHANNEL=lightsource2-tag OPHYD_CONTROL_LAYER=pyepics
+    - _CONDA_CHANNEL=nsls2forge OPHYD_CONTROL_LAYER=pyepics
+    - _CONDA_CHANNEL=lightsource2-tag OPHYD_CONTROL_LAYER=caproto
+    - _CONDA_CHANNEL=nsls2forge OPHYD_CONTROL_LAYER=caproto
+
+os:
+  - linux
+python:
+  - 3.6
+  - 3.7
+
+matrix:
+  fast_finish: true
+
+before_install:
+  # Get and install miniconda first:
+  - wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
+  - sh ./miniconda.sh -b -p ~/mc
+  - source ~/mc/etc/profile.d/conda.sh  # this makes all conda vars available
+  - conda update conda --yes
+  - pwd
+  - ls -laF
+  # Create an IPython profile dir:
+  # - mkdir -p ~/.ipython/profile_${BS_PROFILE}
+  # - cp -rv $PWD ~/.ipython/
+  # - ls -laF ~/.ipython/
+  # - ls -laF ~/.ipython/profile_${BS_PROFILE}
+  # pyOlog config:
+  - cp -v pyOlog-test.conf ~/pyOlog.conf
+  - cat ~/pyOlog.conf
+
+  # Beamline-specific configs:
+  # Databroker config:
+  - mkdir ~/.config/databroker/
+  - cp lix-test.yml ~/.config/databroker/lix.yml
+  # We will be running a default profile without copying the startup/*.py files
+  # into it; the startup files will be executed by explicit commands. But to
+  # satisfy the automatic resolution of the "R_*.txt" files, we will have
+  # to copy them into the "default" profile dir.
+  # - mkdir -p ~/.ipython/profile_default
+  # - cp -v R_*.txt ~/.ipython/profile_default/
+
+install:
+  - env | sort -u
+  - conda create -y -n ${BS_PROFILE}-${BS_ENV_VERSION} -c ${_CONDA_CHANNEL} ${BS_PROFILE}=${BS_ENV_VERSION} python=${TRAVIS_PYTHON_VERSION}
+  - conda activate ${BS_PROFILE}-${BS_ENV_VERSION}
+  - conda info
+  - conda env list
+  # Install beamline-specific packages:
+  # - conda install -y -c ${_CONDA_CHANNEL} 11-id-chx-collection
+  - conda list
+  - echo -e "\n" | caproto-spoof-beamline &
+  # Same reason as in https://github.com/bluesky/tutorial/blob/master/binder/postBuild#L14-L15:
+  - ln -sv caproto-repeater ${CONDA_PREFIX}/bin/caRepeater
+
+script:
+  - |
+    command='
+    import glob
+    ip = get_ipython()
+    for f in sorted(glob.glob("startup/*.py")):
+        ip.parent._exec_file(f)'
+  - EPICS_CA_AUTO_ADDR_LIST=NO EPICS_CA_ADDR_LIST=127.0.0.1 ipython -c "$command"
