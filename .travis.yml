@@ -65,7 +65,7 @@ install:
   - conda info
   - conda env list
   # Install beamline-specific packages:
-  # - conda install -y -c ${_CONDA_CHANNEL} 11-id-chx-collection
+  - conda install -y -c ${_CONDA_CHANNEL} py4xs  # TODO: move to a proper beamline-specific metapackage, i.e. 16-id-lix-collection
   - conda list
   - echo -e "\n" | caproto-spoof-beamline &
   # Same reason as in https://github.com/bluesky/tutorial/blob/master/binder/postBuild#L14-L15:
