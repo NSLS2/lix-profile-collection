@@ -1,11 +1,12 @@
 # part of the ipython profile for data collection
 from ophyd import (EpicsSignal, EpicsMotor, Device, Component as Cpt)
 from time import sleep
-import threading
+import threading,signal
 from epics import PV
 import bluesky.plans as bp
 
 global pilatus_trigger_mode
+    
 
 class SolutionScatteringControlUnit(Device):
     reset_pump = Cpt(EpicsSignal, 'pp1c_reset')
@@ -15,15 +16,19 @@ class SolutionScatteringControlUnit(Device):
     pump_spd = Cpt(EpicsSignal, 'pp1c_spd')
     status = Cpt(EpicsSignal, 'pp1c_status')
     water_pump = Cpt(EpicsSignal, "sv_water")
+    water_pump_spd = Cpt(EpicsSignal, "water_pump_spd")
     sv_sel = Cpt(EpicsSignal, "sv_sel")
     sv_N2 = Cpt(EpicsSignal, "sv_N2")
+    sv_N2_box = Cpt(EpicsSignal, "sv_N2_box")
     sv_drain1 = Cpt(EpicsSignal, "sv_drain1")
     sv_drain2 = Cpt(EpicsSignal, "sv_drain2")
     sv_door_upper = Cpt(EpicsSignal, "sv_door_upper")
     sv_door_lower = Cpt(EpicsSignal, "sv_door_lower")
     sv_pcr_tubes = Cpt(EpicsSignal, "sv_pcr_tubes")
-    sv_8c_gripper = Cpt(EpicsSignal, "sv_8c_fill_gripper")
-    sv_bubble = Cpt(EpicsSignal, "sv_bubble_removal")
+    sv_fan = Cpt(EpicsSignal, "sv_fan")
+    fan_power = Cpt(EpicsSignal, "fan_power")
+    sampleT = Cpt(EpicsSignal, "sample_temp")
+    sampleTs = Cpt(EpicsSignal, "sample_temp_SP")
     vc_4port = Cpt(EpicsSignal, "vc_4port_valve")
     serial_busy = Cpt(EpicsSignal, "busy")
     ready = Cpt(EpicsSignal, "ready")
@@ -73,7 +78,7 @@ class SolutionScatteringControlUnit(Device):
             self.wait()
             dV=-dO
         
-default_solution_scattering_config_file = '/GPFS/xf16id/config.solution'
+default_solution_scattering_config_file = '/nsls2/xf16id1/config.solution'
 # y position of the middle flow-cell
 # y spacing between flow cells
 
@@ -86,17 +91,21 @@ class SolutionScatteringExperimentalModule():
     HolderPresent = EpicsSignal("XF:16IDC-ES:Sol{ctrl}HolderPresent")
     DoorOpen = EpicsSignal("XF:16IDC-ES:Sol{ctrl}DoorOpen")
     
-    sample_y = EpicsMotor('XF:16IDC-ES:Sol{Enc-Ax:YU}Mtr', name='sol_sample_y')
-    sample_x = EpicsMotor('XF:16IDC-ES:Sol{Enc-Ax:Xu}Mtr', name='sol_sample_x')
+    sample_y = EpicsMotor('XF:16IDC-ES:Sol{Enc-Ax:Yu}Mtr', name='sol_sample_y')
     holder_x = EpicsMotor('XF:16IDC-ES:Sol{Enc-Ax:Xl}Mtr', name='sol_holder_x')
     
     # the needles are designated 1 (upstream) and 2
     # the flow cells are designated 1 (bottom), 2 and 3
     # needle 1 is connected to the bottom flowcell, needle 2 connected to the top, HPLC middle
     flowcell_nd = {'upstream': 'top', 'downstream': 'bottom'}
-    flowcell_pos = {'bottom': 3.75, 'middle': -0.8, 'top': -5.25}  # New cell changed by JB
-    #flowcell_pos = {'bottom': 4.2893, 'middle': -0.176, 'top': -4.68}  # 2018/10/10
-    #{'top': -6.33, 'middle': -1.36, 'bottom': 3.15} # SC changed bottom from 3.78 07/12/17
+
+    # the center flow flow cell should be aligned to the beam
+    # the addtional positions are for the standard sample, a empty space for checking scattering background,
+    #    and for the scintillator for check the beam shape
+    # this information should be verified every time we setup for solution scattering
+    flowcell_pos = {'bottom': 4.8, 'middle': 0.165, 'top': -4.1,
+                    "std": -12., "empty": -15., "scint": -17.}  
+    
     # this is the 4-port valve piosition necessary for the wash the needle
     p4_needle_to_wash = {'upstream': 1, 'downstream': 0}
     # this is the 4-port valve piosition necessary to load throug the needle
@@ -113,23 +122,23 @@ class SolutionScatteringExperimentalModule():
     disable_flow_cell_move = False
     
     # selection valve in the syringe pump box, see sol_devices.py
-    sel_valve = {'water': 0, 'N2': 1}
+    sel_valve = {'water': 1, 'N2': 0}
     # time needed to pump enough water to fill the drain well
     # assume that tube is empty
-    wash_duration = 0.3
+    wash_duration = 1.
     drain_duration = 2.
 
     # drain valve
     drain = {'upstream': ctrl.sv_drain1, 'downstream': ctrl.sv_drain2}
     
     # syringe pump 
-    default_piston_pos = 170
+    default_piston_pos = 150
     default_pump_speed = 1500
     # SC changed the value from 600 on 7/9/17
     default_load_pump_speed = 350     
-    vol_p4_to_cell = {'upstream': -140, 'downstream': -145}
+    vol_p4_to_cell = {'upstream': -120, 'downstream': -120}
     # 2019/02/14, chaned from 132 to 127
-    vol_tube_to_cell = {'upstream': 122, 'downstream': 121} 
+    vol_tube_to_cell = {'upstream': 125, 'downstream': 125} 
     vol_sample_headroom = 5 #2019/02/14 reduced from 13
     vol_flowcell_headroom=15 #2019/02/14 
     #mean_thresh = {'upstream': 75, 'downstream': 80} # Mean thresh added on 5/25/19 by SC
@@ -161,12 +170,31 @@ class SolutionScatteringExperimentalModule():
         #self.load_config(default_solution_scattering_config_file)
         self.return_piston_pos = self.default_piston_pos
         self.ctrl.pump_spd.put(self.default_pump_speed)
-        
+        self.ctrl.water_pump_spd.put(0.9)
+        self.load_vol = 0
+
         self.holder_x.acceleration.put(0.2)
         self.holder_x.velocity.put(25)
-        self.sample_x.acceleration.put(0.2)
-        self.sample_x.velocity.put(5)
+        #self.sample_x.acceleration.put(0.2)
+        #self.sample_x.velocity.put(5)
 
+        self.int_handler = signal.getsignal(signal.SIGINT)
+
+    def enable_ctrlc(self):
+        if threading.current_thread() is threading.main_thread():
+            signal.signal(signal.SIGINT, self.int_handler)
+            print("ctrl-C re-enabled ...")
+        else:
+            print("not in the main thread, cannot change ctrl-C handler ... ")
+
+    def disable_ctrlc(self):
+        if threading.current_thread() is threading.main_thread():
+            self.int_hanlder = signal.getsignal(signal.SIGINT)
+            signal.signal(signal.SIGINT, signal.SIG_IGN)
+            print("ctrl-C disabled ...")
+        else:
+            print("not in the main thread, cannot change ctrl-C handler ... ")
+            
     # needle vs tube position
     # this applies for the tube holder that has the alternate tube/empty pattern
     # in the current design the even tube position is on the downstream side
@@ -185,9 +213,9 @@ class SolutionScatteringExperimentalModule():
             raise Exception("the door state should be either open or close.")
             
         if state=='open':
-            setSignal(sol.ctrl.sv_door_lower, 1, sol.DoorOpen)
+            setSignal(sol.ctrl.sv_door_lower, 1)#, sol.DoorOpen)
         else: 
-            setSignal(sol.ctrl.sv_door_lower, 0, sol.DoorOpen)
+            setSignal(sol.ctrl.sv_door_lower, 0)#, sol.DoorOpen)
             
     # homing procedure without encoder strip [obsolete]:
     #     reduce motor current, drive sol.holder_x in the possitive direction to hit the hard stop
@@ -243,14 +271,15 @@ class SolutionScatteringExperimentalModule():
     def floating_threshold(self):
         base_mean=self.cam.stats1.mean_value.get() 
         base_min=self.cam.stats1.min_value.get() 
-        mean_thresh = base_mean + 15 
-        min_thresh = base_min + 15 
+        mean_thresh = base_mean + 10 
+        min_thresh = base_min + 10 
         return mean_thresh,min_thresh
     
     def select_flow_cell(self, cn):
         if self.disable_flow_cell_move:
             print("flow cell motion disabled !!!")
         else:
+            #self.sample_y.home('forward')
             print('move to flow cell %s ...' % cn)
             self.sample_y.move(self.flowcell_pos[cn])
     
@@ -336,16 +365,22 @@ class SolutionScatteringExperimentalModule():
         self.move_tube_holder('up')
         
         if option!="dry only":
+            # the selection valve might leak water, disable ctrl-C until the valve is switched back to N2
+            self.disable_ctrlc()    
+            self.ctrl.sv_sel.put(self.sel_valve['water'])
             for n in range(repeats):
                 print("current wash loop %d of %d" % (n+1,repeats))
-                self.ctrl.sv_sel.put(self.sel_valve['water'])
+                # first turn on watch to fill the drain well
                 self.ctrl.water_pump.put('on')
                 sleep(self.wash_duration)
-                self.ctrl.water_pump.put('off')
-        
+                # now turn on the drain but keep flushing water
                 self.drain[nd].put('on')
                 sleep(self.drain_duration)
+                # turn off water first
+                self.ctrl.water_pump.put('off')
                 self.drain[nd].put('off')
+            self.ctrl.sv_sel.put(self.sel_valve['N2'])
+            self.enable_ctrlc()
 
         if option!="wash only":
             self.drain[nd].put('on')
@@ -418,6 +453,7 @@ class SolutionScatteringExperimentalModule():
         self.ctrl.pump_spd.put(self.default_load_pump_speed)
         self.move_tube_holder('up') 
         print("loading sample")
+        self.load_vol = vol
         self.ctrl.pump_mvR(vol)
         #self.ctrl.pump_mvR(self.vol_tube_to_cell[nd]) ## load the sample fron the PCR tube into the cell
         self.ctrl.wait()
@@ -442,15 +478,20 @@ class SolutionScatteringExperimentalModule():
         """ move the sample back to the injection needle
             self.return_piston_pos is the piston position before the sample aspirated into the needle 
         """
-        self.ctrl.pump_mvA(self.return_piston_pos)#+self.load_vol)
+        self.ctrl.pump_mvA(self.return_piston_pos+self.load_vol)
         if wait:
             self.ctrl.wait()
     
-        
+    def check_pilatus_detectors(self):
+        """ make sure that only externally triggered Pilatus are used in data collection
+        """
+        for det in DETS:
+            if det.__class__!=LIXPilatusExt:
+                raise Exception("only LIXPilatusExt can be used in data collection: {det.__class__}")
+       
     def collect_data(self, vol=45, exp=2, repeats=3, sample_name='test', check_sname=True):
-        global DETS
+        self.check_pilatus_detectors()
         mean_thresh, min_thresh = self.floating_threshold() 
-        DETS=[em1,em2,pil1M_ext,pilW1_ext,pilW2_ext]
         nd = self.verify_needle_for_tube(self.tube_pos, nd=None)
         
         pilatus_ct_time(exp)
@@ -478,8 +519,10 @@ class SolutionScatteringExperimentalModule():
         em1.acquire.put(1)
         em2.acquire.put(1)
         sd.monitors = [em1.sum_all.mean_value, em2.sum_all.mean_value]
-        RE(ct([pil1M_ext,pilW1_ext,pilW2_ext], num=1))
+        # num=1 due to stage_pilatus(multitrigger=False)
+        RE(ct(DETS, num=1))
         sd.monitors = []
+        change_sample()
         
         self.ctrl.wait()
         self.ctrl.pump_spd.put(self.default_pump_speed)
@@ -496,7 +539,7 @@ class SolutionScatteringExperimentalModule():
         self.move_tube_holder('down')
         
     def measure(self, tn, nd=None, vol=50, exp=5, repeats=3, sample_name='test', 
-                delay=0, returnSample=True, washCell=True, concurrentOp=False):
+                delay=0, returnSample=True, washCell=True, concurrentOp=False, check_sname=True):
         ''' tn: tube number: 1-18
             exp: exposure time
             repeats: # of exposures
@@ -533,7 +576,7 @@ class SolutionScatteringExperimentalModule():
         
         print('****************')
         print('collecting data %s' %sample_name)
-        self.collect_data(vol, exp, repeats, sample_name)
+        self.collect_data(vol, exp, repeats, sample_name, check_sname=check_sname)
         
         if returnSample:
             # move the sample back to the end of the injection needle
@@ -559,7 +602,7 @@ class SolutionScatteringExperimentalModule():
         while self.ctrl.ready.get()==0:
             sleep(0.2)
         self.ctrl.ready.put(0)
-        mov_all(self.sample_x,-length,wait=False,relative=True)
+        #mov_all(self.sample_x,-length,wait=False,relative=True)
     
     ## This is specific to the multi-position holder for "sticky" samples
     def meas_opencell(self, exp, repeats, sample_name='test'):
@@ -570,12 +613,12 @@ class SolutionScatteringExperimentalModule():
         set_pil_num_images(repeats)
         length=7.5
         #self.ctrl.wait()
-        self.sample_x.velocity.put(length/((repeats*exp)+4))
+        #self.sample_x.velocity.put(length/((repeats*exp)+4))
         th = threading.Thread(target=self.mov_delay, args=(length, ) )
         th.start()
         RE(count_fs(DETS, num=1))
-        self.sample_x.velocity.put(0)
-        movr(self.sample_x, length)
+        #self.sample_x.velocity.put(0)
+        #movr(self.sample_x, length)
 
         
 # this should be moved to startup.py for solution scattering        
