@@ -174,7 +174,17 @@ class XPStraj(Device):
         return self._traj_status
         
     def collect_asset_docs(self):
-        """ adapted from HXN fly scan example
+        """ when the run eigine process the "collect" message, 3 functions are called (see bluesky.bundlers)
+                collect_asset_docs(): returns resource and datum document (name, doc)
+                                      RE emit(DocumentNames(name), doc)
+                                      called once per scan? name is always "resource"?
+                describe_collect(): returns a dictionary of {stream_name: data_keys, ...}
+                                    RE emit(DocumentNames.descriptor, doc) 
+                collect(): returns a list of events [ev, ...], 
+                           RE emit(DocumentNames.event, ev) or add to bulk data for later emit() call
+            DocumentNames is defined in event_model, enum
+
+            followed HXN example
         """
         asset_docs_cache = []
 
@@ -214,16 +224,25 @@ class XPStraj(Device):
             # first make sure that all data file are saved, otherwise next time when the detector is
             # staged, the files that are not yet saved will be lost
             Ni = det.cam.num_images.get() 
-            Nc1 = 0
+            #Nc1 = 0
+            t0 = time.time()
+            
+            while det.cam.detector_state.get(as_string=True) is "Acquire":
+                time.sleep(0.1)
+            
+            """
             while True:
                 Nc = det.cam.array_counter.get()
-                if Ni==Nc or Nc==Nc1:  
+                #if Ni==Nc or Nc==Nc1:
+                if Ni==Nc or time.time()-t0>5:  
                     # either the final file count is reached, or waited for too long (5s) and no new files 
                     # show up, which can happen if one or more trajectories were cut short during the raster
                     break
-                Nc1 = Nc
+                #Nc1 = Nc
                 print('data files are still being written for %s, %d -> %d' % (det.name, Nc, Ni))
-                time.sleep(5)
+                #time.sleep(5)
+                time.sleep(0.5)
+            """
                 
             k = f'{det.name}_image'
             (data[k], ts[k]) = self.datum[k]
@@ -441,17 +460,17 @@ class XPStraj(Device):
             self.read_back['timestamp2'] = []
         
     def update_readback(self):
-        self.read_back['fast_axis'] += self.readback_traj()
+        self.read_back['fast_axis'] = self.readback_traj()
         # start_time is the beginning of the execution
         # pulse is generated when the positioner enters the segment ??
         # timestamp correspond to the middle of the segment
         N = self.traj_par['no_of_segments']
         Nr = self.traj_par['no_of_rampup_points']
         dt = self.traj_par['segment_duration']
-        self.read_back['timestamp'] += list(self.start_time + (0.5 + Nr + np.arange(N+1))*dt)
+        self.read_back['timestamp'] = list(self.start_time + (0.5 + Nr + np.arange(N+1))*dt)
         if self.traj_par['motor2'] is not None:
-            self.read_back['slow_axis'] += [self.traj_par['motor2'].position] # * N_fast
-            self.read_back['timestamp2'] += [time.time()]
+            self.read_back['slow_axis'] = self.traj_par['motor2'].position
+            self.read_back['timestamp2'] = time.time()
 
             
 # this section below will be moved to startup.py
@@ -460,7 +479,7 @@ class XPStraj(Device):
 ss = PositioningStackMicroscope()
             
 try:
-    xps_trj = XPStraj('10.16.2.100', 'scan', 'test', devices={'scan.rY': ss.ry, 'scan.Y': ss.y, 'scan.X': ss.x})
+    xps_trj = XPStraj('10.16.2.104', 'scan', 'test', devices={'scan.rY': ss.ry, 'scan.Y': ss.y, 'scan.X': ss.x})
 except:
     print('Cannot connect to XPS.')
 
