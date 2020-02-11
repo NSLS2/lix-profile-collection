@@ -5,7 +5,7 @@ from enum import Enum
 #global substitute_data_path_root
 
 class data_file_path(Enum):
-    gpfs = '/GPFS/xf16id/exp_path'
+    gpfs = '/nsls2/xf16id1/data'
     ramdisk = '/exp_path'
 
 #default_data_path_root = '/GPFS/xf16id/exp_path/'

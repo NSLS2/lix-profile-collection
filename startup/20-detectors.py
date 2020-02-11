@@ -20,7 +20,7 @@ class TIFFPluginWithFileStore(TIFFPlugin, FileStoreTIFFIterativeWrite):
     def stage(self):
         global proposal_id
         global run_id
-        path = '/GPFS/xf16id/exp_path/'
+        path = '/nsls2/xf16id1/data/'
         rpath = str(proposal_id)+"/"+str(run_id)+"/tif/"
         makedirs(path+rpath)
         self.write_path_template = path+rpath
@@ -32,7 +32,7 @@ class StandardProsilica(SingleTrigger, DetectorBase):
     cam = Cpt(cam.ProsilicaDetectorCam, '')
     tiff = Cpt(TIFFPluginWithFileStore,
                suffix='TIFF1:',
-               write_path_template='/GPFS/xf16id/exp_path/',   # this is updated when the plug in is staged
+               write_path_template='/nsls2/xf16id1/data/',   # this is updated when the plug in is staged
                reg=db.reg)
     image = Cpt(ImagePlugin, 'image1:')
     trans = Cpt(TransformPlugin, 'Trans1:')

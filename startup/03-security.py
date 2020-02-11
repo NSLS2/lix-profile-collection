@@ -5,13 +5,13 @@ username = None
 proposal_id = None
 run_id = None
 data_path = ""
-collection_lock_file = "/GPFS/xf16id/.lock"
-okay_to_move_file = "/GPFS/xf16id/.okay_to_move"
+collection_lock_file = "/nsls2/xf16id1/.lock"
+okay_to_move_file = "/nsls2/xf16id1/.okay_to_move"
 
-current_cycle = '2019-2'
+current_cycle = '2020-1'
 
 def login(uname = None, pID = None, rID = None, debug=True, 
-          root_path='/GPFS/xf16id', create_proc_dir=False):
+          root_path='/nsls2/xf16id1', create_proc_dir=False):
     """Ask the user for his credentials and proposal information for the data collection"""
     #TODO: Use PASS and LDAP integration when possible.
     global username
@@ -39,13 +39,13 @@ def login(uname = None, pID = None, rID = None, debug=True,
     RE.md['proposal_id'] = proposal_id
     RE.md['run_id'] = run_id
     
-    path = root_path + '/exp_path/'
+    path = f"{root_path}/data/{current_cycle}/"
     rpath = str(proposal_id)+"/"+str(run_id)+"/"
     data_path = path + rpath
     makedirs(data_path)
     RE.md['data_path'] = data_path
 
-    proc_path = f"{root_path}/Processing/{current_cycle}/{proposal_id}/{run_id}/"
+    proc_path = f"{root_path}/experiments/{current_cycle}/{proposal_id}/{run_id}/"
     RE.md['proc_path'] = proc_path
     if create_proc_dir:
         makedirs(proc_path)

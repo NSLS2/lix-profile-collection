@@ -194,7 +194,7 @@ from databroker import Broker
 # TODO : move to /etc/databroker/lix.yml
 # and use :
 # nslsii.configure_base(get_ipython().user_ns, 'lix')
-config = {
+db_config = {
     'description' : 'LIX production mongo',
     'metadatastore' : {
         'module': 'databroker.headersource.mongo',
@@ -217,7 +217,7 @@ config = {
     },
 }
 
-db = Broker.from_config(config)
+db = Broker.from_config(db_config)
 bec = None
 
 
