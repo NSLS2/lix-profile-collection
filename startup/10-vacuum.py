@@ -9,11 +9,12 @@ sim_on=False
 
 import time
 
-def check_sig_status(sig, value, poll_time=0.1):
+def check_sig_status(sig, value, poll_time=0.5):
     while True:
         if sig.get()==value:
             break
         time.sleep(poll_time)
+
         
 class MaxiGauge:
     def __init__(self, devName):
@@ -28,8 +29,7 @@ class MaxiGauge:
         else:
             return float(msg)
 
-    
-                   
+        
 class MKSGauge:
     """ can read pressure, status of the gauge "OFF", "NO GAUGE"
         turn on and off
@@ -74,7 +74,62 @@ class MKSGauge:
             else:
                 return
             
+class valve(TwoButtonShutter):
+    try:
+        enabled_status = Cpt(EpicsSignalRO, 'Enbl-Sts', string=True)
+    except:
+        enabled_status = None
         
+class SolenoidValve1:
+    def __init__(self, devName, name=""):
+        """ for soft pump valves devName should be a list
+            some valves have 
+        """
+        if isinstance(devName, list): # soft pump valves
+            if len(devName)!=2:
+                raise Exception("2 PVs must be given for a soft pump valve.")
+            self.has_soft = True
+            self.soft_valve = SolenoidValve1(devName[1], name+"_soft")
+            devName = devName[0]
+            self.devName = devName
+        else:
+            self.has_soft = False
+            self.devName = devName
+            
+        self.device = valve(devName, name=name)
+            
+    def open(self, softOpen=False):
+        print("request to open valve: ", self.devName)
+        if sim_on:
+            print("simulation mode on, the valve state will not change.")
+            return
+        if softOpen and self.has_soft:
+            self.device.set("Close")
+            self.soft_valve.open()
+        else:
+            if self.has_soft:
+                self.soft_valve.close()
+            self.device.set("Open")
+            
+    def close(self):
+        print("request to close valve: ", self.devName)
+        if sim_on:
+            return
+        if self.has_soft:
+            if self.soft_valve.status==1:
+                self.soft_valve.close()
+        if self.status==1:
+            self.device.set("Close")
+            
+    @property
+    def status(self):
+        st = int(self.device.status.get() == TwoButtonShutter.open_str)
+        if self.has_soft:
+            return 0.5*self.soft_valve.status + st
+        else:
+            return st
+            
+            
 class SolenoidValve:
     """ this works for both gate valves and solenoid valves
         status of the valve is given by PV [deviceName]Pos-Sts
@@ -152,7 +207,7 @@ class VacuumSystem:
         self.manifolds = {}
         self.numSec = 0
         self.maxAllowedPressureDiff = 0.1  # not allow to open GV if pres. diff. exceeds this value
-        self.acceptablePumpPressure = 0.01 # pump pressure should be better than this during normal ops
+        self.acceptablePumpPressure = 0.04 # pump pressure should be better than this during normal ops
 
     def pressure(self, secName='pump'):
         """ support "pump" as a secName as well
@@ -226,12 +281,29 @@ class VacuumSystem:
     def normalOps(self):
         """ open the EV on each section with acceptable vacuum pressure
             this is useful after evacuating one of the vacuum sections
+            open the gate valves too if all pressures are acceptable
         """
+        # make sure the pump is on
+        if self.pressure()>self.acceptablePumpPressure:
+            raise Exception(f"possible problem with the pump, presure = {self.pressure()}")
+        
+        # open EVs
+        ok_to_open_GVs = True
         for vs in self.VSmap:
-            if self.pressure(vs['name'])>self.acceptablePumpPressure:
+            ok_to_open_GVs = ok_to_open_GVs and (self.pressure(vs['name'])<self.acceptablePumpPressure)
+            if self.pressure(vs['name'])>self.acceptablePumpPressure*2:
                 continue
-            self.openValve(vs['name'], 'EV')        
-         
+            if "manifold" in vs.keys():
+                pass
+            else:
+                self.openValve(vs['name'], 'EV')
+
+        # open GVs if all sections are good
+        if not ok_to_open_GVs:
+            return
+        for vs in self.VSmap:
+            self.openValve(vs['name'], "GV")
+            
     def evacuate(self, secName):
         """ check pump vacuum pressure, exit if section vacuum better than pump vacuum (pump off?)
             close the vent valve
@@ -280,6 +352,15 @@ class VacuumSystem:
         """
         self.closeValve(secName, "GV")
         self.closeValve(secName, "EV")
+        #time.sleep(5)  # just to be sure the valves are closed        
+       
+        # there have been some occasions when hte vacuum got worse when venting
+        # doing this out of precaution until we figure out what is wrong 
+        for vs in self.VSmap:
+            if vs['name']==secName:
+                continue
+            self.closeValve(vs['name'], 'EV')
+
         t0 = time.time()
         self.openValve(secName, "VV", softOpen=True)
         while True:
@@ -386,31 +467,68 @@ class VacuumSystem:
         else:
             raise Exception("Unknown valveType: ", valveType)
 
+global vacuum_sample_env
+
+try:
+    vacuum_sample_env
+except:
+    vacuum_sample_env = False
+
 # Maxi gauge controller IOC running on xf16idc-ioc1
 ESVacSys = VacuumSystem(MKSGauge("XF:16IDC-VA{ES-TCG:1}"))
-ESVacSys.appendManifold("EMmf", 
-                        ["XF:16IDC-VA{ES-EV:3}", "XF:16IDC-VA{ES-EV:SoftPump3}"], 
-                        ["XF:16IDC-VA{ES-VV:3}", "XF:16IDC-VA{ES-VV:SoftPump3}"])
 
-ESVacSys.appendSection("SS", MKSGauge("XF:16IDB-VA{Chm:SS-TCG:2}"), 
-                       EVName=["XF:16IDB-VA{Chm:SS-EV:1}", "XF:16IDB-VA{Chm:SS-EV:SoftPump1}"], 
-                       VVName=["XF:16IDB-VA{Chm:SS-VV:1}", "XF:16IDB-VA{Chm:SS-VV:SoftPump1}"],
-                       downstreamGVName="XF:16IDC-VA{Chm:SS-GV:1}")
+if vacuum_sample_env: # the nosecone and the microscope are connected
+    # open the valves on the manifold
+    IV1 = SolenoidValve("XF:16IDC-VA{ES-EV:Micrscp}")
+    IV2 = SolenoidValve("XF:16IDC-VA{ES-EV:Nosecone}")
+    IV1.open()
+    IV2.open()
+    ESVacSys.appendSection("SS", MKSGauge("XF:16IDB-VA{Chm:SS-TCG:2}"), 
+                           EVName=["XF:16IDB-VA{Chm:SS-EV:1}", "XF:16IDB-VA{Chm:SS-EV:SoftPump1}"], 
+                           VVName=["XF:16IDB-VA{Chm:SS-VV:1}", "XF:16IDB-VA{Chm:SS-VV:SoftPump1}"],
+                           downstreamGVName="XF:16IDC-VA{Chm:SS-GV:1}")
 
-ESVacSys.appendSection("SF", MKSGauge("XF:16IDB-VA{Chm:SF-TCG:1}"), 
-                       EVName=["XF:16IDC-VA{ES-EV:2}", "XF:16IDC-VA{ES-EV:SoftPump2}"], 
-                       VVName=["XF:16IDC-VA{ES-VV:2}", "XF:16IDC-VA{ES-VV:SoftPump2}"],
-                       downstreamGVName="XF:16IDC-VA{Chm:SF-GV:1}")
+    ESVacSys.appendSection("SF", MKSGauge("XF:16IDB-VA{Chm:SF-TCG:1}"), 
+                           EVName=["XF:16IDC-VA{ES-EV:2}", "XF:16IDC-VA{ES-EV:SoftPump2}"], 
+                           VVName=["XF:16IDC-VA{ES-VV:2}", "XF:16IDC-VA{ES-VV:SoftPump2}"],
+                           downstreamGVName="XF:16IDC-VA{Chm:SF-GV:1}")
 
-ESVacSys.appendSection("microscope", MaxiGauge("XF:16IDC-VA:{ES-Maxi:1}"), #MKSGauge("XF:16IDB-VA{EM-TCG:2}"), 
-                       manifoldName="EMmf", IVName="XF:16IDC-VA{ES-EV:Micrscp}",
-                       downstreamGVName=None)
+    ESVacSys.appendSection("sample", MaxiGauge("XF:16IDC-VA:{ES-Maxi:1}"), 
+                           EVName=["XF:16IDC-VA{ES-EV:3}", "XF:16IDC-VA{ES-EV:SoftPump3}"], 
+                           VVName=["XF:16IDC-VA{ES-VV:3}", "XF:16IDC-VA{ES-VV:SoftPump3}"],                           
+                           downstreamGVName="XF:16IDC-VA{EM-GV:1}")
 
-ESVacSys.appendSection("nosecone", MaxiGauge("XF:16IDC-VA:{ES-Maxi:2}"), #MKSGauge("XF:16IDB-VA{EM-TCG:1}", 
-                       manifoldName="EMmf", IVName="XF:16IDC-VA{ES-EV:Nosecone}",
-                       downstreamGVName="XF:16IDC-VA{EM-GV:1}")
+    ESVacSys.appendSection("WAXS", MKSGauge("XF:16IDB-VA{det:WAXS-TCG:1}"), 
+                           EVName=["XF:16IDC-VA{ES-EV:4}", "XF:16IDC-VA{ES-EV:SoftPump4}"], 
+                           VVName=["XF:16IDC-VA{ES-VV:4}", "XF:16IDC-VA{ES-VV:SoftPump4}"],
+                           downstreamGVName=None)    
+    
+else:
+    ESVacSys.appendManifold("EMmf", 
+                            ["XF:16IDC-VA{ES-EV:3}", "XF:16IDC-VA{ES-EV:SoftPump3}"], 
+                            ["XF:16IDC-VA{ES-VV:3}", "XF:16IDC-VA{ES-VV:SoftPump3}"])
 
-ESVacSys.appendSection("WAXS", MKSGauge("XF:16IDB-VA{det:WAXS-TCG:1}"), 
-                       EVName=["XF:16IDC-VA{ES-EV:4}", "XF:16IDC-VA{ES-EV:SoftPump4}"], 
-                       VVName=["XF:16IDC-VA{ES-VV:4}", "XF:16IDC-VA{ES-VV:SoftPump4}"],
-                       downstreamGVName=None)
+    ESVacSys.appendSection("SS", MKSGauge("XF:16IDB-VA{Chm:SS-TCG:2}"), 
+                           EVName=["XF:16IDB-VA{Chm:SS-EV:1}", "XF:16IDB-VA{Chm:SS-EV:SoftPump1}"], 
+                           VVName=["XF:16IDB-VA{Chm:SS-VV:1}", "XF:16IDB-VA{Chm:SS-VV:SoftPump1}"],
+                           downstreamGVName="XF:16IDC-VA{Chm:SS-GV:1}")
+
+    ESVacSys.appendSection("SF", MKSGauge("XF:16IDB-VA{Chm:SF-TCG:1}"), 
+                           EVName=["XF:16IDC-VA{ES-EV:2}", "XF:16IDC-VA{ES-EV:SoftPump2}"], 
+                           VVName=["XF:16IDC-VA{ES-VV:2}", "XF:16IDC-VA{ES-VV:SoftPump2}"],
+                           downstreamGVName="XF:16IDC-VA{Chm:SF-GV:1}")
+
+    ESVacSys.appendSection("microscope", MaxiGauge("XF:16IDC-VA:{ES-Maxi:1}"), #MKSGauge("XF:16IDB-VA{EM-TCG:2}"), 
+                           manifoldName="EMmf", IVName="XF:16IDC-VA{ES-EV:Micrscp}",
+                           downstreamGVName=None)
+
+    ESVacSys.appendSection("nosecone", MaxiGauge("XF:16IDC-VA:{ES-Maxi:2}"), #MKSGauge("XF:16IDB-VA{EM-TCG:1}", 
+                           manifoldName="EMmf", IVName="XF:16IDC-VA{ES-EV:Nosecone}",
+                           downstreamGVName="XF:16IDC-VA{EM-GV:1}")
+
+    ESVacSys.appendSection("WAXS", MKSGauge("XF:16IDB-VA{det:WAXS-TCG:1}"), 
+                           EVName=["XF:16IDC-VA{ES-EV:4}", "XF:16IDC-VA{ES-EV:SoftPump4}"], 
+                           VVName=["XF:16IDC-VA{ES-VV:4}", "XF:16IDC-VA{ES-VV:SoftPump4}"],
+                           downstreamGVName=None)
+
+
