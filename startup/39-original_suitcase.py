@@ -15,8 +15,19 @@ import copy
 from databroker import Header
 import copy
 
+def conv_to_list(d): 
+    if isinstance(d, float) or isinstance(d, int) or isinstance(d, str): 
+        return [d] 
+    elif isinstance(d, list):
+        if not isinstance(d[0], list):
+            return d 
+    d1 = []
+    for i in d:
+        d1 += conv_to_list(i) 
+    return d1 
 
-def hdf_export(headers, filename,
+
+def hdf5_export(headers, filename,
            stream_name=None, fields=None,
            timestamps=True, use_uid=True, db=None):
     """
@@ -85,8 +96,9 @@ def hdf_export(headers, filename,
 
                 _safe_attrs_assignment(desc_group, descriptor)
 
-                events = list(db.get_events(header, stream_name=descriptor['name'],
-                                            fill=True))
+                #events = list(db.get_events(header, stream_name=descriptor['name'],
+                #                            fill=True))
+                events = list(header.events(stream_name=descriptor['name'], fill=True))
                 event_times = [e['time'] for e in events]
                 desc_group.create_dataset('time', data=event_times,
                                           compression='gzip', fletcher32=True)
@@ -98,13 +110,14 @@ def hdf_export(headers, filename,
                     if fields is not None:
                         if key not in fields:
                             continue
+                    print(f"creating dataset for {key} ...")
                     if timestamps:
                         timestamps = [e['timestamps'][key] for e in events]
                         ts_group.create_dataset(key, data=timestamps,
                                                 compression='gzip',
                                                 fletcher32=True)
-                    data = [e['data'][key] for e in events]
-                    data = np.array(data)
+                    rawdata = [e['data'][key] for e in events]
+                    data = np.array(rawdata)
 
                     if value['dtype'].lower() == 'string':  # 1D of string
                         data_len = len(data[0])
@@ -123,10 +136,14 @@ def hdf_export(headers, filename,
                         else:
                             raise ValueError('Array of str with ndim >= 3 can not be saved.')
                     else:  # save numerical data
-                        dataset = data_group.create_dataset(
-                            key, data=data,
-                            compression='gzip', fletcher32=True)
-
+                        try:                               
+                            dataset = data_group.create_dataset(
+                                key, data=np.array(conv_to_list(rawdata)),  # issue with list of lists
+                                compression='gzip', fletcher32=True)
+                        except:
+                            print("failed to convert data: ")
+                            print(np.array(conv_to_list(rawdata)))
+                            continue
                     # Put contents of this data key (source, etc.)
                     # into an attribute on the associated data set.
                     _safe_attrs_assignment(dataset, dict(value))
