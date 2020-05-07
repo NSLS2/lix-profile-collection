@@ -45,6 +45,12 @@ class StandardProsilica(SingleTrigger, DetectorBase):
     stats1 = Cpt(StatsPlugin, 'Stats1:')
     stats2 = Cpt(StatsPlugin, 'Stats2:')
     stats3 = Cpt(StatsPlugin, 'Stats3:')
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.watch_timeouts_limit = 3
+        self.watch_timeouts = 0
+        self.watch_list = {}
 
     def stage(self):
         self.cam.acquire.put(0)
@@ -126,20 +132,45 @@ class StandardProsilica(SingleTrigger, DetectorBase):
         size_x,size_y = self.cam.size.get()
         d = self.snapshot(ROIs=[[0, size_x, 0, size_y]])[0]
         imageio.imwrite(fn, d)    
-        
-    def watch_for_change(self, mean_thresh=0, tot_thresh=0, lock=None, poll_rate=0.01, timeout=10):
+    
+    def setup_watch(self, watch_list):
+        """ watch list is actually a dictionary
+            the keys are the name of signals to watch, e.g. 
+            the values are the threhsolds beyond which a change is deemed to be observed
+        """
+        self.watch_list = {}
+        for sig_name in watch_list.keys():
+            if not sig_name in self.read_attrs:
+                raise Exception(f"{sig_name} is not a valid signal for {self.name}")
+            sig = getattr(self, sig_name)
+            self.watch_list[sig_name] = {'signal': sig, 
+                                         'base_value': sig.get(), 
+                                         'thresh': watch_list[sig_name]}
+    
+    def watch_for_change(self, lock=None, poll_rate=0.01, timeout=10):
         """ lock should have been acquired before this function is called
             when a change is observed, release the lock and return
-            05/25/19 moved to min and mean from max and sigma
         """
+        if len(self.watch_list.keys())==0:
+            print("nothing to watch for ...")
+            return
         t1 = time.time()
         while True:
-            if self.stats1.mean_value.get()>=mean_thresh or self.stats1.total.get()>=tot_thresh:
-                #print('released')
+            changed = False
+            for sig_name,sig in self.watch_list.items():
+                cur_value = sig['signal'].get()
+                if abs(cur_value-sig['base_value'])>sig['thresh']:
+                    print('change detected.')
+                    changed = True
+            if changed:
+                self.watch_timeouts=0
                 break
             t2 = time.time()
             if t2-t1>timeout:
-                #print('timedout')
+                self.watch_timeouts+=1
+                print(f'timedout #{self.watch_timeouts}')
+                if self.watch_timeouts>=self.watch_timeouts_limit:
+                    raise Exception(f"max # of timeouts reached.")
                 break
             time.sleep(poll_rate)
         if lock is not None:

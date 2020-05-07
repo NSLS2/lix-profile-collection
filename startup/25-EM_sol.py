@@ -3,10 +3,7 @@ from ophyd import (EpicsSignal, EpicsMotor, Device, Component as Cpt)
 from time import sleep
 import threading,signal
 from epics import PV
-import bluesky.plans as bp
-
-global pilatus_trigger_mode
-    
+import bluesky.plans as bp    
 
 class SolutionScatteringControlUnit(Device):
     reset_pump = Cpt(EpicsSignal, 'pp1c_reset')
@@ -135,21 +132,13 @@ class SolutionScatteringExperimentalModule():
     # syringe pump 
     default_piston_pos = 150
     default_pump_speed = 1500
-    # SC changed the value from 600 on 7/9/17
     default_load_pump_speed = 350     
     vol_p4_to_cell = {'upstream': -120, 'downstream': -120}
-    # 2019/02/14, chaned from 132 to 127
     vol_tube_to_cell = {'upstream': 99, 'downstream': 99} 
-    vol_sample_headroom = 13 #2019/02/14 reduced from 13
-    vol_flowcell_headroom=45 #2019/02/14 
-    #mean_thresh = {'upstream': 75, 'downstream': 80} # Mean thresh added on 5/25/19 by SC
-    #min_thresh = {'upstream': 12, 'downstream': 12} # Mean thresh added on 5/25/19 by SC
-    #camera_trigger_thresh = 20
+    vol_sample_headroom = 13 
+    vol_flowcell_headroom = 45  
+    watch_list = {'stats1.total': 0.2e8}
     
-    # these numbers are for the 2016 version tube holder
-    #tube1_pos = -15.95     # relative to well position
-    #tube_spc = -9.0      # these are mechanically determined and should not change
-    # 2017 march version of tube holder with alterate tube/empty holes
     Ntube = 18
     tube1_pos=-18.83   #4/10/20 sc[new sensor]    #12/20/17 by JB
     tube_spc = -5.8417     # these are mechanically determined and should not change
@@ -157,16 +146,12 @@ class SolutionScatteringExperimentalModule():
     default_dry_time = 30
     default_wash_repeats = 5
     
-    # set up camera 
     cam = setup_cam("XF:16IDA-BI{Cam:OAM}", "camOAM")
     
     def __init__(self):
         # important to home the stages !!!!!
-        #     home sample y (SmarAct) from controller
-        #     home sample_x and holder_x manually 
-        #          move stage to default position and set_current_position(0)
-        #          sample_x: beam centered on cell,   holder_x: needles aligned to washing wells/drains 
-        #
+        # how to home sample_y???
+        
         # load configuration
         #self.load_config(default_solution_scattering_config_file)
         self.return_piston_pos = self.default_piston_pos
@@ -176,8 +161,6 @@ class SolutionScatteringExperimentalModule():
 
         self.holder_x.acceleration.put(0.2)
         self.holder_x.velocity.put(25)
-        #self.sample_x.acceleration.put(0.2)
-        #self.sample_x.velocity.put(5)
 
         self.int_handler = signal.getsignal(signal.SIGINT)
 
@@ -196,12 +179,10 @@ class SolutionScatteringExperimentalModule():
         else:
             print("not in the main thread, cannot change ctrl-C handler ... ")
             
-    # needle vs tube position
-    # this applies for the tube holder that has the alternate tube/empty pattern
-    # in the current design the even tube position is on the downstream side
     def verify_needle_for_tube(self, tn, nd):
-        # if both are allowed, simpluy return nd
-        #return nd
+        """  needle vs tube position
+             in the current design the even tube position is on the downstream side
+        """        
         if tn%2==0: # even tube number
             return("upstream")
         else: # odd tube number
@@ -214,18 +195,10 @@ class SolutionScatteringExperimentalModule():
             raise Exception("the door state should be either open or close.")
             
         if state=='open':
-            setSignal(sol.ctrl.sv_door_lower, 1)#, sol.DoorOpen)
+            setSignal(sol.ctrl.sv_door_lower, 1, sol.DoorOpen)
         else: 
-            setSignal(sol.ctrl.sv_door_lower, 0)#, sol.DoorOpen)
+            setSignal(sol.ctrl.sv_door_lower, 0, sol.DoorOpen)
             
-    # homing procedure without encoder strip [obsolete]:
-    #     reduce motor current, drive sol.holder_x in the possitive direction to hit the hard stop
-    #     move the motor back by 0.5mm, set the current position to 37.5 ("park" position)
-    #     set software limits:
-    #          caput("XF:16IDC-ES:Sol{Enc-Ax:Xl}Mtr.LLM", -119)
-    #          caput("XF:16IDC-ES:Sol{Enc-Ax:Xl}Mtr.HLM", 31.5)
-    #     change the motor current back
-    # keep motor current low?
     def home_holder(self):
         mot = sol.holder_x
     
@@ -256,7 +229,6 @@ class SolutionScatteringExperimentalModule():
         while mot.moving:
             sleep(0.5)
         mot.set_current_position(0)
-        #caput(mot.prefix+".LLM", self.tube1_pos+self.tube_spc*(self.Ntube-1)-0.5)
         caput(mot.prefix+".HLM", self.park_pos+0.5)
         caput(mot.prefix+".LLM", self.tube1_pos+self.tube_spc*(self.Ntube-1)-0.5)
 
@@ -268,14 +240,7 @@ class SolutionScatteringExperimentalModule():
 
     def load_config(self, fn):
         pass
-    
-    def floating_threshold(self):
-        base_mean=self.cam.stats1.mean_value.get() 
-        base_tot=self.cam.stats1.total.get() 
-        mean_thresh = base_mean+10
-        tot_thresh = base_tot+2e7 
-        return mean_thresh,tot_thresh
-    
+        
     def select_flow_cell(self, cn):
         if self.disable_flow_cell_move:
             print("flow cell motion disabled !!!")
@@ -484,26 +449,17 @@ class SolutionScatteringExperimentalModule():
         self.ctrl.pump_mvA(self.return_piston_pos+self.load_vol)
         if wait:
             self.ctrl.wait()
-    
-    def check_pilatus_detectors(self):
-        """ make sure that only externally triggered Pilatus are used in data collection
-        """
-        for det in DETS:
-            if det.__class__!=LIXPilatusExt:
-                raise Exception("only LIXPilatusExt can be used in data collection: {det.__class__}")
-       
+           
     def collect_data(self, vol=45, exp=2, repeats=3, sample_name='test', check_sname=True):
-        self.check_pilatus_detectors()
-        mean_thresh, tot_thresh = self.floating_threshold() 
-        print(mean_thresh,tot_thresh)
         nd = self.verify_needle_for_tube(self.tube_pos, nd=None)
         
-        pilatus_ct_time(exp)
-        pilatus_number_reset(True)
-        #print(self.mean_thresh[nd])
-        #print(self.min_thresh[nd])
         change_sample(sample_name, check_sname=check_sname)
-        set_pil_num_images(repeats)
+        self.cam.setup_watch(self.watch_list)
+
+        pil.set_trigger_mode(PilatusTriggerMode.ext)
+        pil.exp_time(exp)
+        pil.number_reset(True)
+        pil.set_num_images(repeats, rep=1)
         em1.averaging_time.put(0.25)
         em2.averaging_time.put(0.25)
         em1.acquire.put(1)
@@ -512,18 +468,12 @@ class SolutionScatteringExperimentalModule():
         # pump_spd unit is ul/min
         self.ctrl.pump_spd.put(60.*vol/(repeats*exp)) # *0.85) # this was necesary when there is a delay between frames
         
-        
         # stage the pilatus detectors first to be sure that the detector are ready
-        stage_pilatus(multitrigger=False)
-        pilatus_trigger_lock.acquire()
-        #self.ctrl.pump_mvR(vol+self.vol_flowcell_headroom)
-        # monitor sample arrival on the camera [update on 5/25/19 to use mean and min thresh]
-        threading.Thread(target=self.cam.watch_for_change,
-                         args=(mean_thresh, tot_thresh, pilatus_trigger_lock,0.01,10)).start()
-        #args=(self.mean_thresh[nd], self.min_thresh[nd], pilatus_trigger_lock,)).start() Threshold changed from fixed to floating --SC 6/10/19
+        pil.stage()
+        pil.trigger_lock.acquire()
+        threading.Thread(target=self.cam.watch_for_change, args=(pil.trigger_lock,)).start()
         self.ctrl.pump_mvR(vol+self.vol_flowcell_headroom)
-        # num=1 due to stage_pilatus(multitrigger=False)
-        RE(ct(DETS, num=1))
+        RE(ct([pil], num=1))   # number of exposures determined by pil.set_num_images()
         sd.monitors = []
         change_sample()
         
@@ -607,30 +557,3 @@ class SolutionScatteringExperimentalModule():
         self.ctrl.ready.put(0)
         #mov_all(self.sample_x,-length,wait=False,relative=True)
     
-    ## This is specific to the multi-position holder for "sticky" samples
-    def meas_opencell(self, exp, repeats, sample_name='test'):
-        pilatus_ct_time(exp)
-        pilatus_number_reset(False)
-        
-        DETS=[em1, em2, pil1M, pilW1, pilW2]
-        set_pil_num_images(repeats)
-        length=7.5
-        #self.ctrl.wait()
-        #self.sample_x.velocity.put(length/((repeats*exp)+4))
-        th = threading.Thread(target=self.mov_delay, args=(length, ) )
-        th.start()
-        RE(count_fs(DETS, num=1))
-        #self.sample_x.velocity.put(0)
-        #movr(self.sample_x, length)
-
-        
-# this should be moved to startup.py for solution scattering        
-"""
-p = PV('XF:16IDC-ES:Sol{ctrl}busy') 
-sleep(1)  # after 2017C1 shtdown, this delay becomes necessary
-if p.connect():
-    sol = SolutionScatteringExperimentalModule()
-else:
-    print("solution scattering EM is not available.")
-del p
-"""
