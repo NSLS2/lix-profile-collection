@@ -28,6 +28,7 @@ class PilatusFilePlugin(Device, FileStoreIterativeWrite):
     file_name = ADComponent(EpicsSignalWithRBV, 'FileName', string=True)
     file_template = ADComponent(EpicsSignalWithRBV, 'FileTemplate', string=True)
     file_number_reset = 1
+    next_file_number = 1
     sub_directory = None
     froot = data_file_path.gpfs
     enable = SimpleNamespace(get=lambda: True)
@@ -64,12 +65,21 @@ class PilatusFilePlugin(Device, FileStoreIterativeWrite):
         # if file number reset is Ture, use 1 as the next file #
         # if reset is False, when the first Pilatus/PilatusExt instance is staged, the file# will be
         # synchronized to the highest current value
-        if PilatusFilePlugin.file_number_reset==1:
+        if PilatusFilePlugin.file_number_reset==1 and self.file_number.get()>1:
+            #PilatusFilePlugin.next_file_number = 1
             print("resetting file number for ", self.parent.name)
             # it is a bad idea to wait since auto-increment may change this value immediately
             #set_and_wait(self.file_number, 1, timeout=99999)   
-            self.file_number.put(1)
+            for d in pilatus_detectors:
+                d.file.file_number.put(1)
             print('done.')
+        #else:
+        #    PilatusFilePlugin.next_file_number = np.max([d.file.file_number.get() for d in pilatus_detectors])
+        #
+        # it appears that sometime the pilatus detector not being used confuses the file number 
+        #for d in pilatus_detectors:
+        #    if d.file.file_number.get() != PilatusFilePlugin.next_file_number:
+        #        d.file.file_number.put(PilatusFilePlugin.next_file_number)
         elif self.parent.name == first_Pilatus():
             next_file_number = np.max([d.file.file_number.get() for d in pilatus_detectors])
             for d in pilatus_detectors:
@@ -325,7 +335,7 @@ def first_Pilatus():
 
 def first_PilatusExt():
     #print("checking first Pialtus")
-    for det in reversed(DETS):
+    for det in DETS:
         if det.__class__ == LIXPilatusExt:
             #print(det.name)
             return det.name

@@ -80,7 +80,7 @@ class valve(TwoButtonShutter):
     except:
         enabled_status = None
         
-class SolenoidValve1:
+class SolenoidValve:
     def __init__(self, devName, name=""):
         """ for soft pump valves devName should be a list
             some valves have 
@@ -89,7 +89,7 @@ class SolenoidValve1:
             if len(devName)!=2:
                 raise Exception("2 PVs must be given for a soft pump valve.")
             self.has_soft = True
-            self.soft_valve = SolenoidValve1(devName[1], name+"_soft")
+            self.soft_valve = SolenoidValve(devName[1], name+"_soft")
             devName = devName[0]
             self.devName = devName
         else:
@@ -109,7 +109,11 @@ class SolenoidValve1:
         else:
             if self.has_soft:
                 self.soft_valve.close()
-            self.device.set("Open")
+            st = self.device.set("Open")
+            while not st.done:
+                time.sleep(0.5)
+            if not st.success:
+                raise Exception("failed to open valve ...")
             
     def close(self):
         print("request to close valve: ", self.devName)
@@ -119,7 +123,11 @@ class SolenoidValve1:
             if self.soft_valve.status==1:
                 self.soft_valve.close()
         if self.status==1:
-            self.device.set("Close")
+            st = self.device.set("Close")
+            while not st.done:
+                time.sleep(0.5)
+            if not st.success:
+                raise Exception("failed to close valve ...")
             
     @property
     def status(self):
@@ -130,7 +138,7 @@ class SolenoidValve1:
             return st
             
             
-class SolenoidValve:
+class SolenoidValve1:
     """ this works for both gate valves and solenoid valves
         status of the valve is given by PV [deviceName]Pos-Sts
         open the valve by setting PV [deviceName]Cmd:Opn-Cmd to 1
@@ -481,8 +489,6 @@ if vacuum_sample_env: # the nosecone and the microscope are connected
     # open the valves on the manifold
     IV1 = SolenoidValve("XF:16IDC-VA{ES-EV:Micrscp}")
     IV2 = SolenoidValve("XF:16IDC-VA{ES-EV:Nosecone}")
-    IV1.open()
-    IV2.open()
     ESVacSys.appendSection("SS", MKSGauge("XF:16IDB-VA{Chm:SS-TCG:2}"), 
                            EVName=["XF:16IDB-VA{Chm:SS-EV:1}", "XF:16IDB-VA{Chm:SS-EV:SoftPump1}"], 
                            VVName=["XF:16IDB-VA{Chm:SS-VV:1}", "XF:16IDB-VA{Chm:SS-VV:SoftPump1}"],
@@ -502,7 +508,10 @@ if vacuum_sample_env: # the nosecone and the microscope are connected
                            EVName=["XF:16IDC-VA{ES-EV:4}", "XF:16IDC-VA{ES-EV:SoftPump4}"], 
                            VVName=["XF:16IDC-VA{ES-VV:4}", "XF:16IDC-VA{ES-VV:SoftPump4}"],
                            downstreamGVName=None)    
-    
+    ESVacSys.VSmap[ESVacSys.VSindex["sample"]]['EV'].close()
+    ESVacSys.VSmap[ESVacSys.VSindex["sample"]]['VV'].close() 
+    IV1.open()
+    IV2.open()   
 else:
     ESVacSys.appendManifold("EMmf", 
                             ["XF:16IDC-VA{ES-EV:3}", "XF:16IDC-VA{ES-EV:SoftPump3}"], 

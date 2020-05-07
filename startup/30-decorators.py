@@ -5,7 +5,7 @@ import bluesky.preprocessors as bpp
 USE_FAST_SHUTTER = True
 
 def fast_shutter_wrapper(plan):
-    update_metadata()
+    #update_metadata()
 
     if USE_FAST_SHUTTER:
         plan = bpp.pchain(bps.abs_set(fast_shutter.output, FastShutter.OPEN_SHUTTER, settle_time=FastShutter.SETTLE_TIME), plan)

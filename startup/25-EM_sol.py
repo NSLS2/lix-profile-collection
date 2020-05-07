@@ -29,6 +29,7 @@ class SolutionScatteringControlUnit(Device):
     fan_power = Cpt(EpicsSignal, "fan_power")
     sampleT = Cpt(EpicsSignal, "sample_temp")
     sampleTs = Cpt(EpicsSignal, "sample_temp_SP")
+    sampleTCsts = Cpt(EpicsSignal, "sample_TC_sts")
     vc_4port = Cpt(EpicsSignal, "vc_4port_valve")
     serial_busy = Cpt(EpicsSignal, "busy")
     ready = Cpt(EpicsSignal, "ready")
@@ -103,7 +104,7 @@ class SolutionScatteringExperimentalModule():
     # the addtional positions are for the standard sample, a empty space for checking scattering background,
     #    and for the scintillator for check the beam shape
     # this information should be verified every time we setup for solution scattering
-    flowcell_pos = {'bottom': 4.8, 'middle': 0.165, 'top': -4.1,
+    flowcell_pos = {'bottom': 4.5, 'middle': 0, 'top': -4.5,
                     "std": -12., "empty": -15., "scint": -17.}  
     
     # this is the 4-port valve piosition necessary for the wash the needle
@@ -138,9 +139,9 @@ class SolutionScatteringExperimentalModule():
     default_load_pump_speed = 350     
     vol_p4_to_cell = {'upstream': -120, 'downstream': -120}
     # 2019/02/14, chaned from 132 to 127
-    vol_tube_to_cell = {'upstream': 125, 'downstream': 125} 
-    vol_sample_headroom = 5 #2019/02/14 reduced from 13
-    vol_flowcell_headroom=15 #2019/02/14 
+    vol_tube_to_cell = {'upstream': 99, 'downstream': 99} 
+    vol_sample_headroom = 13 #2019/02/14 reduced from 13
+    vol_flowcell_headroom=45 #2019/02/14 
     #mean_thresh = {'upstream': 75, 'downstream': 80} # Mean thresh added on 5/25/19 by SC
     #min_thresh = {'upstream': 12, 'downstream': 12} # Mean thresh added on 5/25/19 by SC
     #camera_trigger_thresh = 20
@@ -150,7 +151,7 @@ class SolutionScatteringExperimentalModule():
     #tube_spc = -9.0      # these are mechanically determined and should not change
     # 2017 march version of tube holder with alterate tube/empty holes
     Ntube = 18
-    tube1_pos=-18.75    #12/20/17 by JB
+    tube1_pos=-18.83   #4/10/20 sc[new sensor]    #12/20/17 by JB
     tube_spc = -5.8417     # these are mechanically determined and should not change
 
     default_dry_time = 30
@@ -270,10 +271,10 @@ class SolutionScatteringExperimentalModule():
     
     def floating_threshold(self):
         base_mean=self.cam.stats1.mean_value.get() 
-        base_min=self.cam.stats1.min_value.get() 
-        mean_thresh = base_mean + 10 
-        min_thresh = base_min + 10 
-        return mean_thresh,min_thresh
+        base_tot=self.cam.stats1.total.get() 
+        mean_thresh = base_mean+10
+        tot_thresh = base_tot+2e7 
+        return mean_thresh,tot_thresh
     
     def select_flow_cell(self, cn):
         if self.disable_flow_cell_move:
@@ -371,6 +372,7 @@ class SolutionScatteringExperimentalModule():
             for n in range(repeats):
                 print("current wash loop %d of %d" % (n+1,repeats))
                 # first turn on watch to fill the drain well
+                print("water")
                 self.ctrl.water_pump.put('on')
                 sleep(self.wash_duration)
                 # now turn on the drain but keep flushing water
@@ -384,6 +386,7 @@ class SolutionScatteringExperimentalModule():
 
         if option!="wash only":
             self.drain[nd].put('on')
+            print('n2')
             self.ctrl.sv_sel.put(self.sel_valve['N2'])
             self.ctrl.sv_N2.put('on')
             countdown("drying for ", dry_duration)
@@ -491,7 +494,8 @@ class SolutionScatteringExperimentalModule():
        
     def collect_data(self, vol=45, exp=2, repeats=3, sample_name='test', check_sname=True):
         self.check_pilatus_detectors()
-        mean_thresh, min_thresh = self.floating_threshold() 
+        mean_thresh, tot_thresh = self.floating_threshold() 
+        print(mean_thresh,tot_thresh)
         nd = self.verify_needle_for_tube(self.tube_pos, nd=None)
         
         pilatus_ct_time(exp)
@@ -500,7 +504,11 @@ class SolutionScatteringExperimentalModule():
         #print(self.min_thresh[nd])
         change_sample(sample_name, check_sname=check_sname)
         set_pil_num_images(repeats)
-        
+        em1.averaging_time.put(0.25)
+        em2.averaging_time.put(0.25)
+        em1.acquire.put(1)
+        em2.acquire.put(1)
+        sd.monitors = [em1.sum_all.mean_value, em2.sum_all.mean_value]
         # pump_spd unit is ul/min
         self.ctrl.pump_spd.put(60.*vol/(repeats*exp)) # *0.85) # this was necesary when there is a delay between frames
         
@@ -508,17 +516,12 @@ class SolutionScatteringExperimentalModule():
         # stage the pilatus detectors first to be sure that the detector are ready
         stage_pilatus(multitrigger=False)
         pilatus_trigger_lock.acquire()
-        self.ctrl.pump_mvR(vol+self.vol_flowcell_headroom)
+        #self.ctrl.pump_mvR(vol+self.vol_flowcell_headroom)
         # monitor sample arrival on the camera [update on 5/25/19 to use mean and min thresh]
         threading.Thread(target=self.cam.watch_for_change,
-                         args=(mean_thresh, min_thresh, pilatus_trigger_lock,)).start()
+                         args=(mean_thresh, tot_thresh, pilatus_trigger_lock,0.01,10)).start()
         #args=(self.mean_thresh[nd], self.min_thresh[nd], pilatus_trigger_lock,)).start() Threshold changed from fixed to floating --SC 6/10/19
-        
-        em1.averaging_time.put(0.25)
-        em2.averaging_time.put(0.25)
-        em1.acquire.put(1)
-        em2.acquire.put(1)
-        sd.monitors = [em1.sum_all.mean_value, em2.sum_all.mean_value]
+        self.ctrl.pump_mvR(vol+self.vol_flowcell_headroom)
         # num=1 due to stage_pilatus(multitrigger=False)
         RE(ct(DETS, num=1))
         sd.monitors = []

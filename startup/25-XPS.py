@@ -46,7 +46,11 @@ class PositioningStackMicroscope(PositioningStack):
     sz = EpicsMotor('XF:16IDC-ES:Scan2-Gonio{Ax:sZ}Mtr', name='ss_sz')
     tx = EpicsMotor('XF:16IDC-ES:Scan2-Gonio{Ax:tX}Mtr', name='ss_tx')
     tz = EpicsMotor('XF:16IDC-ES:Scan2-Gonio{Ax:tZ}Mtr', name='ss_tz')
-
+    try: # may not always be installed
+        rx = EpicsMotor('XF:16IDC-ES:Scan2{Ax:RX}Mtr', name='ss_rx')
+    except:
+        rx = None
+        print("ss.rx not available")
 
 class XPStraj(Device):
     def __init__(self, ip_addr, group, name, devices=None):

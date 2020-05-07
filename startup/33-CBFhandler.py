@@ -23,19 +23,19 @@ global pilatus_trigger_mode
 
 pilatus_trigger_mode = triggerMode.software_trigger_single_frame
 
-# assuming that the data files always have names with these extensions 
-image_size = {
-    'SAXS': (1043, 981),
-    'WAXS1': (619, 487),
-    'WAXS2': (1043, 981)
-}
-
 # if the cbf files have been moved already
 #CBF_replace_data_path = False
 
 class PilatusCBFHandler(HandlerBase):
     specs = {'AD_CBF'} | HandlerBase.specs
     froot = data_file_path.gpfs 
+    subdir = None
+    # assuming that the data files always have names with these extensions 
+    std_image_size = {
+        'SAXS': (1043, 981),
+        'WAXS1': (619, 487),
+        'WAXS2': (1043, 981)      # orignal WAXS2 was (619, 487)
+    }
 
     def __init__(self, rpath, template, filename, frame_per_point=1, initial_number=1):
         #if frame_per_point>1:
@@ -52,9 +52,9 @@ class PilatusCBFHandler(HandlerBase):
         self._default_path = os.path.join(rpath, '')
         self._path = ""
         
-        for k in image_size:
+        for k in self.std_image_size:
             if template.find(k)>=0:
-                self._image_size = image_size[k]
+                self._image_size = self.std_image_size[k]
         if self._image_size is None:
             raise Exception(f'Unrecognized data file extension in filename template: {template}')
 
@@ -93,16 +93,19 @@ class PilatusCBFHandler(HandlerBase):
         print("  ", self._initial_number, point_number, self._fpp)
         print("  ", self._template, self._path, self._initial_number)
         self.update_path()
+        if self.subdir is not None:
+            self._path += f"{self.subdir}/"
      
         if pilatus_trigger_mode == triggerMode.software_trigger_single_frame or self._fpp == 1:
-            fn = self._template % (self._path, self._filename, point_number+1)
+            fn = self._template % (self._path, self._filename, self._initial_number+point_number)
             ret.append(self.get_data(fn))
         elif pilatus_trigger_mode in [triggerMode.software_trigger_multi_frame,
                                       triggerMode.fly_scan]:
             for i in range(self._fpp):
-                fn = self._template % (self._path, self._filename, point_number+1, i) 
+                fn = self._template % (self._path, self._filename, start, point_number+i) 
                 #data = self.get_data(fn)
                 #print(f"{i}: {data.shape}")
+                #print(fn)
                 ret.append(self.get_data(fn))
         elif pilatus_trigger_mode==triggerMode.external_trigger:
             fn = self._template % (self._path, self._filename, start, point_number)

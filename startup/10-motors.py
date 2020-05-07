@@ -91,8 +91,8 @@ class Microscope(PseudoPositioner):
     @real_position_argument
     def inverse(self, pos):
         """pos is self.RealPosition"""
-        pRx = np.degrees((pos.kz1 - pos.kz2)/self.Lx)
-        pRy = np.degrees(0.5*(pos.kz1 + pos.kz2)/self.Ly)
+        pRy = np.degrees((pos.kz1 - pos.kz2)/self.Lx)
+        pRx = np.degrees(0.5*(pos.kz1 + pos.kz2)/self.Ly)
         return self.PseudoPosition(Rx=pRx, Ry=pRy)
 
     
@@ -138,11 +138,11 @@ ssa1 = ApertureDev('XF:16IDB-OP{Slt:SSA1', name='ssa1')
 
 ## Attenuator
 # Absorber Set #1
-atn1x = EpicsMotor('XF:16IDB-OP{Fltr:Atn-Ax:X1}Mtr', name='atn1x')
+atn1x = EpicsMotor('XF:16IDB-OP{Fltr:Attn-Ax:X1}Mtr', name='atn1x')
 # Absorber Set #2
-atn2x = EpicsMotor('XF:16IDB-OP{Fltr:Atn-Ax:X2}Mtr', name='atn2x')
+atn2x = EpicsMotor('XF:16IDB-OP{Fltr:Attn-Ax:X2}Mtr', name='atn2x')
 # Absorber Set #3
-atn3x = EpicsMotor('XF:16IDB-OP{Fltr:Atn-Ax:X3}Mtr', name='atn3x')
+atn3x = EpicsMotor('XF:16IDB-OP{Fltr:Attn-Ax:X3}Mtr', name='atn3x')
 
 ## Alternative SSA
 #assa = SlitsCenterAndGap('XF:16IDB-OP{Slt:aSSA', name="aSSA")

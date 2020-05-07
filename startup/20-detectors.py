@@ -127,17 +127,19 @@ class StandardProsilica(SingleTrigger, DetectorBase):
         d = self.snapshot(ROIs=[[0, size_x, 0, size_y]])[0]
         imageio.imwrite(fn, d)    
         
-    def watch_for_change(self, max_thresh=0, sigma_thresh=0, lock=None, poll_rate=0.05, timeout=10):
+    def watch_for_change(self, mean_thresh=0, tot_thresh=0, lock=None, poll_rate=0.01, timeout=10):
         """ lock should have been acquired before this function is called
             when a change is observed, release the lock and return
             05/25/19 moved to min and mean from max and sigma
         """
         t1 = time.time()
         while True:
-            if self.stats1.mean_value.get()>max_thresh or self.stats1.min_value.get()>sigma_thresh:
+            if self.stats1.mean_value.get()>=mean_thresh or self.stats1.total.get()>=tot_thresh:
+                #print('released')
                 break
             t2 = time.time()
             if t2-t1>timeout:
+                #print('timedout')
                 break
             time.sleep(poll_rate)
         if lock is not None:
@@ -176,6 +178,7 @@ camAltSS     = setup_cam("XF:16IDB-BI{AltSS}", "camAltSS")  # should change the 
 camBHutch    = setup_cam("XF:16IDB-BI{Cam:BHutch}", "camBHutch")
 camSF        = setup_cam("XF:16IDC-BI{Cam:SF}", "camSF")
 camSol        = setup_cam("XF:16IDC-BI{Cam:Sol}", "camSol")
+camTop       = setup_cam("XF:16IDC-BI{Cam:sam_top}", "camTop")
 #camOAM       = setup_cam("XF:16IDA-BI{Cam:OAM}", "camOAM")
 """
 

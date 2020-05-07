@@ -33,21 +33,23 @@ def h5_fix_sample_name(fn_h5):
             f.move(g, sn)
     f.close()
 
-pack_h5_lock = threading.Lock()
+# maximum process allowed to be packing hdf5 files (may use a lot of memory)
+max_packing_processes = 3
+pack_h5_lock = threading.Semaphore(max_packing_processes)
 
 def pack_h5_with_lock(*args, **kwargs):
     pack_h5_lock.acquire()
-    #try:
-    ret = pack_h5(*args, **kwargs)
-    #except:
-    #    print("an error occur when packing h5.")
-    #    ret = None
+    try:
+        ret = pack_h5(*args, **kwargs)
+    except Exception as e:
+        print(f"An error occured when packing h5: {e}")
+        ret = None
     pack_h5_lock.release()    
     return ret
     
-def pack_h5(uids, dest_dir='', fn=None, fix_sample_name=True, 
-            attach_uv_file=False, delete_old_file=True, 
-            fields=[#'em2_current1_mean_value', 'em2_current2_mean_value',
+def pack_h5(uids, dest_dir='', fn=None, fix_sample_name=True, stream_name=None, 
+            attach_uv_file=False, delete_old_file=True, include_motor_pos=True,
+            fields=['em2_current1_mean_value', 'em2_current2_mean_value',
                     'em1_sum_all_mean_value', 'em2_sum_all_mean_value',
                     'pil1M_image', 'pilW1_image', 'pilW2_image', 
                     'pil1M_ext_image', 'pilW1_ext_image', 'pilW2_ext_image']):
@@ -81,7 +83,7 @@ def pack_h5(uids, dest_dir='', fn=None, fix_sample_name=True,
     fds0 = headers[0].fields()
     # only these fields are considered relevant to be saved in the hdf5 file
     fds = list(set(fds0) & set(fields))
-    if 'motors' in list(headers[0].start.keys()):
+    if 'motors' in list(headers[0].start.keys()) and include_motor_pos:
         for m in headers[0].start['motors']:
             fds += [m] #, m+"_user_setpoint"]
     
@@ -100,7 +102,7 @@ def pack_h5(uids, dest_dir='', fn=None, fix_sample_name=True,
             pass
         
     print(fds)
-    hdf5_export(headers, fn, fields=fds, use_uid=False) #, mds= db.mds, use_uid=False) 
+    hdf5_export(headers, fn, fields=fds, stream_name=stream_name, use_uid=False) #, mds= db.mds, use_uid=False) 
     
     # by default the groups in the hdf5 file are named after the scan IDs
     if fix_sample_name:
@@ -109,7 +111,7 @@ def pack_h5(uids, dest_dir='', fn=None, fix_sample_name=True,
     if attach_uv_file:
         # by default the UV file should be saved in /GPFS/xf16id/Windows/
         # ideally this should be specified, as the default file is overwritten quickly
-        h5_attach_hplc(fn, '/GPFS/xf16id/Windows/hplc_export.txt')
+        h5_attach_hplc(fn, '/nsls2/xf16id1/Windows/hplc_export.txt')
     
     print(f"finished packing {fn} ...")
     return fn
@@ -133,7 +135,7 @@ def h5_attach_hplc(fn_h5, fn_hplc, chapter_num=-1, grp_name=None):
     # 3rd line of the header contains the HPLC data file name, which is based on the sample name 
     sname = hdstr.split('\n')[2].split('\\')[-1][:-4]
     if grp_name!=sname:
-        print(f"mismatched sample name: {sname} vs grp_name")
+        print(f"mismatched sample name: {sname} vs {grp_name}")
         f.close()
         return
     
@@ -163,28 +165,52 @@ def h5_attach_hplc(fn_h5, fn_hplc, chapter_num=-1, grp_name=None):
     f.close()
 
 from py4xs.detector_config import create_det_from_attrs
-from py4xs.hdf import h5sol_HPLC,h5sol_HT,h5xs
+from py4xs.hdf import h5sol_HPLC,h5sol_HT,h5xs,h5exp    
 import json
 
 import socket
 packing_queue_sock_port = 9999
 
-def send_to_packing_queue(uid, datatype, froot=data_file_path.ramdisk):
-    """ data_type must be one of ["scan", "flyscan", "HPLC", "sol", "multi"]
+def send_to_packing_queue(uid, datatype, froot=data_file_path.ramdisk, move_first=False):
+    """ data_type must be one of ["scan", "flyscan", "HPLC", "sol", "multi", "mscan"]
         single uid only for "scan", "flyscan", "HPLC"
         uids must be concatenated using '|' for "multi" and "sol"
+        if move_first is True, move the files from RAMDISK to GPFS first, otherwise the RAMDISK
+            may fill up since only one pack_h5 process is allow
     """
-    if datatype not in ["scan", "flyscan", "HPLC", "multi", "sol"]:
+    if datatype not in ["scan", "flyscan", "HPLC", "multi", "sol", "mscan", "mfscan"]:
         raise Exception("invalid data type: {datatype}, valid options are scan and HPLC.")
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM) 
     s.connect(('10.16.0.4', packing_queue_sock_port))
-    msg = f"{datatype}::{uid}::{proc_path}::{froot.name}"
+    msg = f"{datatype}::{uid}::{proc_path}::{froot.name}::{move_first}"
     s.send(msg.encode('ascii'))
     s.close()
 
-from py4xs.hdf import h5exp    
-    
-def pack_and_move(data_type, uid, dest_dir):
+
+def move_files_from_RAMDISK(uids, dir_name=None):
+    for uid in uids:
+        print(f'moving files for {uid} from RAMDISK to GPFS ...')
+        h = db[uid]        
+        p1 = h.start['data_path']  
+        #p2 = p1.replace(default_data_path_root, '/ramdisk/')
+        p2 = p1.replace(data_file_path.gpfs.value, '/ramdisk')
+        sample_name = h.start['sample_name']
+        if dir_name is not None:
+            cmd = f"rsync -ahv --remove-source-files det@10.16.0.14:{p2}{dir_name} {p1}"
+        elif "subdir" in h.start.keys():
+            subdir = h.start['subdir']
+            cmd = f"rsync -ahv --remove-source-files det@10.16.0.14:{p2}{subdir} {p1}{subdir}"
+        elif os.system(f"ssh -q det@10.16.0.14 [[ -d {p2}{sample_name} ]]")==0:
+            # if sample name is a directory on the RAMDISK, move the entire directory
+            cmd = f"rsync -ahv --remove-source-files det@10.16.0.14:{p2}{sample_name} {p1}"
+        else:        
+            cmd = f"rsync -ahv --remove-source-files det@10.16.0.14:{p2}{sample_name}_*.* {p1}"
+            #os.system(f"rsync -ahv --remove-source-files det@10.16.0.14:{p2}{h.start['sample_name']}_*.log {p1}")          
+        print(cmd)
+        os.system(cmd)
+
+
+def pack_and_move(data_type, uid, dest_dir, move_first=True):
     # useful for moving files from RAM disk to GPFS during fly scans
     # 
     # assume other type of data are saved on RAM disk as well (GPFS not working for WAXS2)
@@ -201,11 +227,26 @@ def pack_and_move(data_type, uid, dest_dir):
         dt_exp = None
 
     dir_name = None
+    original_file_path = PilatusCBFHandler.froot
     
-    if data_type in ["multi", "sol"]:
+    if PilatusCBFHandler.froot==data_file_path.ramdisk and move_first:
+        print("move files to GPFS first ...")
+        if isinstance(uid, str):
+            uids = [uid]
+        else:
+            uids = uid
+        hdr = db[uids[0]].start
+        if 'holderName' in list(hdr.keys()):
+            dir_name = hdr['holderName']
+        move_files_from_RAMDISK(uids, dir_name)
+        PilatusCBFHandler.froot=data_file_path.gpfs
+    
+    if data_type in ["multi", "sol", "mscan", "mfscan"]:
         uids = uid.split('|')
         if data_type=="sol":
             sb_dict = json.loads(uids.pop())
+            pilatus_trigger_mode = triggerMode.fly_scan
+        elif data_type=="mfscan":
             pilatus_trigger_mode = triggerMode.fly_scan
         else:
             pilatus_trigger_mode = triggerMode.external_trigger
@@ -217,15 +258,18 @@ def pack_and_move(data_type, uid, dest_dir):
             dir_name = db[uids[0]].start['holderName']
             fh5_name = dir_name+'.h5'
         fn = pack_h5_with_lock(uids, dest_dir, fn="tmp.h5")
-        if fn is not None and dt_exp is not None:
+        if fn is not None and dt_exp is not None and data_type!="mscan":
             print('processing ...')
             if data_type=="sol":    
                 dt = h5sol_HT(fn, [dt_exp.detectors, dt_exp.qgrid])
                 dt.assign_buffer(sb_dict)
                 dt.process(filter_data=True, sc_factor=0.998, debug='quiet')
-                dt.export_d1s(path=dest_dir+"/processed/")
-            else:
+                #dt.export_d1s(path=dest_dir+"/processed/")
+            elif data_type=="multi":
                 dt = h5xs(fn, [dt_exp.detectors, dt_exp.qgrid], transField='em2_sum_all_mean_value')
+                dt.load_data(debug="quiet")
+            elif data_type=="mfscan":
+                dt = h5xs(fn, [dt_exp.detectors, dt_exp.qgrid])
                 dt.load_data(debug="quiet")
             dt.fh5.close()
             if fh5_name is not "tmp.h5":  # temporary fix, for some reason other processes cannot open the packed file
@@ -238,7 +282,11 @@ def pack_and_move(data_type, uid, dest_dir):
             pilatus_trigger_mode = triggerMode.software_trigger_single_frame
         else:
             # data collected using ct
-            pilatus_trigger_mode = triggerMode.software_trigger_multi_frame
+            # could be ct(num=1) (software multiframe trigger), or ct(num=N) (hardware trigger)
+            if db[uid].start['num_points']==1:
+                pilatus_trigger_mode = triggerMode.software_trigger_multi_frame
+            else:
+                pilatus_trigger_mode = triggerMode.external_trigger
         fn = pack_h5_with_lock(uid, dest_dir=dest_dir, attach_uv_file=True)
         if fn is not None and dt_exp is not None:
             print('procesing ...')
@@ -252,7 +300,7 @@ def pack_and_move(data_type, uid, dest_dir):
         else:
             pilatus_trigger_mode = triggerMode.external_trigger
         uids = [uid]
-        fn = pack_h5_with_lock(uid, dest_dir)
+        fn = pack_h5_with_lock(uid, dest_dir=dest_dir)
     else:
         print(f"invalid data type: {data_type} .")
         return
@@ -261,26 +309,10 @@ def pack_and_move(data_type, uid, dest_dir):
         return # packing unsuccessful, 
     print(f"{time.asctime()}: finished packing/processing, total time lapsed: {time.time()-t0:.1f} sec ...")
 
-    if PilatusCBFHandler.froot==data_file_path.gpfs:
-        return
-    
-    for uid in uids:
-        print(f'moving files for {uid} from RAMDISK to GPFS ...')
-        h = db[uid]        
-        p1 = h.start['data_path']  
-        #p2 = p1.replace(default_data_path_root, '/ramdisk/')
-        p2 = p1.replace(data_file_path.gpfs.value, '/ramdisk')
-        sample_name = h.start['sample_name']
-        if dir_name is not None:
-            cmd = f"rsync -ahv --remove-source-files det@10.16.0.14:{p2}{dir_name} {p1}"
-        elif os.system(f"ssh -q det@10.16.0.14 [[ -d {p2}{sample_name} ]]")==0:
-            # if sample name is a directory on the RAMDISK, move the entire directory
-            cmd = f"rsync -ahv --remove-source-files det@10.16.0.14:{p2}{sample_name} {p1}"
-        else:        
-            cmd = f"rsync -ahv --remove-source-files det@10.16.0.14:{p2}{sample_name}_*.* {p1}"
-            #os.system(f"rsync -ahv --remove-source-files det@10.16.0.14:{p2}{h.start['sample_name']}_*.log {p1}")          
-        print(cmd)
-        os.system(cmd)
+    if PilatusCBFHandler.froot==data_file_path.ramdisk and not move_first:
+        move_files_from_RAMDISK(uids)
+        
+    original_file_path = PilatusCBFHandler.froot
 
             
 def process_packing_queue():
@@ -301,8 +333,13 @@ def process_packing_queue():
         msg = clientsocket.recv(8192).decode()
         print(msg)
         clientsocket.close()
-        data_type,uid,path,frn = msg.split("::") 
-        if data_type not in ["multi", "sol"]: # single UID
+        data_type,uid,path,frn,t = msg.split("::") 
+        if t is True:
+            move_first = True
+        else:
+            move_first = False
+        
+        if data_type not in ["multi", "sol", "mscan", "mfscan"]: # single UID
             if 'exit_status' not in db[uid].stop.keys():
                 print(f"in complete header for {uid}.")
                 return
@@ -312,6 +349,7 @@ def process_packing_queue():
         #print(uid)
         #print(path)
         PilatusCBFHandler.froot = data_file_path[frn]
-        threading.Thread(target=pack_and_move, args=(data_type,uid,path,)).start() 
-                    
+        threading.Thread(target=pack_and_move, args=(data_type,uid,path,move_first,)).start() 
+        print("processing thread started ...")            
+
 

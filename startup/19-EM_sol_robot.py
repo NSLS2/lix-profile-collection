@@ -118,6 +118,12 @@ class EM_Sol_Robot():
 	def powerOff(self):
 		self.runTask('PowerOff', self.CMD_TIMEOUT)
 
+	def openGripper(self):
+		self.runTask('OpenGripper', self.CMD_TIMEOUT)
+
+	def closeGripper(self):
+		self.runTask('CloseGripper', self.CMD_TIMEOUT)
+
 	def goHome(self):
 		cmdList = ['Initialize','Home']
 		for cmd in cmdList:

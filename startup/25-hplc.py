@@ -16,9 +16,9 @@ class HPLCStatus(str, Enum):
     waiting_done = "waiting_done"
 
 class HPLC(Device):
-    ready = Cpt(EpicsSignal, 'io1')
-    injected = Cpt(EpicsSignalRO, 'io2')
-    done = Cpt(EpicsSignalRO, 'io3')
+    ready = Cpt(EpicsSignal, 'out')
+    injected = Cpt(EpicsSignalRO, 'in1')
+    done = Cpt(EpicsSignalRO, 'in2')
     bypass = Cpt(EpicsSignal, '_bypass')
     
     def __init__(self, *args, read_filepath, write_filepath, **kwargs):
@@ -71,7 +71,7 @@ class HPLC(Device):
 
         # in principle there are lots of things that can be saved
         # for now just keep the chromatograms
-        sections = readShimadzuDatafile('/GPFS/xf16id/Windows/hplc_export.txt', return_all_sections=True)
+        sections = readShimadzuDatafile('/nsls2/xf16id1/Windows/hplc_export.txt', return_all_sections=True)
         
         import numpy as np
         yield {'time': time.time(),

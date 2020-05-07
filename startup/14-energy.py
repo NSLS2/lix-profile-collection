@@ -2,6 +2,7 @@ from ophyd import (PseudoPositioner, PseudoSingle, EpicsMotor, Signal, EpicsSign
 from ophyd import (Component as Cpt)
 from ophyd.pseudopos import (pseudo_position_argument, real_position_argument)
 from time import sleep
+import numpy as np
 
 class MonoDCM(Device):
     bragg = Cpt(EpicsMotor, '-Ax:Bragg}Mtr')
@@ -30,7 +31,7 @@ def getE(bragg=None):
     return energy
 
 # Set energy to the given value, if calc_only=false otherwise only calculate
-def setE(energy, calc_only=True, ov=-29.4153):
+def setE(energy, calc_only=True, ov=-10.0189): #ov=-29.4153
     # Si(111) lattice constant is 5.43095A
     d = 5.43095 
     offset = 20.0
@@ -46,21 +47,19 @@ def setE(energy, calc_only=True, ov=-29.4153):
         mono.bragg.move(bragg)
         mono.y.move(y0+ov)
 
-def XBPM_pos(navg=5):
-    xpos = 0.
-    ypos = 0.
-    px = PV('SR:C16-BI{XBPM:1}Pos:X-I')
-    py = PV('SR:C16-BI{XBPM:1}Pos:Y-I')
-    if px.connected==False or py.connected==False:
-        return (np.nan, np.nan)
-    try:
-        for i in range(navg):
-            xpos += caget('SR:C16-BI{XBPM:1}Pos:X-I')
-            ypos += caget('SR:C16-BI{XBPM:1}Pos:Y-I')        
-            sleep(0.05)
+class XBPM(Device):
+    x = Cpt(EpicsSignalRO, 'Pos:X-CL')
+    y = Cpt(EpicsSignalRO, 'Pos:Y-CL')
+
+    def pos(self, navg=5):
+        if self.x.connected==False or self.y.connected==False:
+            return (np.nan, np.nan)
+        
+        xpos = np.average([self.x.get() for _ in range(navg)])
+        ypos = np.average([self.y.get() for _ in range(navg)])
         return (xpos/navg, ypos/navg)
-    except:
-        return ("unknown", "unknown") 
+
+xbpm = XBPM('SR:C16-BI{XBPM:1}', name="C16XBPM")
         
 
 # arcsec to radians conversion
@@ -86,7 +85,7 @@ class Energy(PseudoPositioner):
     y = Cpt(EpicsMotor, 'XF:16IDA-OP{Mono:DCM-Ax:Of2}Mtr')
     #initial value=-28.5609
     # Variables
-    ov = Cpt(Signal, value=-29.4153, 
+    ov = Cpt(Signal, value=-10.0189, 
              doc='ov is the correction needed to get actual Y value')
     
     @pseudo_position_argument
