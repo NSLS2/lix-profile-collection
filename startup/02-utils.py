@@ -5,7 +5,7 @@ from time import sleep
 from datetime import datetime
 
 # xf16id - 5008, lix - 3009
-def makedirs(path, mode=0o777, owner_uid=5008, group=3009):
+def makedirs(path, mode=None, owner_uid=5008, group=3009):
     '''Recursively make directories and set permissions'''
     # Permissions not working with os.makedirs -
     # See: http://stackoverflow.com/questions/5231901
@@ -20,7 +20,8 @@ def makedirs(path, mode=0o777, owner_uid=5008, group=3009):
         if 'File exists' not in str(ex):
             raise
 
-    os.chmod(path, mode)
+    if mode is not None:
+        os.chmod(path, mode)
     ret.append(path)
     return ret
 

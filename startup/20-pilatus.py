@@ -180,14 +180,14 @@ class LiXPilatusDetectors(Device):
         for dname,det in self.dets.items():
             det.name = dname
             det.read_attrs = ['file']
-        self.active_detectors = list(self.dets.keys())
+        self.active_detectors = list(self.dets.values())
             
         self._trigger_signal = EpicsSignal('XF:16IDC-ES{Zeb:1}:SOFT_IN:B0')
         self._exp_completed = 0
         
     def update_header(self, uid):
-        for det_name in self.active_detectors:
-            self.dets[det_name].HeaderString.put(f"uid={uid}")
+        for det in self.active_detectors:
+            det.HeaderString.put(f"uid={uid}")
 
     def activate(self, det_list):
         """ e.g.
@@ -196,7 +196,7 @@ class LiXPilatusDetectors(Device):
         for det in det_list:
             if det not in self.dets.keys():
                 raise Exception(f"{det} is not a known Pilatus detector.")
-        self.active_detectors = det_list
+        self.active_detectors = [self.dets[d] for d in det_list]
     
     def set_trigger_mode(self, trigger_mode):
         if isinstance(trigger_mode, PilatusTriggerMode):
@@ -212,7 +212,7 @@ class LiXPilatusDetectors(Device):
         self._num_repeats = rep
         
     def number_reset(self, reset=True):
-        self.rest_file_number = reset
+        self.reset_file_number = reset
         
     def exp_time(self, exp):
         for det_name in self.dets.keys():
@@ -225,13 +225,13 @@ class LiXPilatusDetectors(Device):
         if sd is not None:
             if sd[-1]!='/':
                 sd += '/'
-            makedirs(data_path+sd)
+            makedirs(data_path+sd, mode=0o0777)
             RE.md['subdir'] = PilatusFilePlugin.sub_directory
+            PilatusFilePlugin.sub_directory = sd
         elif 'subdir' in RE.md.keys():
             del RE.md['subdir'] 
+            PilatusFilePlugin.sub_directory = sd
         
-        PilatusFilePlugin.sub_directory = sd
-    
     def set_thresh(self):
         ene = int(getE()/10*0.5+0.5)*0.01
         for det in self.dets.values():
@@ -247,8 +247,8 @@ class LiXPilatusDetectors(Device):
         for det in self.dets.values():
             det.file.file_number.put(fno)
             
-        for det_name in self.active_detectors:
-            self.dets[det_name].stage(self.trigger_mode)
+        for det in self.active_detectors:
+            det.stage(self.trigger_mode)
             
         if self.trigger_mode == PilatusTriggerMode.ext_multi:
             # the name is misleading, multi_triger means one image per trigger
@@ -257,8 +257,8 @@ class LiXPilatusDetectors(Device):
             self.trig_wait = self.acq_time*self._num_images+0.02
         
     def unstage(self):
-        for det_name in self.active_detectors:
-            self.dets[det_name].unstage()
+        for det in self.active_detectors:
+            det.unstage()
                 
     def trigger(self):
         #if len(self.active_detectors)==0:
@@ -270,8 +270,8 @@ class LiXPilatusDetectors(Device):
             print("generating triggering pulse ...")
             self._trigger_signal.put(1, wait=True)
             self._trigger_signal.put(0, wait=True)
-        for det_name in self.active_detectors:
-            self.dets[det_name].trigger()
+        for det in self.active_detectors:
+            det.trigger()
         if self.trigger_mode is not PilatusTriggerMode.soft:
             # soft: status to be cleared by _acquire_changed()
             # ext: set up callback to clear status after the end-of-exposure
@@ -288,8 +288,8 @@ class LiXPilatusDetectors(Device):
             self._status._finished()
 
     def collect_asset_docs(self):
-        for det_name in self.active_detectors:
-            yield from self.dets[det_name].collect_asset_docs()
+        for det in self.active_detectors:
+            yield from det.collect_asset_docs()
     
 #    def describe(self):
 #        """ aim to reduce the amount of information saved in the databroker
@@ -297,9 +297,9 @@ class LiXPilatusDetectors(Device):
 #            in fact these are the same for the entire scan
 #        """
 #        attrs = OrderedDict([])
-#        common_attrs = self.dets[self.active_detectors[0]].describe()
+#        common_attrs = self.active_detectors[0].describe()
         
                                     
-pil =  LiXPilatusDetectors("XF:16IDC-DT")   
+pil = LiXPilatusDetectors("XF:16IDC-DT")   
 pil.activate(["pil1M", "pilW2"])
 pil.set_trigger_mode(PilatusTriggerMode.soft)

@@ -192,7 +192,8 @@ class XPStraj(Device):
         """
         asset_docs_cache = []
 
-        for det in self.detectors:
+        #for det in self.detectors:
+        for det in pil.active_detectors:
             k = f'{det.name}_image'
             #det.dispatch(k, ttime.time())
             (name, resource), = det.file.collect_asset_docs()
@@ -224,7 +225,8 @@ class XPStraj(Device):
             data[self.traj_par['slow_axis']] = self.read_back['slow_axis']
             ts[self.traj_par['slow_axis']] = self.read_back['timestamp2']
 
-        for det in self.detectors:
+        #for det in self.detectors:
+        for det in pil.active_detectors:
             # first make sure that all data file are saved, otherwise next time when the detector is
             # staged, the files that are not yet saved will be lost
             Ni = det.cam.num_images.get() 
@@ -271,7 +273,8 @@ class XPStraj(Device):
             ret[self.traj_par['slow_axis']] = {'dtype': 'number',
                                                'shape': (1,),
                                                'source': 'motor position readback'}
-        for det in self.detectors:
+        #for det in self.detectors:
+        for det in pil.active_detectors:
             ret[f'{det.name}_image'] = det.make_data_key() 
             for k,desc in det.describe().items():
                 ret[k] = desc
@@ -438,7 +441,8 @@ class XPStraj(Device):
         fast_shutter.close()
         
         # generate enough triggers to complete exposure 
-        det = self.detectors[0]
+        #det = self.detectors[0]
+        det = pil.active_detectors[0]
         Ni = det.cam.num_images.get() 
         Nc = det.cam.array_counter.get()
         """for i in range(Ni-Nc):
@@ -477,96 +481,4 @@ class XPStraj(Device):
             self.read_back['timestamp2'] = time.time()
 
             
-# this section below will be moved to startup.py
-'''                        
-# this should be created based on experimental configuration       
-ss = PositioningStackMicroscope()
-            
-try:
-    xps_trj = XPStraj('10.16.2.104', 'scan', 'test', devices={'scan.rY': ss.ry, 'scan.Y': ss.y, 'scan.X': ss.x})
-except:
-    print('Cannot connect to XPS.')
-
-def raster(detectors, exp_time, fast_axis, f_start, f_end, Nfast, 
-           slow_axis=None, s_start=0, s_end=0, Nslow=1, md=None):
-    """ raster scan in fly mode using detectors with exposure time of exp_time
-        detectors must be a member of pilatus_detectors_ext
-        fly on the fast_axis, step on the slow_axis, both specified as Ophyd motors
-        the fast_axis must be one of member of xps_trj.motors, for now this is hard-coded
-        the specified positions are relative to the current position
-        for the fast_axis are the average positions during detector exposure 
-        
-        use it within the run engine: RE(raster(...))
-    """
-    if not set(detectors).issubset(pilatus_detectors_ext):
-        raise Exception("only pilatus_detectors_ext can be used in this raster scan.")
-    if fast_axis.name not in xps_trj.device_names:
-        raise Exception("the fast_axis is not supported in this raster scan: ", fast_axis.name)
-    fast_axis_name = list(xps_trj.devices.keys())[list(xps_trj.devices.values()).index(fast_axis)]
-    # 
-    step_size = (f_end-f_start)/(Nfast-1)
-    dt = exp_time + 0.005    # exposure_period is 5ms longer than exposure_time, as defined in Pilatus
-    xps_trj.define_traj(fast_axis_name, Nfast-1, step_size, dt, motor2=slow_axis)
-    p0_fast = fast_axis.position
-    ready_pos = {}
-    ready_pos[True] = p0_fast+f_start-xps_trj.traj_par['rampup_distance']-step_size/2
-    ready_pos[False] = p0_fast+f_end+xps_trj.traj_par['rampup_distance']+step_size/2
-    xps_trj.clear_readback()
-    
-    if slow_axis is not None:
-        p0_slow = slow_axis.position
-        pos_s = p0_slow+np.linspace(s_start, s_end, Nslow)
-    elif Nslow != 1:
-        raise Exception(f"invlaid input, did not pass slow_axis, but passed Nslow != 1 ({Nslow})")
-
-    xps_trj.detectors = detectors
-    
-    pilatus_ct_time(exp_time)
-    set_pil_num_images(Nfast*Nslow)
-    print('setting up to collect %d exposures of %.2f sec ...' % (Nfast*Nslow, exp_time))
-    
-    motor_names = [slow_axis.name, fast_axis.name]
-    #motors = [fast_axis, slow_axis]
-    scan_shape = [Nslow, Nfast]
-    _md = {'shape': tuple(scan_shape),
-           'plan_args': {'detectors': list(map(repr, detectors))},
-           'plan_name': 'raster',
-           'plan_pattern': 'outer_product',
-           'motors': tuple(motor_names),
-           'hints': {},
-           }
-    _md.update(md or {})
-    _md['hints'].setdefault('dimensions', [(('time',), 'primary')])
-        
-    @bpp.stage_decorator([xps_trj] + detectors)
-    @bpp.run_decorator(md=_md)
-    @fast_shutter_decorator()
-    def inner(detectors, fast_axis, ready_pos, slow_axis, Nslow, pos_s):
-        running_forward = True
-        #for mo in monitors:
-        #    yield from bps.monitor(mo)
-        
-        for i in range(Nslow):
-            if slow_axis is not None:
-                yield from mov(fast_axis, ready_pos[running_forward], slow_axis, pos_s[i])
-            else:
-                yield from mov(fast_axis, ready_pos[running_forward])
-
-            xps_trj.select_forward_traj(running_forward)
-            yield from bps.kickoff(xps_trj, wait=True)
-            yield from bps.complete(xps_trj, wait=True)
-            running_forward = not running_forward
-        yield from bps.collect(xps_trj)
-
-        #for mo in monitors:
-        #    yield from bps.unmonitor(mo)
-
-    yield from inner(detectors, fast_axis, ready_pos, slow_axis, Nslow, pos_s)
-        
-    if slow_axis is not None:
-        yield from mov(fast_axis, p0_fast, slow_axis, p0_slow)
-    else:
-        yield from mov(fast_axis, p0_fast)
-'''
-    
     

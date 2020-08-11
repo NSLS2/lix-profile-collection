@@ -101,7 +101,7 @@ class SolutionScatteringExperimentalModule():
     # the addtional positions are for the standard sample, a empty space for checking scattering background,
     #    and for the scintillator for check the beam shape
     # this information should be verified every time we setup for solution scattering
-    flowcell_pos = {'bottom': 4.5, 'middle': 0, 'top': -4.5,
+    flowcell_pos = {'bottom': 4.4, 'middle': 0, 'top': -4.5,
                     "std": -12., "empty": -15., "scint": -17.}  
     
     # this is the 4-port valve piosition necessary for the wash the needle
@@ -134,16 +134,16 @@ class SolutionScatteringExperimentalModule():
     default_pump_speed = 1500
     default_load_pump_speed = 350     
     vol_p4_to_cell = {'upstream': -120, 'downstream': -120}
-    vol_tube_to_cell = {'upstream': 99, 'downstream': 99} 
+    vol_tube_to_cell = {'upstream': 125, 'downstream': 125} 
     vol_sample_headroom = 13 
-    vol_flowcell_headroom = 45  
+    vol_flowcell_headroom = 20  
     watch_list = {'stats1.total': 0.2e8}
     
     Ntube = 18
     tube1_pos=-18.83   #4/10/20 sc[new sensor]    #12/20/17 by JB
     tube_spc = -5.8417     # these are mechanically determined and should not change
 
-    default_dry_time = 30
+    default_dry_time = 20
     default_wash_repeats = 5
     
     cam = setup_cam("XF:16IDA-BI{Cam:OAM}", "camOAM")

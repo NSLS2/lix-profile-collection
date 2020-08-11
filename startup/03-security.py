@@ -8,7 +8,7 @@ data_path = ""
 collection_lock_file = "/nsls2/xf16id1/.lock"
 okay_to_move_file = "/nsls2/xf16id1/.okay_to_move"
 
-current_cycle = '2020-1'
+current_cycle = '2020-2'
 
 def login(uname = None, pID = None, rID = None, debug=True, 
           root_path='/nsls2/xf16id1', create_proc_dir=False):
@@ -42,13 +42,13 @@ def login(uname = None, pID = None, rID = None, debug=True,
     path = f"{root_path}/data/{current_cycle}/"
     rpath = str(proposal_id)+"/"+str(run_id)+"/"
     data_path = path + rpath
-    makedirs(data_path)
+    makedirs(data_path, mode=0o0777)
     RE.md['data_path'] = data_path
 
     proc_path = f"{root_path}/experiments/{current_cycle}/{proposal_id}/{run_id}/"
     RE.md['proc_path'] = proc_path
     if create_proc_dir:
-        makedirs(proc_path)
+        makedirs(proc_path, mode=0o2755)
         makedirs(proc_path+"processed/")
         
     dw,mo,da,tt,yr = time.asctime().split()
