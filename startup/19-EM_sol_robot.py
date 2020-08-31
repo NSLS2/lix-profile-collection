@@ -197,7 +197,9 @@ class EM_Sol_Robot():
 
 			if cmd=="Mount":
 				if not bPicked and not bMounted:
-					raise Exception("FATAL: Mount Failed. Tray lost during mounting")
+					ret=self.push(0)
+					if ret==False:
+						raise Exception("FATAL: Mount Failed. Tray lost during mounting")
 		return
 
 	def unmount(self):
@@ -244,8 +246,6 @@ def testRobot(sMode='A',nbgn=1,nend=20,nloop=1):
   for n in range(1,nloop+1):
     for nTray in range(nbgn,nend+1):
       setParameter("nTray", nTray)
-      #if nTray==13:
-      #  continue
 
       if sMode=='A':
         rbt.loadTray(nTray)
@@ -261,8 +261,6 @@ def testRobot(sMode='A',nbgn=1,nend=20,nloop=1):
         rbt.loadTray(nTray)
         if nTray==20:
           rbt.unloadTray(1)
-        #elif nTray==12:
-        #  rbt.unloadTray(nTray+2)
         else:
           rbt.unloadTray(nTray+1)
         
@@ -281,8 +279,6 @@ def testRobot(sMode='A',nbgn=1,nend=20,nloop=1):
         rbt.unmount()
         if nTray==20:
           rbt.unloadTray(1)
-        #elif nTray==12:
-        #  rbt.unloadTray(nTray+2)
         else:
           rbt.unloadTray(nTray+1)
 

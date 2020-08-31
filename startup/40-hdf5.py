@@ -215,7 +215,7 @@ def pack_and_move(data_type, uid, dest_dir, move_first=True):
     # 
     # assume other type of data are saved on RAM disk as well (GPFS not working for WAXS2)
     # these data must be moved manually to GPFS
-    global pilatus_trigger_mode  #,CBF_replace_data_path 
+    #global pilatus_trigger_mode  #,CBF_replace_data_path 
     
     print(f"packing: {data_type}, {uid}, {dest_dir}")
     print(f"data source: {PilatusCBFHandler.froot}")
@@ -245,11 +245,11 @@ def pack_and_move(data_type, uid, dest_dir, move_first=True):
         uids = uid.split('|')
         if data_type=="sol":
             sb_dict = json.loads(uids.pop())
-            pilatus_trigger_mode = triggerMode.fly_scan
+            PilatusCBFHandler.trigger_mode = triggerMode.fly_scan
         elif data_type=="mfscan":
-            pilatus_trigger_mode = triggerMode.fly_scan
+            PilatusCBFHandler.trigger_mode = triggerMode.fly_scan
         else:
-            pilatus_trigger_mode = triggerMode.external_trigger
+            PilatusCBFHandler.trigger_mode = triggerMode.external_trigger
         ## assume that the meta data contains the holderName
         if 'holderName' not in list(db[uids[0]].start.keys()):
             print("cannot find holderName from the header, using tmp.h5 as filename ...")
@@ -279,14 +279,14 @@ def pack_and_move(data_type, uid, dest_dir, move_first=True):
         uids = [uid]
         if db[uid].start['plan_name']=="hplc_scan":
             # this was software_trigger_single_frame when using the flyer-based hplc_scan
-            pilatus_trigger_mode = triggerMode.software_trigger_single_frame
+            PilatusCBFHandler.trigger_mode = triggerMode.software_trigger_single_frame
         else:
             # data collected using ct
             # could be ct(num=1) (software multiframe trigger), or ct(num=N) (hardware trigger)
             if db[uid].start['num_points']==1:
-                pilatus_trigger_mode = triggerMode.software_trigger_multi_frame
+                PilatusCBFHandler.trigger_mode = triggerMode.software_trigger_multi_frame
             else:
-                pilatus_trigger_mode = triggerMode.external_trigger
+                PilatusCBFHandler.trigger_mode = triggerMode.external_trigger
         fn = pack_h5_with_lock(uid, dest_dir=dest_dir, attach_uv_file=True)
         if fn is not None and dt_exp is not None:
             print('procesing ...')
@@ -296,9 +296,9 @@ def pack_and_move(data_type, uid, dest_dir, move_first=True):
             del dt,dt_exp
     elif data_type=="flyscan" or data_type=="scan":
         if data_type=="flyscan":
-            pilatus_trigger_mode = triggerMode.fly_scan
+            PilatusCBFHandler.trigger_mode = triggerMode.fly_scan
         else:
-            pilatus_trigger_mode = triggerMode.external_trigger
+            PilatusCBFHandler.trigger_mode = triggerMode.external_trigger
         uids = [uid]
         fn = pack_h5_with_lock(uid, dest_dir=dest_dir)
     else:

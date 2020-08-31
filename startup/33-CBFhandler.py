@@ -16,12 +16,12 @@ class triggerMode(Enum):
     fly_scan = 4
     #external_trigger_multi_frame = 5  # this is unnecessary, difference is fpp
 
-global pilatus_trigger_mode
+#global pilatus_trigger_mode
 #global default_data_path_root
 #global substitute_data_path_root
 #global CBF_replace_data_path
 
-pilatus_trigger_mode = triggerMode.software_trigger_single_frame
+#pilatus_trigger_mode = triggerMode.software_trigger_single_frame
 
 # if the cbf files have been moved already
 #CBF_replace_data_path = False
@@ -30,6 +30,7 @@ class PilatusCBFHandler(HandlerBase):
     specs = {'AD_CBF'} | HandlerBase.specs
     froot = data_file_path.gpfs 
     subdir = None
+    trigger_mode = triggerMode.software_trigger_single_frame
     # assuming that the data files always have names with these extensions 
     std_image_size = {
         'SAXS': (1043, 981),
@@ -38,12 +39,7 @@ class PilatusCBFHandler(HandlerBase):
     }
 
     def __init__(self, rpath, template, filename, frame_per_point=1, initial_number=1):
-        #if frame_per_point>1:
-        print(f'Initializing CBF handler for {pilatus_trigger_mode} ...')
-        if pilatus_trigger_mode != triggerMode.software_trigger_single_frame and frame_per_point>1: 
-            # file name should look like test_000125_SAXS_00001.cbf, instead of test_000125_SAXS.cbf
-            template = template[:-4]+"_%05d.cbf"
-        
+        print(f'Initializing CBF handler for {self.trigger_mode} ...')
         self._template = template
         self._fpp = frame_per_point
         self._filename = filename
@@ -89,6 +85,18 @@ class PilatusCBFHandler(HandlerBase):
         start = self._initial_number #+ point_number
         stop = start + 1 
         ret = []
+
+        tl = self._template.replace(".", "_").split("_") 
+        # e.g. ['%s%s', '%06d', 'SAXS', 'cbf'], ['%s%s', '%06d', 'SAXS', '%05d', 'cbf']
+        # resulting in file names like test_000125_SAXS.cbf vs test_000125_SAXS_00001.cbf 
+        if self.trigger_mode != triggerMode.software_trigger_single_frame and self._fpp>1:
+            # the template needs to have two number fileds
+            if len(tl)==4:
+                tl = tl[:-1]+["%05d"]+tl[-1:] 
+        elif len(tl)==5:
+            tl = tl[:-2]+tl[-1:]
+        self._template = "_".join(tl[:-1])+"."+tl[-1]
+
         print("CBF handler called: start=%d, stop=%d" % (start, stop))
         print("  ", self._initial_number, point_number, self._fpp)
         print("  ", self._template, self._path, self._initial_number)
@@ -96,18 +104,15 @@ class PilatusCBFHandler(HandlerBase):
         if self.subdir is not None:
             self._path += f"{self.subdir}/"
      
-        if pilatus_trigger_mode == triggerMode.software_trigger_single_frame or self._fpp == 1:
+        if self.trigger_mode == triggerMode.software_trigger_single_frame or self._fpp == 1:
             fn = self._template % (self._path, self._filename, self._initial_number+point_number)
             ret.append(self.get_data(fn))
-        elif pilatus_trigger_mode in [triggerMode.software_trigger_multi_frame,
+        elif self.trigger_mode in [triggerMode.software_trigger_multi_frame,
                                       triggerMode.fly_scan]:
             for i in range(self._fpp):
                 fn = self._template % (self._path, self._filename, start, point_number+i) 
-                #data = self.get_data(fn)
-                #print(f"{i}: {data.shape}")
-                #print(fn)
                 ret.append(self.get_data(fn))
-        elif pilatus_trigger_mode==triggerMode.external_trigger:
+        elif self.trigger_mode==triggerMode.external_trigger:
             fn = self._template % (self._path, self._filename, start, point_number)
             ret.append(self.get_data(fn))
         

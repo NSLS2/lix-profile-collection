@@ -295,6 +295,12 @@ class VacuumSystem:
         if self.pressure()>self.acceptablePumpPressure:
             raise Exception(f"possible problem with the pump, presure = {self.pressure()}")
         
+        # also make sure that the section that is being pumped on has reached acceptable pressure
+        for vs in self.VSmap:
+            if vs['EV'].status>0: # being pumped on right now
+                if self.pressure(vs['name'])>self.acceptablePumpPressure:
+                    raise Exception(f"too soon to request normal ops: {vs['name']} pressure is {self.pressure(vs['name'])}")
+
         # open EVs
         ok_to_open_GVs = True
         for vs in self.VSmap:

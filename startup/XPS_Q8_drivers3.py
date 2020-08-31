@@ -18,6 +18,7 @@ class XPS:
     __sockets = {}
     __usedSockets = {}
     __nbSockets = 0
+    debug = False
 
     # Initialization Function
     def __init__ (self):
@@ -41,6 +42,8 @@ class XPS:
             print('Socket error: %s ' % e)
             return [-2, '']
 
+        if self.debug:
+            print(command, ret)
         retlist = ret.strip(',EndOfAPI').split(',', 1)
         if retlist[0]!='0':
             print(f"returned value for {command}: ", retlist)

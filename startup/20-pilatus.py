@@ -140,6 +140,10 @@ class LIXPilatus(PilatusDetector):
         if self._staged == Staged.no:
             return
         print(self.name, "unstaging ...")
+        print(self.name, "checking detector Armed status:", end="")
+        while self.armed.get():
+            time.sleep(0.1)
+        print(" unarmed.")
         if self.parent.trigger_mode is PilatusTriggerMode.soft:  
             self._acquisition_signal.clear_sub(self.parent._acquire_changed)
         else:
@@ -213,6 +217,8 @@ class LiXPilatusDetectors(Device):
         
     def number_reset(self, reset=True):
         self.reset_file_number = reset
+        for det in self.dets.values():
+            det.file.file_number.put(0)
         
     def exp_time(self, exp):
         for det_name in self.dets.keys():
