@@ -13,20 +13,22 @@ from bluesky.callbacks.olog import logbook_cb_factory
 
 global DETS 
 
-class CustomRunEngine(RunEngine):
-    def __call__(self, *args, **kwargs):
-        global username
-        global proposal_id
-        global run_id
+# moved to 00-base.py during 2020-2 deployment
+#class CustomRunEngine(RunEngine):
+#    def __call__(self, *args, **kwargs):
+#        global username
+#        global proposal_id
+#        global run_id
+#
+#        if username is None or proposal_id is None or run_id is None:
+#            login()
+#
+#        return super().__call__(*args, **kwargs)
 
-        if username is None or proposal_id is None or run_id is None:
-            login()
+#RE = CustomRunEngine()
 
-        return super().__call__(*args, **kwargs)
-
-RE = CustomRunEngine()
-
-configure_base(get_ipython().user_ns, db, bec=True, pbar=False)
+#configure_base(get_ipython().user_ns, db, bec=True, pbar=False)
+# end of code moved to 00-base.py
 
 abort = RE.abort
 resume = RE.resume
