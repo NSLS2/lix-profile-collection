@@ -76,33 +76,33 @@ class StandardProsilica(SingleTrigger, DetectorBase):
         ROIs = {1: self.roi1, 2: self.roi2, 3:self.roi3, 4:self.roi4}
         if i>0 and i<=4:
             print("%s: [%d, %d, %d, %d]" % (ROIs[i].name,
-                                           ROIs[i].min_xyz.min_x.value,
-                                           ROIs[i].size.x.value,
-                                           ROIs[i].min_xyz.min_y.value,
-                                           ROIs[i].size.y.value))
-            return [ROIs[i].min_xyz.min_x.value,
-                    ROIs[i].size.x.value,
-                    ROIs[i].min_xyz.min_y.value,
-                    ROIs[i].size.y.value]
+                                           ROIs[i].min_xyz.min_x.get(),
+                                           ROIs[i].size.x.get(),
+                                           ROIs[i].min_xyz.min_y.get(),
+                                           ROIs[i].size.y.get()))
+            return [ROIs[i].min_xyz.min_x.get(),
+                    ROIs[i].size.x.get(),
+                    ROIs[i].min_xyz.min_y.get(),
+                    ROIs[i].size.y.get()]
         else:
             raise(ValueError("valid ROI numbers are 1-4"))       
             
     def snapshot(self,showWholeImage=False, ROIs=None, showROI=False, retry=3):
         # array_data.value may have different shapes (mono/Bayer vs RGB)\
         for i in range(retry):
-            img = np.asarray(self.image.array_data.value)
+            img = np.asarray(self.image.array_data.get())
             if len(img)>0:
                 break
             if i==retry-1:
                 return None
         
         if self.image.array_size.depth.get()>0:  # RGB
-            img = img.reshape([self.image.array_size.depth.value,
-                               self.image.array_size.height.value,
-                               self.image.array_size.width.value])
+            img = img.reshape([self.image.array_size.depth.get(),
+                               self.image.array_size.height.get(),
+                               self.image.array_size.width.get()])
         else: # mono/Bayer
-            img = img.reshape([self.image.array_size.height.value,
-                               self.image.array_size.width.value])
+            img = img.reshape([self.image.array_size.height.get(),
+                               self.image.array_size.width.get()])
         # demosaic first
         if showWholeImage:
             plt.figure()

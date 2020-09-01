@@ -23,10 +23,9 @@ def getE(bragg=None):
     # q = 2pi / d * sqrt(3.)
     # q = 4pi / lmd * sin(bragg)
     #
-    try:
-        lmd = 2.0/np.sqrt(3.)*d*np.sin(np.radians(bragg))
-    except AttributeError:
-        lmd = 2.0/np.sqrt(3.)*d*np.sin(np.radians(mono.bragg.position))
+    if bragg is None:
+        bragg = mono.bragg.position
+    lmd = 2.0/np.sqrt(3.)*d*np.sin(np.radians(bragg))
     energy = 1973.*2.*np.pi/lmd
     return energy
 
