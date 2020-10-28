@@ -5,8 +5,8 @@ def update_metadata():
                          'waxs2': {'x':waxs2.x.position, 'y':waxs2.y.position, 'z':waxs2.z.position},
                         })
     RE.md['energy'] = ({'mono_bragg': mono.bragg.position,
-                        'energy': getE(), 
-                        'gap': IVUgap.position
+                        'energy': pseudoE.energy.position, 
+                        'gap': pseudoE.IVUgap.position
                        })
     RE.md['optics'] = ({'wbm_y': wbm.y.position,
                         'wbm_pitch': wbm.pitch.position,

@@ -4,6 +4,17 @@ from ophyd.pseudopos import (pseudo_position_argument, real_position_argument)
 from time import sleep
 import numpy as np
 
+class EpicsGapMotor(EpicsMotor):
+
+    def __init__(self, brakeDevice, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.brake = brakeDevice
+        
+    def move(self, *args, **kwargs):
+        if self.brake.get()==0:
+            set_and_wait(self.brake, 1)
+        return super().move(*args, **kwargs)
+
 class MonoDCM(Device):
     bragg = Cpt(EpicsMotor, '-Ax:Bragg}Mtr')
     x = Cpt(EpicsMotor, '-Ax:X}Mtr')
@@ -15,36 +26,6 @@ class MonoDCM(Device):
     pitch2_rb = Cpt(EpicsSignalRO, '-Ax:PF_RDBK}Mtr.RBV')
 
 mono = MonoDCM("XF:16IDA-OP{Mono:DCM", name="dcm")
-
-# Calculate X-ray energy using the current theta position or from given argument    
-def getE(bragg=None):
-    # Si(111) lattice constant is 5.43095A
-    d = 5.43095 
-    # q = 2pi / d * sqrt(3.)
-    # q = 4pi / lmd * sin(bragg)
-    #
-    if bragg is None:
-        bragg = mono.bragg.position
-    lmd = 2.0/np.sqrt(3.)*d*np.sin(np.radians(bragg))
-    energy = 1973.*2.*np.pi/lmd
-    return energy
-
-# Set energy to the given value, if calc_only=false otherwise only calculate
-def setE(energy, calc_only=True, ov=-10.0189): #ov=-29.4153
-    # Si(111) lattice constant is 5.43095A
-    d = 5.43095 
-    offset = 20.0
-    lmd = 1973.*2.*np.pi/energy
-    bragg = np.degrees(np.arcsin(lmd*np.sqrt(3.)/(2.*d)))
-    y0 = offset/(2.0*np.cos(np.radians(bragg)))
-    if calc_only:
-        print("expected Bragg angle is %.4f" % bragg)
-        print("expected Y displacement is %.4f" % y0)
-        print("expected Y motor position after correction is %.4f" % (y0+ov))
-        print("run setE(%.1f,calc_only=False) to actually move the mono" % energy)
-    else: # this actually moves the motors
-        mono.bragg.move(bragg)
-        mono.y.move(y0+ov)
 
 class XBPM(Device):
     x = Cpt(EpicsSignalRO, 'Pos:X-CL')
@@ -75,42 +56,86 @@ def rad_arcsec(x):
     print(y,"in arcsec")
 
 
+# undulator Keff was measured, the following is good when the gap < 8.5mm 
+# K = 0.0406 g^2 - 0.899 g + 6.231 
+# the K correction factor is based on data collected in Oct 2020
+def calc_E_from_gap(gap, K_cor_factor=1, n=1):
+    Keff = 0.0406*(gap*1.e-3)**2 - 0.899*(gap*1.e-3) + 6.231
+    Keff *= K_cor_factor
+    lmd0 = 2.3e8 # 23mm
+    gamma = 3.e3/0.511 # NSLS-II, 3GeV
+    lmd = lmd0/(2.*n*gamma*gamma)*(1.+Keff*Keff/2)
+    ene = 1973.*2.*np.pi/lmd
+    return ene
+
+def calc_E_from_Bragg(th):
+    d = 5.43095
+    lmd = 2.0/np.sqrt(3.)*d*np.sin(np.radians(th))
+    ene = 1973.*2.*np.pi/lmd
+    
+    return ene
+
+def calc_Bragg_from_E(ene):
+    d = 5.43095
+    lmd = 1973.*2.*np.pi/ene
+    bragg = np.degrees(np.arcsin(lmd*np.sqrt(3.)/(2.*5.43095)))
+    
+    return bragg
+
+def get_gap_from_E(ene, min_gap=6000, max_gap=7000):
+    """ select a suitable gap value for the given x-ray energy
+        keep gap value close to but above 6.3mm
+        odd harmonic only
+    """
+    if ene>18000 or ene<5500:
+        raise Exception(f"invalid x-ray energy: {ene} eV, only support between 5.5 and 18 keV.")
+    # find harmonic number
+    cf = 1.014
+    ed = {i: calc_E_from_gap(min_gap, K_cor_factor=cf, n=i) for i in range(3,22,2)}
+    k = np.where(np.asarray(list(ed.values()))<ene)[0][-1]
+    nh = list(ed.keys())[k]
+    # find gap value
+    gv = np.linspace(min_gap, max_gap, 101)
+    el = calc_E_from_gap(gv, K_cor_factor=cf, n=nh)
+    gv0 = np.interp(ene, el, gv)
+
+    return gv0,nh
+
 class Energy(PseudoPositioner):
     # The pseudo positioner axes
-    energy = Cpt(PseudoSingle, limits=(-100000, 100000))
+    energy = Cpt(PseudoSingle, limits=(6000, 18000))
 
     # The real (or physical) positioners:
     bragg = Cpt(EpicsMotor, 'XF:16IDA-OP{Mono:DCM-Ax:Bragg}Mtr')
     y = Cpt(EpicsMotor, 'XF:16IDA-OP{Mono:DCM-Ax:Of2}Mtr')
-    #initial value=-28.5609
-    # Variables
-    ov = Cpt(Signal, value=-10.0189, 
-             doc='ov is the correction needed to get actual Y value')
+    IVUgapBrake = EpicsSignal("SR:C16-ID:G1{IVU:1}BrakesDisengaged-Sts", 
+                              write_pv="SR:C16-ID:G1{IVU:1}BrakesDisengaged-SP")  
+    IVUgap = Cpt(EpicsGapMotor, 
+                 prefix="SR:C16-ID:G1{IVU:1-Ax:Gap}-Mtr", 
+                 brakeDevice=IVUgapBrake, name='IVUgap')
+    min_gap = 6000
+    max_gap = 7000
+
+    # want mono.y to be -16.4 at high E
+    ov = -16.74  # mono.y recently homed, this value gets beam close to the previous "good positon" 
     
     @pseudo_position_argument
     def forward(self, target):
         '''Run a forward (pseudo -> real) calculation'''
-        d = 5.43095
         offset = 20.0
-        lmd = 1973.*2.*np.pi/target.energy
-        brg = np.degrees(np.arcsin(lmd*np.sqrt(3.)/(2.*d)))
-        y0 = offset/(2.0*np.cos(np.radians(brg)))
-        y_calc = y0+self.ov.get()
+        brg = calc_Bragg_from_E(target.energy)
+        y_calc = self.ov+offset*(1.0-np.cos(np.radians(brg)))
+        g_calc,nh = get_gap_from_E(target.energy, min_gap=self.min_gap, max_gap=self.max_gap)
         
-        return self.RealPosition(bragg=brg, y=y_calc)
+        return self.RealPosition(bragg=brg, IVUgap=g_calc, y=y_calc)
 
     @real_position_argument
     def inverse(self, real_pos):
         '''Run an inverse (real -> pseudo) calculation'''
-        # Si(111) lattice constant is 5.43095A
-        d = 5.43095
-        # q = 2pi / d * sqrt(3.)
-        # q = 4pi / lmd * sin(bragg)
-        #
-        lmd = 2.0/np.sqrt(3.)*d*np.sin(np.radians(real_pos.bragg))
-        calc_energy = 1973.*2.*np.pi/lmd
+        calc_energy = calc_E_from_Bragg(real_pos.bragg)
         return self.PseudoPosition(energy=calc_energy)
 
 
-pseudo_energy = Energy('', name='energy')
-energy = pseudo_energy.energy
+pseudoE = Energy('', name='energy')
+
+

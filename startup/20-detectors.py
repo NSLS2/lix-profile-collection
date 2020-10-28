@@ -8,7 +8,8 @@ from ophyd.areadetector.filestore_mixins import (FileStoreTIFFIterativeWrite,
                                                  FileStoreHDF5IterativeWrite)
 
 from ophyd import Component as Cpt
-import imageio,time
+import imageio,time,PIL,pyzbar
+from pyzbar.pyzbar import decode
 
 class TIFFPluginWithFileStore(TIFFPlugin, FileStoreTIFFIterativeWrite):
     def make_filename(self):
@@ -33,7 +34,7 @@ class StandardProsilica(SingleTrigger, DetectorBase):
     tiff = Cpt(TIFFPluginWithFileStore,
                suffix='TIFF1:',
                write_path_template='/nsls2/xf16id1/data/',   # this is updated when the plug in is staged
-               reg=db.reg)
+               ) #reg=db.reg)
     image = Cpt(ImagePlugin, 'image1:')
     trans = Cpt(TransformPlugin, 'Trans1:')
     over = Cpt(OverlayPlugin, 'Over1:')
@@ -127,6 +128,12 @@ class StandardProsilica(SingleTrigger, DetectorBase):
                     plt.show()
 
         return(data)
+
+    def readQR(self, roi=1):
+        d = self.snapshot(ROIs=[self.getROI(roi)])[0]
+        im = PIL.Image.fromarray(d)
+        ret = [c.data.decode() for c in decode(im)]
+        return ret
 
     def saveImg(self, fn):
         size_x,size_y = self.cam.size.get()
