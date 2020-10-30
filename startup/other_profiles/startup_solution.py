@@ -7,7 +7,7 @@ PilatusFilePlugin.froot = data_file_path.gpfs
 PilatusCBFHandler.froot = data_file_path.gpfs
 froot=data_file_path.gpfs
 
-sol = SolutionScatteringExperimentalModule()
+sol = SolutionScatteringExperimentalModule(camPV="XF:16IDC-BI{Cam:Spare}")
 
 def showd2s(d2, logScale=True, showMask=False, clim=(0.1,14000), showRef=True, cmap=None):
     plt.figure()
@@ -78,8 +78,10 @@ def collect_reference():
     for nd in nd_list:
         fcell = sol.flowcell_nd[nd]
         sol.select_flow_cell(fcell)
+        sol.ctrl.water_pump_spd.put(0.3) 
         sol.wash_needle(nd, option="wash only")
-        
+        sol.ctrl.water_pump_spd.put(0.8)         
+
         for ref in ['water','blank']:
             #em1.averaging_time.put(0.25)
             #em2.averaging_time.put(0.25)
@@ -610,3 +612,8 @@ sol.default_dry_time=20
 sol.vol_sample_headroom = 10 
 
 hplc.ready.set(0)
+
+# 2020-Oct-26
+sol.flowcell_pos["bottom"] = 4.85                                                                                                                
+sol.flowcell_pos["top"] = -4.05
+sol.watch_list = {'stats1.total': 2e3} 

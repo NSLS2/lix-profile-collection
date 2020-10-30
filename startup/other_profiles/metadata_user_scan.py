@@ -31,7 +31,7 @@ def update_metadata():
     RE.md['BPM'] = ({'stage position': {'x': bpm_pos.x.position, 'y': bpm_pos.y.position},
                      'beam position': {'x': best.x_mean.get(), 'y': best.y_mean.get()}
                     })
-    RE.md['XBPM'] = XBPM_pos() 
+#    RE.md['XBPM'] = XBPM_pos() 
     RE.md['CRL'] = ({'state': crl.state(), 
                      'x1': crl.x1.position,
                      'y1': crl.y1.position,

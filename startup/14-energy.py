@@ -118,13 +118,19 @@ class Energy(PseudoPositioner):
 
     # want mono.y to be -16.4 at high E
     ov = -16.74  # mono.y recently homed, this value gets beam close to the previous "good positon" 
+    offset = 20
     
+    @property
+    def wavelength(self):
+        ene = self.energy.position
+        lmd = 1973.*2.*np.pi/ene
+        return lmd
+
     @pseudo_position_argument
     def forward(self, target):
         '''Run a forward (pseudo -> real) calculation'''
-        offset = 20.0
         brg = calc_Bragg_from_E(target.energy)
-        y_calc = self.ov+offset*(1.0-np.cos(np.radians(brg)))
+        y_calc = self.ov+self.offset*(1.0-np.cos(np.radians(brg)))
         g_calc,nh = get_gap_from_E(target.energy, min_gap=self.min_gap, max_gap=self.max_gap)
         
         return self.RealPosition(bragg=brg, IVUgap=g_calc, y=y_calc)
