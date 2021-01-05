@@ -5,7 +5,7 @@ RE.md['det_pos'] = ({'saxs': {'x':saxs.x.position, 'y':saxs.y.position, 'z':saxs
 del saxs,waxs1,waxs2
 
 RE.md['energy'] = ({'mono_bragg': mono.bragg.position,
-                    'energy': getE(), 
+                    'energy': pseudoE.energy.position, 
                     'gap': IVUgap.position
                    })
 

@@ -1,5 +1,5 @@
 from py4xs.hdf import h5sol_HT,h5exp
-import time,sys,random
+import time,sys,random,openpyxl
 #global DET_replace_data_path
 #DET_replace_data_path = True
 
@@ -47,12 +47,11 @@ def collect_std():
     pil.use_sub_directory(holderName)
     pil.set_trigger_mode(PilatusTriggerMode.soft)
     pil.set_num_images(1)
-    pil.exp_time(0.5)
+    pil.exp_time(0.2)
     ts = gettimestamp()
 
-    r_range = 2.
-    sol.sample_y.move(sol.flowcell_pos['std'] + r_range*(random.random()-0.5))
-    
+    sol.select_flow_cell('std', r_range=1.5)    
+
     change_sample(f"AgBH-{ts}")
     RE(ct([pil,em1,em2], num=1))
     
@@ -299,7 +298,7 @@ def measure_holder(spreadSheet, holderName, sheet_name='Holders', exp_time=1, re
     #print('collecting reference')
     #collect_reference()
     #pack_ref_h5(run_id)
-    samples = get_samples(spreadSheet, holderName, sheet_name='Holders')
+    samples = get_samples(spreadSheet, holderName, sheet_name=sheet_name)
 
     uids = []
     if concurrentOp and checkSampleSequence:
@@ -385,18 +384,21 @@ def auto_measure_samples(spreadSheet, configName, exp_time=1, repeats=5, vol=45,
                         returnSample=True, concurrentOp=False, checkSampleSequence=False):
     """ measure all sample holders defined in a given configuration in the spreadsheet
     """
-    validate_sample_spreadSheet_HT(spreadSheet, sheet_name="Holders", configName=configName)
-
     if data_path is None:
         raise exception("login first !")
     if sol.HolderPresent.get():
         raise Exception("A sample holder is still in the sample handler !")
 
-    holders = get_holders(spreadSheet, configName)
-    rbt.goHome()
+    if isinstance(configName, str): # for on-site measurements, read configuration from spreadsheet 
+        sheet_name = "Holders"
+        validate_sample_spreadSheet_HT(spreadSheet, sheet_name=sheet_name, configName=configName)
+        holders = get_holders(spreadSheet, configName)
+    else: # for mail-in, derive configuration for the all existing holders
+        sheet_name = 0
+        holders = configName  # called from measure_mailin_spreadsheets()
 
+    rbt.goHome()
     for p in list(holders.keys()):
-        sol.sample_y.home('forward')
         sol.select_flow_cell('bottom')
         print('mounting tray from position', p)
         rbt.loadTray(p)
@@ -426,6 +428,52 @@ def auto_measure_samples(spreadSheet, configName, exp_time=1, repeats=5, vol=45,
         rbt.unloadTray(p)
         
     rbt.park()
+
+
+def measure_mailin_spreadsheets(sh_list):
+    """ each spreadsheet should contain:
+            1. the first sheet is named as proposal#_SAF#
+            2. a "UIDs" tab that lists all sample holder names and UIDs
+    """
+    
+    storage_locs = [i for i in range(1,21) if caget(f"XF:16IDC-ES:Chalet{{ctrl}}tray{i:02d}_sts")>0]
+    storage_uids = []
+    rbt.goHome()
+    for loc in storage_locs:
+        rbt.loadTray(loc)
+        uid = camSol.readQR()
+        if len(uid)>0:
+            storage_uids.append(uid[0])
+        rbt.unloadTray(loc)
+    
+    print(f"found sample holders with QR codes at these locations: {storage_locs}")
+    print(f"UIDs: {storage_uids}")
+    if isinstance(sh_list, str):
+        sh_list = [sh_list]
+    
+    for sh in sh_list:
+        wb = openpyxl.load_workbook(sh)
+        try:
+            [prop_id, saf_id] = np.asarray((wb.sheetnames[0].split("-")), dtype=int)
+        except:
+            print(f"Unable to get proposal and SAF IDs from {wb.sheetnames[0]}")
+            continue
+        if not "UIDs" in wb.sheetnames:
+            print(f"{sh} does not contain holder UIDs.")
+            continue
+
+        login("bot", prop_id, saf_id)
+        hdict = parseSpreadsheet(sh, "UIDs", ["holderName"])
+        hlist = list(hdict['holderName'].values())
+        ulist = list(hdict['UID'].values())
+        holders = {}
+        for hn,uid in zip(hlist,ulist):
+            if not uid in storage_uids:
+                print(f"holder {hn} is not in storge.")
+                continue
+            loc = storage_locs[storage_uids.index(uid)]
+            holders[loc] = hn
+        auto_measure_samples(sh, holders)
 
 
 def HT_pack_h5(spreadSheet=None, holderName=None, froot=data_file_path.gpfs, 
@@ -614,6 +662,4 @@ sol.vol_sample_headroom = 10
 hplc.ready.set(0)
 
 # 2020-Oct-26
-sol.flowcell_pos["bottom"] = 4.85                                                                                                                
-sol.flowcell_pos["top"] = -4.05
 sol.watch_list = {'stats1.total': 2e3} 
