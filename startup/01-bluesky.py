@@ -30,9 +30,9 @@ global DETS
 #configure_base(get_ipython().user_ns, db, bec=True, pbar=False)
 # end of code moved to 00-base.py
 
-abort = RE.abort
-resume = RE.resume
-stop = RE.stop
+#abort = RE.abort
+#resume = RE.resume
+#stop = RE.stop
 
 RE.md['group'] = 'lix'
 RE.md['beamline_id'] = 'LIX'

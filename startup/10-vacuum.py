@@ -288,7 +288,7 @@ class VacuumSystem:
         
     def normalOps(self):
         """ open the EV on each section with acceptable vacuum pressure
-            this is useful after evacuating one of the vacuum sections
+            thisvs['EV'].status==0: is useful after evacuating one of the vacuum sections
             open the gate valves too if all pressures are acceptable
         """
         # make sure the pump is on
@@ -296,21 +296,38 @@ class VacuumSystem:
             raise Exception(f"possible problem with the pump, presure = {self.pressure()}")
         
         # also make sure that the section that is being pumped on has reached acceptable pressure
+        # and that vacuum is okay in all sections not being pumped on 
         for vs in self.VSmap:
-            if vs['EV'].status>0: # being pumped on right now
-                if self.pressure(vs['name'])>self.acceptablePumpPressure:
-                    raise Exception(f"too soon to request normal ops: {vs['name']} pressure is {self.pressure(vs['name'])}")
+            pumping = False
+            if 'IV' in vs.keys():
+                # connected to a manifold
+                if vs['IV'].status>0 and self.manifolds[vs['manifold']]['EV'].status>0: 
+                    pumping = True
+            elif vs['EV'].status>0: # not being pumped on right now
+                pumping = True
+            if pumping and self.pressure(vs['name'])>self.acceptablePumpPressure:
+                raise Exception(f"too soon to request normal ops: {vs['name']} pressure is {self.pressure(vs['name'])}")
+            elif not pumping and self.pressure(vs['name'])>2*self.acceptablePumpPressure:
+                raise Exception(f"vacuum in {vs['name']} has deteriorated.")
 
         # open EVs
-        ok_to_open_GVs = True
+        ok_to_open_GVs = True # this should be satisfied already
         for vs in self.VSmap:
-            ok_to_open_GVs = ok_to_open_GVs and (self.pressure(vs['name'])<self.acceptablePumpPressure)
-            if self.pressure(vs['name'])>self.acceptablePumpPressure*2:
-                continue
-            if "manifold" in vs.keys():
-                pass
-            else:
+            #ok_to_open_GVs = ok_to_open_GVs and (self.pressure(vs['name'])<self.acceptablePumpPressure)
+            if not "manifold" in vs.keys():
                 self.openValve(vs['name'], 'EV')
+        # manifolds need to be treated separately
+        for nm,mf in self.manifolds.items():
+            if mf['EV'].status==0: # EV on the manifold is closed
+                IVopen = True
+                for vn in mf['vacSecs']:
+                    if self.VSmap[self.VSindex[vn]]['IV'].status==0:
+                        IVopen = False
+                if not IVopen:
+                    raise Exception(f"manifold {nm} has is EV and all IVs closed, some one needs to check this!!")
+            mf['EV'].open()
+            for vn in mf['vacSecs']:
+                self.VSmap[self.VSindex[vn]]['IV'].open() 
 
         # open GVs if all sections are good
         if not ok_to_open_GVs:

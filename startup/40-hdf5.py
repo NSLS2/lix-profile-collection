@@ -109,7 +109,7 @@ def pack_h5(uids, dest_dir='', fn=None, fix_sample_name=True, stream_name=None,
         h5_fix_sample_name(fn)
         
     if attach_uv_file:
-        # by default the UV file should be saved in /GPFS/xf16id/Windows/
+        # by default the UV file should be saved in /nsls2/xf16id1/Windows/
         # ideally this should be specified, as the default file is overwritten quickly
         h5_attach_hplc(fn, '/nsls2/xf16id1/Windows/hplc_export.txt')
     
@@ -171,7 +171,7 @@ import json
 import socket
 packing_queue_sock_port = 9999
 
-def send_to_packing_queue(uid, datatype, froot=data_file_path.ramdisk, move_first=False):
+def send_to_packing_queue(uid, datatype, froot=data_file_path.gpfs, move_first=False):
     """ data_type must be one of ["scan", "flyscan", "HPLC", "sol", "multi", "mscan"]
         single uid only for "scan", "flyscan", "HPLC"
         uids must be concatenated using '|' for "multi" and "sol"
@@ -263,7 +263,7 @@ def pack_and_move(data_type, uid, dest_dir, move_first=True):
             if data_type=="sol":    
                 dt = h5sol_HT(fn, [dt_exp.detectors, dt_exp.qgrid])
                 dt.assign_buffer(sb_dict)
-                dt.process(filter_data=True, sc_factor=0.998, debug='quiet')
+                dt.process(filter_data=True, sc_factor="auto", debug='quiet')
                 #dt.export_d1s(path=dest_dir+"/processed/")
             elif data_type=="multi":
                 dt = h5xs(fn, [dt_exp.detectors, dt_exp.qgrid], transField='em2_sum_all_mean_value')
@@ -323,6 +323,7 @@ def process_packing_queue():
     host = socket.gethostname()                           
     if host!='xf16idc-gpu1':
         raise Exception("this function can only run on xf16idc-gpu1.")
+    serversocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     serversocket.bind(('10.16.0.4', packing_queue_sock_port))  
     serversocket.listen(5)
     print('listening ...')

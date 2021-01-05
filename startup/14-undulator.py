@@ -10,7 +10,7 @@ from ophyd.status import wait as status_wait
    
    The following is adapted from DAMA implementation. 
    
-   Alternatively, use /GPFS/xf16id/controls/profile_collection/startup/32-undulator-2019Jan.py 
+   Alternatively, use profile_collection/startup/32-undulator-2019Jan.py 
    
 """
 

@@ -1,7 +1,7 @@
 # part of the ipython profile for data collection
 from ophyd import (EpicsSignal, EpicsMotor, Device, Component as Cpt)
 from time import sleep
-import threading,signal
+import threading,signal,random
 from epics import PV
 import bluesky.plans as bp    
 
@@ -26,7 +26,7 @@ class SolutionScatteringControlUnit(Device):
     fan_power = Cpt(EpicsSignal, "fan_power")
     sampleT = Cpt(EpicsSignal, "sample_temp")
     sampleTs = Cpt(EpicsSignal, "sample_temp_SP")
-    sampleTCsts = Cpt(EpicsSignal, "sample_TC_sts")
+    sampleTCsts = Cpt(EpicsSignal, "sample_TCsts")
     vc_4port = Cpt(EpicsSignal, "vc_4port_valve")
     serial_busy = Cpt(EpicsSignal, "busy")
     ready = Cpt(EpicsSignal, "ready")
@@ -91,7 +91,8 @@ class SolutionScatteringExperimentalModule():
     
     sample_y = EpicsMotor('XF:16IDC-ES:Sol{Enc-Ax:Yu}Mtr', name='sol_sample_y')
     holder_x = EpicsMotor('XF:16IDC-ES:Sol{Enc-Ax:Xl}Mtr', name='sol_holder_x')
-    
+    xc = EpicsMotor('XF:16IDC-ES:Scan{Ax:XC}Mtr', name='ss_xc')
+
     # the needles are designated 1 (upstream) and 2
     # the flow cells are designated 1 (bottom), 2 and 3
     # needle 1 is connected to the bottom flowcell, needle 2 connected to the top, HPLC middle
@@ -101,8 +102,12 @@ class SolutionScatteringExperimentalModule():
     # the addtional positions are for the standard sample, a empty space for checking scattering background,
     #    and for the scintillator for check the beam shape
     # this information should be verified every time we setup for solution scattering
-    flowcell_pos = {'bottom': 4.4, 'middle': 0, 'top': -4.5,
-                    "std": -12., "empty": -15., "scint": -17.}  
+    flowcell_pos = {'bottom': [4.55 ,0], 
+                    'middle': [0, 0],
+                    'top':    [-4.25, 0],
+                    'std':    [-12., 0],
+                    'empty':  [-15., 0],
+                    'scint':  [-17., 0]}  
     
     # this is the 4-port valve piosition necessary for the wash the needle
     p4_needle_to_wash = {'upstream': 1, 'downstream': 0}
@@ -146,9 +151,9 @@ class SolutionScatteringExperimentalModule():
     default_dry_time = 20
     default_wash_repeats = 5
     
-    cam = setup_cam("XF:16IDA-BI{Cam:OAM}", "camOAM")
+    cam = None 
     
-    def __init__(self):
+    def __init__(self, camPV="XF:16IDA-BI{Cam:OAM}"):
         # important to home the stages !!!!!
         # how to home sample_y???
         
@@ -163,6 +168,11 @@ class SolutionScatteringExperimentalModule():
         self.holder_x.velocity.put(25)
 
         self.int_handler = signal.getsignal(signal.SIGINT)
+        self.cam = setup_cam(camPV, "solOACam")
+
+    def set_xc_limits(self):
+        self.xc.set_current_position(0)
+        self.xc.set_limits(-1,1)
 
     def enable_ctrlc(self):
         if threading.current_thread() is threading.main_thread():
@@ -241,13 +251,15 @@ class SolutionScatteringExperimentalModule():
     def load_config(self, fn):
         pass
         
-    def select_flow_cell(self, cn):
+    def select_flow_cell(self, cn, r_range=0):
         if self.disable_flow_cell_move:
             print("flow cell motion disabled !!!")
         else:
             #self.sample_y.home('forward')
+            offset = [r_range*(random.random()-0.5), r_range*(random.random()-0.5)]
             print('move to flow cell %s ...' % cn)
-            self.sample_y.move(self.flowcell_pos[cn])
+            self.xc.move(self.flowcell_pos[cn][1] + offset[1])
+            self.sample_y.move(self.flowcell_pos[cn][0] + offset[0])
     
     def select_tube_pos(self, tn):
         ''' 1 argument accepted: 
@@ -266,6 +278,7 @@ class SolutionScatteringExperimentalModule():
         self.tube_pos = tn
         if tn=='park':
             self.move_door('open')
+            self.xc.move(0) # so that the robot doesn't have to change trajectory
             self.holder_x.move(self.park_pos)
             print('move to PCR tube holder park position ...')        
         else:

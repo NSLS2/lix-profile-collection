@@ -8,16 +8,6 @@ class data_file_path(Enum):
     gpfs = '/nsls2/xf16id1/data'
     ramdisk = '/exp_path'
 
-#default_data_path_root = '/GPFS/xf16id/exp_path/'
-#substitute_data_path_root = '/exp_path/'
-# DET_use_substitue_data_path: 
-#     if true, save data into substitue path, but eventaully moved to the default path
-#     the idea is that /exp_path would be the RAM disk on P1M_PPU
-#     value assigned in 20-pilatus.py
-# CBF_replace_data_path:
-#     to let the CBF file handler know whether the files have been moved
-#     value assigned in 33-CBFhandler.py
-
 current_sample="test"
 
 def check_sample_name(sample_name, sub_dir=None, check_for_duplicate=True, check_dir=False):    

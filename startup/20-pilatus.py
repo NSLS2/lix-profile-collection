@@ -188,6 +188,12 @@ class LiXPilatusDetectors(Device):
             
         self._trigger_signal = EpicsSignal('XF:16IDC-ES{Zeb:1}:SOFT_IN:B0')
         self._exp_completed = 0
+        if not "pilatus" in RE.md.keys():
+            RE.md['pilatus'] = {}
+        # ver 0, or none at all: filename template must be set by CBF file handler
+        # ver 1: filename template is already revised by the file plugin
+        RE.md['pilatus']['cbf_file_handler_ver'] = 0 
+        self.set_trigger_mode(PilatusTriggerMode.soft)
         
     def update_header(self, uid):
         for det in self.active_detectors:
@@ -207,8 +213,6 @@ class LiXPilatusDetectors(Device):
             self.trigger_mode = trigger_mode
         else: 
             print(f"invalid trigger mode: {trigger_mode}")
-        if not "pilatus" in RE.md.keys():
-            RE.md['pilatus'] = {}
         RE.md['pilatus']['trigger_mode'] = trigger_mode.name
         
     def set_num_images(self, num, rep=1):
@@ -239,7 +243,7 @@ class LiXPilatusDetectors(Device):
             PilatusFilePlugin.sub_directory = sd
         
     def set_thresh(self):
-        ene = int(getE()/10*0.5+0.5)*0.01
+        ene = int(pseudoE.energy.position/10*0.5+0.5)*0.01
         for det in self.dets.values():
             det.set_thresh(ene)
             
@@ -306,6 +310,10 @@ class LiXPilatusDetectors(Device):
 #        common_attrs = self.active_detectors[0].describe()
         
                                     
-pil = LiXPilatusDetectors("XF:16IDC-DT")   
-pil.activate(["pil1M", "pilW2"])
-pil.set_trigger_mode(PilatusTriggerMode.soft)
+try:
+    pil = LiXPilatusDetectors("XF:16IDC-DT")   
+    pil.activate(["pil1M", "pilW2"])
+    pil.set_trigger_mode(PilatusTriggerMode.soft)
+except:
+    print("Unable to initialize the Pilatus detectors ...")
+

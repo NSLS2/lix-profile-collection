@@ -61,7 +61,7 @@ class PilatusCBFHandler(HandlerBase):
         raise Exception(f"invalid file path: {self._default_path}")
     
     def update_path(self):
-        # this is a workaround for data that are save in /exp_path then moved to /GPFS/xf16id/exp_path
+        # this is a workaround for data that are save in /exp_path then moved to /nsls2/xf16id1/exp_path
         if not self.froot in data_file_path:
             raise Exception(f"invalid froot: {self.froot}")
         self._path = self.froot.value+self._dir 

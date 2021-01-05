@@ -7,10 +7,10 @@ from epics import PV
 
 profile_dir = get_ipython().profile_dir.location
 
-at = np.genfromtxt(os.path.join(profile_dir, "data_files/attn_comb"),skip_header=0)
-t1p = np.genfromtxt(os.path.join(profile_dir, "data_files/atn1x_pos_per.dat"),delimiter=',',skip_header=0)
-t2p = np.genfromtxt(os.path.join(profile_dir, "data_files/atn2x_pos_per.dat"),delimiter=',',skip_header=0)
-t3p = np.genfromtxt(os.path.join(profile_dir, "data_files/atn3x_pos_per.dat"),delimiter=',',skip_header=0)
+#at = np.genfromtxt(os.path.join(profile_dir, "data_files/attn_comb"),skip_header=0)
+#t1p = np.genfromtxt(os.path.join(profile_dir, "data_files/atn1x_pos_per.dat"),delimiter=',',skip_header=0)
+#t2p = np.genfromtxt(os.path.join(profile_dir, "data_files/atn2x_pos_per.dat"),delimiter=',',skip_header=0)
+#t3p = np.genfromtxt(os.path.join(profile_dir, "data_files/atn3x_pos_per.dat"),delimiter=',',skip_header=0)
 
 
 class Attenuator():

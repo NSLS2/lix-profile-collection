@@ -47,7 +47,7 @@ class PositioningStackMicroscope(PositioningStack):
     tx = EpicsMotor('XF:16IDC-ES:Scan2-Gonio{Ax:tX}Mtr', name='ss_tx')
     tz = EpicsMotor('XF:16IDC-ES:Scan2-Gonio{Ax:tZ}Mtr', name='ss_tz')
     try: # may not always be installed
-        rx = EpicsMotor('XF:16IDC-ES:Scan2{Ax:RX}Mtr', name='ss_rx')
+        rx = EpicsMotor('XF:16IDC-ES:Scan2-Gonio{Ax:RX}Mtr', name='ss_rx')
     except:
         rx = None
         print("ss.rx not available")
@@ -105,6 +105,7 @@ class XPStraj(Device):
         
     def stage(self):
         self.datum = {}
+        self.aborted = False
     
     def unstage(self):
         """ abort whatever is still going on??
@@ -173,6 +174,8 @@ class XPStraj(Device):
         while not self._traj_status.done:
             print(f"{time.asctime()}: waiting for the trajectory to finish ...   ", end='')
             time.sleep(1)
+        if self.aborted:
+            raise Exception("unable to complete the scan due to hardware issues ...")
         print("Done.")
         
         return self._traj_status
@@ -423,19 +426,26 @@ class XPStraj(Device):
                 break
             elif i==n_retry-1:
                 self.safe_stop()
+                print("motion group re-initialized ...")
+                break
             print(f'An error (code {err}) as occured when starting trajectory execution, retry #{i+1} ...')
             #if err=='-22': # Group state must be READY                
             [err, ret] = self.xps.GroupMotionEnable(self.sID, self.group)
             print(f"attempted to re-enable motion group: ", end='')
             time.sleep(1)
         
-        self.xps.GatheringStopAndSave(self.sID)
-        self.xps.EventExtendedRemove(self.sID, eID)
-        self.update_readback()
-        print('end of trajectory execution, ', end='')
+        if not self.aborted:
+            self.xps.GatheringStopAndSave(self.sID)
+            self.xps.EventExtendedRemove(self.sID, eID)
+            self.update_readback()
+            print('end of trajectory execution, ', end='')
 
         if self._traj_status != None:
             self._traj_status._finished()
+
+        # for testing only
+        #if caget('XF:16IDC-ES:XPSAux1Bi0'):
+        #    self.aborted = True
             
     def safe_stop(self):
         fast_shutter.close()
@@ -450,7 +460,21 @@ class XPStraj(Device):
             print('%d more data points to complete exposure ...   ' % (Ni-Nc-i), end='\r')
             time.sleep(self.traj_par['segment_duration'])     
         """
-        raise Exception('a hardware error has occured, aborting ... ')
+        st = self.xps.GroupStatusGet(self.sID, 'scan') 
+        if st==['0', '1']: # group likely need initilization and homing
+            self.xps.GroupInitialize(self.sID, 'scan')
+            time.sleep(1)
+            st = self.xps.GroupStatusGet(self.sID, 'scan')
+            if st==['0', '42']: # ready for home search
+                self.xps.GroupHomeSearch(self.sID, 'scan') 
+                time.sleep(1)
+                st = self.xps.GroupStatusGet(self.sID, 'scan')
+                if st==['0', '11']: # home search successful 
+                    print('stages re-initialized ... ')
+        
+        self.aborted = True
+        print("giving up the current scan ...")
+        #raise Exception('a hardware error has occured, aborting ... ')
     
     def readback_traj(self):
         print('reading back trajectory ...')
