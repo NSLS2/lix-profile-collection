@@ -2,6 +2,7 @@ import numpy as np
 from collections import ChainMap
 from ophyd import DeviceStatus
 from ophyd import EpicsSignal, EpicsMotor, EpicsSignalRO, Device, Component 
+from ophyd.utils.epics_pvs import data_type, data_shape
 import epics
 import bluesky.preprocessors as bpp
 import bluesky.plan_stubs as bps
@@ -121,12 +122,17 @@ class XPStraj(Device):
         self.xps.GPIODigitalSet(self.sID, "GPIO3.DO", mask, 0)
         
     def read_configuration(self):
-        ret = [(k, {'value': self.traj_par[k], 
-                    'timestamp': self.time_modified}) for k in self.traj_par.keys()]
+        ret = [(k, {'value': val, 
+                    'timestamp': self.time_modified}) for k, val in self.traj_par.items() if val is not None]
         return OrderedDict(ret)
         
     def describe_configuration(self):
-        pass
+        return {
+          k: {"source": "trajectory_state", "dtype": data_type(val), "shape": data_shape(val)}
+          for k, val
+          in self.traj_par.items()
+          if val is not None
+        }
         
     def select_forward_traj(self, op=True):
         if op:

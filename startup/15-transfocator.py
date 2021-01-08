@@ -74,13 +74,8 @@ class Transfocator(Device):
             self.lens_group[i].put(state_removed)
         self.get_state(silent=True)
 
-## Transfocator CRLs 
-p = PV('XF:16IDC-OP{CRL:1}config') 
-sleep(1) 
-if p.connect():
+try:
     crl = Transfocator('XF:16IDC-OP{CRL', 9, 'crl')
-else:
+except TimeoutError:
     print("transfocator is not available.")
-    
-del p
 

@@ -81,17 +81,20 @@ def raster(exp_time, fast_axis, f_start, f_end, Nfast,
     @bpp.stage_decorator(detectors)
     @fast_shutter_decorator()
     def line():
+        print("in line()")
         yield from bps.kickoff(xps_trj, wait=True)
         yield from bps.complete(xps_trj, wait=True)
         yield from bps.collect(xps_trj)
-
+        print("leaving line()")
 
     @bpp.stage_decorator([xps_trj]) # + detectors)
     @bpp.run_decorator(md=_md)
     def inner(detectors, fast_axis, ready_pos, slow_axis, Nslow, pos_s):
         running_forward = True
         
+        print("in inner()")
         for i in range(Nslow):
+            print("start of the loop")
             if slow_axis is not None:
                 yield from mov(fast_axis, ready_pos[running_forward], slow_axis, pos_s[i])
             else:
@@ -102,7 +105,8 @@ def raster(exp_time, fast_axis, f_start, f_end, Nfast,
             running_forward = not running_forward
             if PilatusFilePlugin.file_number_reset:
                 PilatusFilePlugin.file_number_reset = 0
-
+        print("leaving inner()")
+    
     yield from inner(detectors, fast_axis, ready_pos, slow_axis, Nslow, pos_s)
     PilatusFilePlugin.file_number_reset = 1    
     
