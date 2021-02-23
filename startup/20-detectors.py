@@ -222,6 +222,6 @@ camTop       = setup_cam("XF:16IDC-BI{Cam:sam_top}", "camTop")
 
 camSampleTV  = setup_cam("XF:16IDC-BI{Cam:sam_top}", "camSampleTV")
 camOAM       = setup_cam("XF:16IDA-BI{Cam:OAM}", "camOAM")
-camSpare     = setup_cam("XF:16IDA-BI{Cam:Spare}", "camSpare")
+camSpare     = setup_cam("XF:16IDC-BI{Cam:Spare}", "camSpare")
 camScope     = setup_cam("XF:16IDC-BI{Cam:Stereo}", "camScope") 
 """

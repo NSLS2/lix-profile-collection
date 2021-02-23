@@ -172,8 +172,8 @@ class LiXPilatusDetectors(Device):
     _num_images = 1
     _num_repeats = 1
     active_detectors = []
-    trig_wait = 1
-    acq_time = 1
+    trig_wait = 1.
+    acq_time = 1.
     trigger_mode = PilatusTriggerMode.soft
     
     def __init__(self, prefix):
@@ -290,6 +290,15 @@ class LiXPilatusDetectors(Device):
         
         return self._status
     
+    def repeat_ext_trigger(self, rep):
+        """ this is used to produce external triggers to complete data collection by camserver
+        """
+        for i in reversed(range(rep)):
+            self._trigger_signal.put(1, wait=True)
+            self._trigger_signal.put(0, wait=True)
+            time.sleep(self.acq_time)
+            print(f"# of triggers to go: {i} \r", end="")
+
     def _acquire_changed(self, value=None, old_value=None, **kwargs):
         if old_value==1 and value==0:
             self._exp_completed += 1
@@ -313,7 +322,7 @@ class LiXPilatusDetectors(Device):
 try:
     pil = LiXPilatusDetectors("XF:16IDC-DT")   
     pil.activate(["pil1M", "pilW2"])
-    pil.set_trigger_mode(PilatusTriggerMode.soft)
+    pil.set_trigger_mode(PilatusTriggerMode.ext_multi)
 except:
     print("Unable to initialize the Pilatus detectors ...")
 

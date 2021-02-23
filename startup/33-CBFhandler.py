@@ -86,7 +86,8 @@ class PilatusCBFHandler(HandlerBase):
         stop = start + 1 
         ret = []
 
-        tl = self._template.replace(".", "_").split("_") 
+        tplt = self._template.replace("6.6d", "06d") # some early templates are not correctly formatted
+        tl = tplt.replace(".", "_").split("_") 
         # e.g. ['%s%s', '%06d', 'SAXS', 'cbf'], ['%s%s', '%06d', 'SAXS', '%05d', 'cbf']
         # resulting in file names like test_000125_SAXS.cbf vs test_000125_SAXS_00001.cbf 
         if self.trigger_mode != triggerMode.software_trigger_single_frame and self._fpp>1:

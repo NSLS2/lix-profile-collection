@@ -137,9 +137,21 @@ def hdf5_export(headers, filename,
                             raise ValueError('Array of str with ndim >= 3 can not be saved.')
                     else:  # save numerical data
                         try:                               
-                            dataset = data_group.create_dataset(
-                                key, data=np.array(conv_to_list(rawdata)),  # issue with list of lists
-                                compression='gzip', fletcher32=True)
+                            if isinstance(rawdata[0], np.ndarray): # detector image
+                                chunks = np.ones(len(data.shape), dtype=int)
+                                n = len(rawdata[0].shape)
+                                chunks[-2:] = data.shape[-2:]
+                                chunks = tuple(chunks)
+                                print("data shape: ", data.shape, "     chunks: ", chunks)
+                                dataset = data_group.create_dataset(
+                                    key, data=data,
+                                    compression='gzip', fletcher32=True, chunks=chunks)
+                            else: # motor positions etc.
+                                data = np.array(conv_to_list(rawdata)) # issue with list of lists
+                                chunks = False
+                                dataset = data_group.create_dataset(
+                                    key, data=data, 
+                                    compression='gzip', fletcher32=True)
                         except:
                             print("failed to convert data: ")
                             print(np.array(conv_to_list(rawdata)))

@@ -165,7 +165,9 @@ def h5_attach_hplc(fn_h5, fn_hplc, chapter_num=-1, grp_name=None):
     f.close()
 
 from py4xs.detector_config import create_det_from_attrs
-from py4xs.hdf import h5sol_HPLC,h5sol_HT,h5xs,h5exp    
+from py4xs.hdf import h5xs,h5exp    
+from lixtools.hdf import h5sol_HPLC,h5sol_HT
+from lixtools.atsas import gen_report
 import json
 
 import socket
@@ -272,9 +274,10 @@ def pack_and_move(data_type, uid, dest_dir, move_first=True):
                 dt = h5xs(fn, [dt_exp.detectors, dt_exp.qgrid])
                 dt.load_data(debug="quiet")
             dt.fh5.close()
+            del dt,dt_exp            
             if fh5_name is not "tmp.h5":  # temporary fix, for some reason other processes cannot open the packed file
                 os.system(f"cd {dest_dir} ; cp tmp.h5 {fh5_name} ; rm tmp.h5")
-            del dt,dt_exp            
+            gen_report(fh5_name)
     elif data_type=="HPLC":
         uids = [uid]
         if db[uid].start['plan_name']=="hplc_scan":

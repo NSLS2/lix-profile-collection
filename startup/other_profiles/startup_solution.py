@@ -1,13 +1,11 @@
-from py4xs.hdf import h5sol_HT,h5exp
+from py4xs.hdf import h5exp
 import time,sys,random,openpyxl
-#global DET_replace_data_path
-#DET_replace_data_path = True
 
 PilatusFilePlugin.froot = data_file_path.gpfs
 PilatusCBFHandler.froot = data_file_path.gpfs
 froot=data_file_path.gpfs
 
-sol = SolutionScatteringExperimentalModule(camPV="XF:16IDC-BI{Cam:Spare}")
+sol = SolutionScatteringExperimentalModule(camPV="XF:16IDC-BI{Cam:Sol}")
 
 def showd2s(d2, logScale=True, showMask=False, clim=(0.1,14000), showRef=True, cmap=None):
     plt.figure()
@@ -172,7 +170,7 @@ def parseSpreadsheet(infilename, sheet_name=0, strFields=[]):
     """ dropna removes empty rows
     """
     converter = {col: str for col in strFields} 
-    DataFrame = pandas.read_excel(infilename, sheet_name=sheet_name, converters=converter)
+    DataFrame = pandas.read_excel(infilename, sheet_name=sheet_name, converters=converter, engine="openpyxl")
     DataFrame.dropna(axis=0, how='all', inplace=True)
     return DataFrame.to_dict()
 
@@ -413,7 +411,7 @@ def auto_measure_samples(spreadSheet, configName, exp_time=1, repeats=5, vol=45,
             sol.select_tube_pos(1)
             countdown("simulating data collection ", 60)
         else:
-            uids,samples = measure_holder(spreadSheet, holderName,
+            uids,samples = measure_holder(spreadSheet, holderName, sheet_name=sheet_name,
                                           exp_time=exp_time, repeats=repeats, vol=vol,
                                           returnSample=returnSample, concurrentOp=concurrentOp,
                                           checkSampleSequence=checkSampleSequence)
@@ -429,28 +427,80 @@ def auto_measure_samples(spreadSheet, configName, exp_time=1, repeats=5, vol=45,
         
     rbt.park()
 
+import socket,time,json
 
-def measure_mailin_spreadsheets(sh_list):
+class sock_client:
+    def __init__(self, sock_addr):
+        self.sock_addr = sock_addr
+        self.delay = 0.05
+    
+    def clean_up(self):
+        if self.sock is not None:
+            self.sock.close()
+
+    def send_msg(self, msg):
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.connect(self.sock_addr)   
+        sock.send(msg.encode('ascii'))
+        time.sleep(self.delay)
+        ret = sock.recv(1024).decode('ascii')
+        sock.close()
+        return ret
+
+def checkQRcodes(cs, locs):
+    Flocs = []
+    Fuids = []
+    camcmd = {"target": "1QR", "zoom": 400, "focus": 50, "exposure": 140}
+
+    rbt.goHome()
+    for loc in locs:
+        rbt.loadTray(loc)
+        for tt in range(80,150,5):
+            camcmd['exposure'] = tt
+            camcmd['slot'] = loc
+            uid = json.loads(cs.send_msg(json.dumps(camcmd)))
+            if len(uid)>0:
+                Flocs.append(loc)
+                Fuids.append(uid[0])
+                print(f"found {uid[0]} in pos {loc}")
+                break
+        rbt.unloadTray(loc)
+    return Flocs,Fuids
+
+def measure_mailin_spreadsheets(sh_list, sample_locs=None, check_QR_only=False):
     """ each spreadsheet should contain:
             1. the first sheet is named as proposal#_SAF#
             2. a "UIDs" tab that lists all sample holder names and UIDs
     """
-    
-    storage_locs = [i for i in range(1,21) if caget(f"XF:16IDC-ES:Chalet{{ctrl}}tray{i:02d}_sts")>0]
+    cs = sock_client(('10.16.0.10', 9999)) # webcam on babyIOC
+
+    if sample_locs is None:
+        sample_locs = list(range(1,21))
+    all_locs = [i for i in sample_locs if caget(f"XF:16IDC-ES:Chalet{{ctrl}}tray{i:02d}_sts")>0]
+    storage_locs = []
     storage_uids = []
-    rbt.goHome()
-    for loc in storage_locs:
-        rbt.loadTray(loc)
-        uid = camSol.readQR()
-        if len(uid)>0:
-            storage_uids.append(uid[0])
-        rbt.unloadTray(loc)
-    
+    Slocs = all_locs
+
+    while True:
+        locs,uids = checkQRcodes(cs, Slocs)
+        storage_locs += locs
+        storage_uids += uids
+        if len(storage_locs)==len(all_locs):
+            break
+        Slocs = [loc for loc in all_locs if not loc in storage_locs]
+        print(f"QR codes were not found at these locations: {Slocs}")
+        ans = input("Retry?? (type 'no' to skip): ") 
+        if 'n' in ans or 'N' in ans:
+            break
+
     print(f"found sample holders with QR codes at these locations: {storage_locs}")
     print(f"UIDs: {storage_uids}")
+
+    if check_QR_only:
+        return         
+    
     if isinstance(sh_list, str):
         sh_list = [sh_list]
-    
     for sh in sh_list:
         wb = openpyxl.load_workbook(sh)
         try:
@@ -474,6 +524,7 @@ def measure_mailin_spreadsheets(sh_list):
             loc = storage_locs[storage_uids.index(uid)]
             holders[loc] = hn
         auto_measure_samples(sh, holders)
+        logoff(quiet=True)
 
 
 def HT_pack_h5(spreadSheet=None, holderName=None, froot=data_file_path.gpfs, 
@@ -527,7 +578,7 @@ def createShimadzuBatchFile(spreadsheet_fn, batchID, sheet_name='Samples',
     default_win_HPLC_dir = 'Z:\\HPLC\\'
     default_win_data_path = default_win_HPLC_dir+proposal_id+'\\'+run_id+'\\'
     # make directory, makedirs() is defined in 02-utils.py
-    makedirs(default_data_path)
+    makedirs(default_data_path, mode=0o777)
 
     # some contents of the sample info need to be generated automatically
     dd['Sample ID'] = {}

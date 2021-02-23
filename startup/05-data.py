@@ -1,4 +1,5 @@
 import time
+import pylab as plt
 
 last_scan_uid = None
 last_scan_id = None
