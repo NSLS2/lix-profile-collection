@@ -96,9 +96,9 @@ def raster(exp_time, fast_axis, f_start, f_end, Nfast,
         for i in range(Nslow):
             print("start of the loop")
             if slow_axis is not None:
-                yield from mov(fast_axis, ready_pos[running_forward], slow_axis, pos_s[i])
+                yield from mv(fast_axis, ready_pos[running_forward], slow_axis, pos_s[i])
             else:
-                yield from mov(fast_axis, ready_pos[running_forward])
+                yield from mv(fast_axis, ready_pos[running_forward])
 
             xps_trj.select_forward_traj(running_forward)
             yield from line()
@@ -108,7 +108,7 @@ def raster(exp_time, fast_axis, f_start, f_end, Nfast,
         print("leaving inner()")
     
     yield from inner(detectors, fast_axis, ready_pos, slow_axis, Nslow, pos_s)
-    PilatusFilePlugin.file_number_reset = 1    
+    #PilatusFilePlugin.file_number_reset = 1    
     
     if slow_axis is not None:
         yield from mov(fast_axis, p0_fast, slow_axis, p0_slow)

@@ -4,11 +4,6 @@ RE.md['det_pos'] = ({'saxs': {'x':saxs.x.position, 'y':saxs.y.position, 'z':saxs
                     })
 del saxs,waxs1,waxs2
 
-RE.md['energy'] = ({'mono_bragg': mono.bragg.position,
-                    'energy': pseudoE.energy.position, 
-                    'gap': pseudoE.IVUgap.position
-                   })
-
 RE.md['optics'] = ({'wbm_y': wbm.y.position,
                     'wbm_pitch': wbm.pitch.position,
                     'dcm_y2': mono.y.position,
@@ -32,6 +27,11 @@ del crl
 def update_metadata():
     print('updating meta data ...', end='')
 #    RE.md['BPM']['beam position'] = ({'x': best.x_mean.get(), 'y': best.y_mean.get()})
+    RE.md['energy'] = ({'mono_bragg': mono.bragg.position,
+                    'energy': pseudoE.energy.position, 
+                    'gap': pseudoE.IVUgap.position
+                   })
+
     RE.md['slits'] = ({#'SSA': {'dx': ssa1.dx.position, 'dy': ssa1.dy.position}, 
                        'DDA': {'x': dda.x.position, 'y': dda.y.position, 'dx': dda.dx.position, 'dy': dda.dy.position },
                        'Sg': {'x': sg2.x.position, 'y': sg2.y.position, 'dx': sg2.dx.position, 'dy': sg2.dy.position },

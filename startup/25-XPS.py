@@ -12,6 +12,10 @@ from threading import Thread
 import uuid
 import time, getpass
 
+#xps_path = "/nsls2/xf16id1/controls/profile_collection/startup"
+#if not xps_path in sys.path:
+#    sys.path += xps_path
+#from newportxps.XPS_C8_drivers import XPS
 from XPS_Q8_drivers3 import XPS
 from ftplib import FTP
 
@@ -96,7 +100,7 @@ class XPStraj(Device):
                          'segment_duration': 0,
                          'motor': None,
                          'rampup_distance': 0,
-                         'motor2': None
+                         #'motor2': None
                         }
         self.time_modified = time.time()
         self.start_time = 0
@@ -230,7 +234,7 @@ class XPStraj(Device):
         
         data[self.traj_par['fast_axis']] = self.read_back['fast_axis']
         ts[self.traj_par['fast_axis']] = self.read_back['timestamp']
-        if self.traj_par['motor2'] is not None:
+        if self.motor2 is not None:
             data[self.traj_par['slow_axis']] = self.read_back['slow_axis']
             ts[self.traj_par['slow_axis']] = self.read_back['timestamp2']
 
@@ -278,7 +282,7 @@ class XPStraj(Device):
         ret[self.traj_par['fast_axis']] = {'dtype': 'number',
                                            'shape': (1,),
                                            'source': 'PVT trajectory readback position'}
-        if self.traj_par['motor2'] is not None:
+        if self.motor2 is not None:
             ret[self.traj_par['slow_axis']] = {'dtype': 'number',
                                                'shape': (1,),
                                                'source': 'motor position readback'}
@@ -372,10 +376,11 @@ class XPStraj(Device):
                          'segment_duration': dt,
                          'motor': motor,
                          'rampup_distance': self.ramp_dist,
-                         'motor2': motor2,
+                         #'motor2': motor2,
                          'motor2_disp': dy
                         }
         self.traj_par['fast_axis'] = xps_trj.devices[motor].name
+        self.motor2 = motor2
         if motor2 is not None:
             self.traj_par['slow_axis'] = motor2.name
         self.time_modified = time.time()
@@ -387,6 +392,8 @@ class XPStraj(Device):
         if self.verified==False:
             raise Exception("trajectory not defined/verified.")
 
+        print("executing trajectory ...")
+            
         N = self.traj_par['no_of_segments']
         Nr = self.traj_par['no_of_rampup_points']
         motor = self.traj_par['motor']
@@ -407,13 +414,13 @@ class XPStraj(Device):
         print("starting a trajectory with triggering parameters: %d, %d, %.3f ..." % (Nr+1, N+Nr+1, dt))
         self.xps.MultipleAxesPVTPulseOutputSet (self.sID, self.group, Nr+1, N+Nr+1, dt)
         self.xps.MultipleAxesPVTVerification(self.sID, self.group, traj_fn)
-        self.xps.GatheringConfigurationSet(self.sID, [motor+".CurrentPosition"])
-        self.xps.sendAndReceive(self.sID, 
-                                'EventExtendedConfigurationTriggerSet('+
-                                'Always,0,0,0,0,%s.PVT.TrajectoryPulse,0,0,0,0)'%self.group )
-        self.xps.sendAndReceive(self.sID, 
-                                'EventExtendedConfigurationActionSet('+
-                                'GatheringOneData,0,0,0,0)')
+        self.xps.GatheringConfigurationSet(self.sID, [motor+".CurrentPosition"])        
+        self.xps.EventExtendedConfigurationTriggerSet(self.sID,
+                                                      ["Always", f"{self.group}.PVT.TrajectoryPulse"],
+                                                      ["0", "0"], ["0", "0"], ["0", "0"], ["0", "0"])
+        self.xps.EventExtendedConfigurationActionSet(self.sID,
+                                                     ["GatheringOneData"], ["0"], ["0"], ["0"], ["0"])
+                
         # all trigger event for gathering should be removed
         if clean_event_queue:
             err,ret = self.xps.EventExtendedAllGet(self.sID)
@@ -423,18 +430,19 @@ class XPStraj(Device):
         eID = self.xps.EventExtendedStart(self.sID)[1]
         self.start_time = time.time()
         
-        for i in range(n_retry):
-            # can this generate some triggers and then fail? if so this failure should kill the run
-            # as there is no book keeping to know which images from the detectors are garbage
-            # and the postions and image sequences will be off
-            [err, ret] = self.xps.MultipleAxesPVTExecution(self.sID, self.group, traj_fn, 1)
-            if err=='0': 
-                break
-            elif i==n_retry-1:
-                self.safe_stop()
-                print("motion group re-initialized ...")
-                break
-            print(f'An error (code {err}) as occured when starting trajectory execution, retry #{i+1} ...')
+        #for i in range(n_retry):
+        # can this generate some triggers and then fail? if so this failure should kill the run
+        # as there is no book keeping to know which images from the detectors are garbage
+        # and the postions and image sequences will be off
+        [err, ret] = self.xps.MultipleAxesPVTExecution(self.sID, self.group, traj_fn, 1)
+        #if err=='0': 
+        #    break
+        #elif i==n_retry-1:
+        if err!='0':
+            self.safe_stop()
+            print("motion group re-initialized ...")
+            #    break
+            print(f'An error (code {err}) as occured when starting trajectory execution') #, retry #{i+1} ...')
             #if err=='-22': # Group state must be READY                
             [err, ret] = self.xps.GroupMotionEnable(self.sID, self.group)
             print(f"attempted to re-enable motion group: ", end='')
@@ -461,6 +469,7 @@ class XPStraj(Device):
         det = pil.active_detectors[0]
         Ni = det.cam.num_images.get() 
         Nc = det.cam.array_counter.get()
+        pil.repeat_ext_trigger(Ni-Nc)
         """for i in range(Ni-Nc):
             det.trigger()
             print('%d more data points to complete exposure ...   ' % (Ni-Nc-i), end='\r')
@@ -479,8 +488,10 @@ class XPStraj(Device):
                     print('stages re-initialized ... ')
         
         self.aborted = True
+        if self._traj_status != None:
+            self._traj_status._finished()
         print("giving up the current scan ...")
-        #raise Exception('a hardware error has occured, aborting ... ')
+        raise Exception('a hardware error has occured, aborting ... ')
     
     def readback_traj(self):
         print('reading back trajectory ...')
@@ -493,7 +504,7 @@ class XPStraj(Device):
         self.read_back = {}
         self.read_back['fast_axis'] = []
         self.read_back['timestamp'] = []
-        if self.traj_par['motor2'] is not None:
+        if self.motor2 is not None:
             self.read_back['slow_axis'] = []
             self.read_back['timestamp2'] = []
         
@@ -506,8 +517,8 @@ class XPStraj(Device):
         Nr = self.traj_par['no_of_rampup_points']
         dt = self.traj_par['segment_duration']
         self.read_back['timestamp'] = list(self.start_time + (0.5 + Nr + np.arange(N+1))*dt)
-        if self.traj_par['motor2'] is not None:
-            self.read_back['slow_axis'] = self.traj_par['motor2'].position
+        if self.motor2 is not None:
+            self.read_back['slow_axis'] = self.motor2.position
             self.read_back['timestamp2'] = time.time()
 
             

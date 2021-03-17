@@ -95,6 +95,7 @@ class LIXPilatus(PilatusDetector):
     HeaderString = Cpt(EpicsSignal, "cam1:HeaderString")
     ThresholdEnergy = Cpt(EpicsSignal, "cam1:ThresholdEnergy")
     armed = Cpt(EpicsSignal, "cam1:Armed")
+    #flatfield = Cpt(EpicsSignal, "cam1:FlatFieldFile")
 
     def __init__(self, *args, detector_id, **kwargs):
         self.detector_id = detector_id
@@ -255,7 +256,7 @@ class LiXPilatusDetectors(Device):
         if self.reset_file_number:
             fno = 1
         for det in self.dets.values():
-            det.file.file_number.put(fno)
+            det.file.file_number.put(fno+1)
             
         for det in self.active_detectors:
             det.stage(self.trigger_mode)
@@ -323,6 +324,7 @@ try:
     pil = LiXPilatusDetectors("XF:16IDC-DT")   
     pil.activate(["pil1M", "pilW2"])
     pil.set_trigger_mode(PilatusTriggerMode.ext_multi)
+    #pil.pilW2.flatfield.put("/home/det/WAXS2ff_2020Oct26.tif")
 except:
     print("Unable to initialize the Pilatus detectors ...")
 

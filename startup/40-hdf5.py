@@ -51,6 +51,7 @@ def pack_h5(uids, dest_dir='', fn=None, fix_sample_name=True, stream_name=None,
             attach_uv_file=False, delete_old_file=True, include_motor_pos=True,
             fields=['em2_current1_mean_value', 'em2_current2_mean_value',
                     'em1_sum_all_mean_value', 'em2_sum_all_mean_value',
+                    'xsp3_spectrum_array_data',
                     'pil1M_image', 'pilW1_image', 'pilW2_image', 
                     'pil1M_ext_image', 'pilW1_ext_image', 'pilW2_ext_image']):
     """ if only 1 uid is given, use the sample name as the file name
@@ -277,7 +278,7 @@ def pack_and_move(data_type, uid, dest_dir, move_first=True):
             del dt,dt_exp            
             if fh5_name is not "tmp.h5":  # temporary fix, for some reason other processes cannot open the packed file
                 os.system(f"cd {dest_dir} ; cp tmp.h5 {fh5_name} ; rm tmp.h5")
-            gen_report(fh5_name)
+            #gen_report(fh5_name)
     elif data_type=="HPLC":
         uids = [uid]
         if db[uid].start['plan_name']=="hplc_scan":

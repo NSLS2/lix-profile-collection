@@ -306,6 +306,7 @@ def measure_holder(spreadSheet, holderName, sheet_name='Holders', exp_time=1, re
         if ((spos[1:]-spos[:-1])%2 == 0).any():
             raise Exception('the sample sequence is not optimized for concurrent ops.')
     
+    update_metadata()
     pil.use_sub_directory(holderName)
     RE.md['holderName'] = holderName 
 
@@ -328,7 +329,7 @@ def measure_holder(spreadSheet, holderName, sheet_name='Holders', exp_time=1, re
                 if verify_beam_on():
                     break
                 # wash the needle first in case we have to wait for the beam to recover
-                sol.wash_needle(verify_needle_for_tube(s['position'], None))   
+                sol.wash_needle(sol.verify_needle_for_tube(s['position'], None))   
                 time.sleep(check_bm_period)
             # check whether the beam was on during data collection; if not, repeat the previous sample
             bim = db[-1].table(stream_name='em2_sum_all_mean_value_monitor')['em2_sum_all_mean_value'] 

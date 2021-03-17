@@ -53,14 +53,35 @@ class StandardProsilica(SingleTrigger, DetectorBase):
         self.watch_timeouts = 0
         self.watch_list = {}
 
-    def stage(self):
-        self.cam.acquire.put(0)
+    def stage(self):  
         super().stage()
+        # when using as a detector, some parameters need to be set correctly
+        if hasattr(self, 'tiff'):
+            self.tiff.enable.put(1, wait=True)
+        self.cam.acquire.put(0)
+        self.cam.image_mode.put(0, wait=True)  # single
+        self.cam.trigger_mode.put(6, wait=True)  # software
 
     def unstage(self):
-        if hasattr(self, 'tiff'):
-            self.tiff.enable.put(0)
         super().unstage()
+        if hasattr(self, 'tiff'):
+            self.tiff.enable.put(0, wait=True)
+        self.cam.image_mode.put(2, wait=True)  # continuous
+        self.cam.trigger_mode.put(0, wait=True)  # free run
+        self.cam.acquire.put(1)
+        
+    def trigger(self):
+        if self._staged != Staged.yes:
+            raise RuntimeError("This detector is not ready to trigger."
+                               "Call the stage() method before triggering.")
+
+        self._status = self._status_type(self)
+        self._acquisition_signal.put(1, wait=False)
+        self.cam.trigger_software.put(1, wait=False)
+        threading.Timer(self.cam.acquire_period.get(), self._status._finished, ()).start()
+        self.dispatch(self._image_name, ttime.time())
+        return self._status
+
         
     # ROIs = [ROI1, ROI2, ...]
     # each ROI is defined as [startX, sizeX, startY, sizeY]
@@ -190,7 +211,7 @@ def setup_cam(pv, name):
         cam = None
         print("%s is not accessible." % name)
 
-    cam.read_attrs = ['image', 'stats1', 'stats2', 'stats3', 'roi1', 'tiff', 'over', 'trans']
+    cam.read_attrs = ['image', 'stats1', 'stats2', 'stats3', 'roi1', 'over', 'trans']
     cam.image.read_attrs = [] #'array_data']
     cam.stats1.read_attrs = ['total', 'centroid', 'profile_average']
     cam.stats2.read_attrs = ['total', 'centroid']
