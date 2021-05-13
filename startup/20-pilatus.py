@@ -3,7 +3,8 @@ from ophyd import ( Component as Cpt, ADComponent, Signal,
                     ROIPlugin, StatsPlugin, ImagePlugin,
                     SingleTrigger, PilatusDetector, Device)
 
-from ophyd.areadetector.filestore_mixins import FileStoreIterativeWrite
+from ophyd.areadetector.filestore_mixins import FileStoreBase,FileStoreHDF5,FileStoreIterativeWrite
+from ophyd.areadetector.plugins import HDF5Plugin
 
 from ophyd.utils import set_and_wait
 from databroker.assets.handlers_base import HandlerBase
@@ -19,83 +20,143 @@ class PilatusTriggerMode(Enum):
     ext = 2         # ExtTrigger in camserver
     ext_multi = 3   # ExtMTrigger in camserver
 
-class PilatusFilePlugin(Device, FileStoreIterativeWrite):
-    file_path = ADComponent(EpicsSignalWithRBV, 'FilePath', string=True)
-    file_number = ADComponent(EpicsSignalWithRBV, 'FileNumber')
-    file_name = ADComponent(EpicsSignalWithRBV, 'FileName', string=True)
-    file_template = ADComponent(EpicsSignalWithRBV, 'FileTemplate', string=True)
-    file_number_reset = 1
-    next_file_number = 1
-    sub_directory = None
-    froot = data_file_path.gpfs
-    enable = SimpleNamespace(get=lambda: True)
-
+class LiXFileStorePluginBase(FileStoreBase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._datum_kwargs_map = dict()  # store kwargs for each uid
-        self.filestore_spec = 'AD_CBF'
+        self.stage_sigs.update([('auto_increment', 'Yes'),
+                                ('array_counter', 0),
+                                ('auto_save', 'Yes'),
+                                ('num_capture', 0),
+                                ])
+        self._fn = None
+        self._fp = None
+
+    def make_filename(self):
+        '''Make a filename.
+        This is a hook so that the read and write paths can either be modified
+        or created on disk prior to configuring the areaDetector plugin.
+        Returns
+        -------
+        filename : str
+            The start of the filename
+        read_path : str
+            Path that ophyd can read from
+        write_path : str
+            Path that the IOC can write to
+        '''
+        filename = new_short_uid()
+        formatter = datetime.now().strftime
+        write_path = formatter(self.write_path_template)
+        read_path = formatter(self.read_path_template)
+        return filename, read_path, write_path
 
     def stage(self):
-        global proposal_id
-        global run_id
-        global current_sample
-        global data_path
+        # Make a filename.
+        filename, read_path, write_path = self.make_filename()
 
-        f_tplt = '%s%s_%06d_'+self.parent.detector_id+'.cbf'
-        set_and_wait(self.file_template, f_tplt, timeout=99999)
-
-        if PilatusFilePlugin.sub_directory is not None:
-            f_path = data_path+PilatusFilePlugin.sub_directory
-        else:
-            f_path = data_path
-
-        f_fn = current_sample
-        print('%s: setting file path ...' % self.name)
-        if self.froot == data_file_path.ramdisk:
-            f_path = f_path.replace(data_file_path.gpfs.value, data_file_path.ramdisk.value) 
-        set_and_wait(self.file_path, f_path, timeout=99999) 
-        set_and_wait(self.file_name, f_fn, timeout=99999)
-        self._fn = Path(f_path)
-
-        fpp = self.get_frames_per_point()
-        # when camserver collects in "multiple" mode, another number is added to the file name
-        # even though the template does not specify it. 
-        # Camserver doesn't like the template to include the second number
-        # The template will be revised in the CBF handler if fpp>1
-
-        print('%s: super().stage() ...' % self.name)
+        # Ensure we do not have an old file open.
+        if self.file_write_mode != 'Single':
+            set_and_wait(self.capture, 0)
+        # These must be set before parent is staged (specifically
+        # before capture mode is turned on. They will not be reset
+        # on 'unstage' anyway.
+        self.file_path.set(write_path).wait()
+        set_and_wait(self.file_name, filename)
+        #set_and_wait(self.file_number, 0)     # only reason to redefine the pluginbase
         super().stage()
-        res_kwargs = {'template': f_tplt, # self.file_template(),
-                      'filename': f_fn, # self.file_name(),
-                      'frame_per_point': fpp,
-                      'initial_number': self.file_number.get()}
-        print('%s: _generate_resource() ...' % self.name)
-        self._generate_resource(res_kwargs)
 
-    def unstage(self):
-        super().unstage()
+        # AD does this same templating in C, but we can't access it
+        # so we do it redundantly here in Python.
+        self._fn = self.file_template.get() % (read_path,
+                                               filename,
+                                               # file_number is *next* iteration
+                                               self.file_number.get() - 1)
+        self._fp = read_path
+        if not self.file_path_exists.get():
+            raise IOError("Path %s does not exist on IOC."
+                          "" % self.file_path.get())
+
+
+class LiXFileStoreHDF5(LiXFileStorePluginBase):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.filestore_spec = 'AD_HDF5'  # spec name stored in resource doc
+        self.stage_sigs.update([('file_template', '%s%s_%6.6d.h5'),
+                                ('file_write_mode', 'Stream'),
+                                ('capture', 1)
+                                ])
 
     def get_frames_per_point(self):
-        return self.parent.parent._num_images
+        num_capture = self.num_capture.get()
+        # If num_capture is 0, then the plugin will capture however many frames
+        # it is sent. We can get how frames it will be sent (unless
+        # interrupted) by consulting num_images on the detector's camera.
+        if num_capture == 0:
+            return self.parent.cam.num_images.get()
+        # Otherwise, a nonzero num_capture will cut off capturing at the
+        # specified number.
+        return num_capture
 
+    def stage(self):
+        super().stage()
+        res_kwargs = {'frame_per_point': self.get_frames_per_point()}
+        self._generate_resource(res_kwargs)
+
+
+class LIXhdfPlugin(HDF5Plugin, LiXFileStoreHDF5):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fnbr = 0        
+
+    def make_filename(self):
+        ''' replaces FileStorePluginBase.make_filename()
+        Returns
+        -------
+        filename : str
+            The start of the filename
+        read_path : str
+            Path that ophyd can read from
+        write_path : str
+            Path that the IOC can write to
+        '''
+        global data_path,current_sample
+        
+        filename = f"{current_sample}_{self.parent.detector_id}"
+        write_path = data_path
+        read_path = self.file_path.get()
+        return filename, read_path, write_path
+    
+    #def stage(self):
+    #    """ need to set the number of images to collect and file path
+    #    """
+    #    super().stage()
+    #    if not self.parent.parent.reset_file_number:
+    #        set_and_wait(self.file_number, self.fnbr+1)
+    #        filename, read_path, write_path = self.make_filename()
+    #        self._fn = self.file_template.get() % (read_path, filename, self.fnbr)
+    #        set_and_wait(self.full_file_name, self._fn)
+        
+    #def unstage(self):
+    #    self.fnbr = self.file_number.get()
+    #    super().unstage()
+        
+    def get_frames_per_point(self):
+        if self.parent.trigger_mode is PilatusTriggerMode.ext:
+            return self.parent.parent._num_images
+        else:
+            return 1
+    
 class LIXPilatus(PilatusDetector):
-    file = Cpt(PilatusFilePlugin, suffix="cam1:",
-               write_path_template="", root='/')
-
-    #roi1 = Cpt(ROIPlugin, 'ROI1:')
-    #roi2 = Cpt(ROIPlugin, 'ROI2:')
-    #roi3 = Cpt(ROIPlugin, 'ROI3:')
-    #roi4 = Cpt(ROIPlugin, 'ROI4:')
-
-    #stats1 = Cpt(StatsPlugin, 'Stats1:')
-    #stats2 = Cpt(StatsPlugin, 'Stats2:')
-    #stats3 = Cpt(StatsPlugin, 'Stats3:')
-    #stats4 = Cpt(StatsPlugin, 'Stats4:')
-
+    hdf = Cpt(LIXhdfPlugin, suffix="HDF1:",
+              write_path_template="", root='/')
+    
+    cbf_file_path = ADComponent(EpicsSignalWithRBV, 'cam1:FilePath', string=True)
+    cbf_file_name = ADComponent(EpicsSignalWithRBV, 'cam1:FileName', string=True)
+    cbf_file_number = ADComponent(EpicsSignalWithRBV, 'cam1:FileNumber')
     HeaderString = Cpt(EpicsSignal, "cam1:HeaderString")
     ThresholdEnergy = Cpt(EpicsSignal, "cam1:ThresholdEnergy")
     armed = Cpt(EpicsSignal, "cam1:Armed")
-    #flatfield = Cpt(EpicsSignal, "cam1:FlatFieldFile")
+    flatfield = Cpt(EpicsSignal, "cam1:FlatFieldFile")
 
     def __init__(self, *args, detector_id, **kwargs):
         self.detector_id = detector_id
@@ -103,11 +164,38 @@ class LIXPilatus(PilatusDetector):
         
         self._acquisition_signal = self.cam.acquire
         self._counter_signal = self.cam.array_counter
+        self.set_cbf_file_default("/exp_path/current", "current")  # local to the detector server
+        self.hdf.warmup()
+        
+    def set_flatfield(self, fn):
+        """ do some changing first
+            make sure that the image size is correct and the values are reasonable
+            
+            documentation on the PV:
+            
+            Name of a file to be used to correct for the flat field. If this record does not point to a valid 
+            flat field file then no flat field correction is performed. The flat field file is simply a TIFF 
+            or CBF file collected by the Pilatus that is used to correct for spatial non-uniformity in the 
+            response of the detector. It should be collected with a spatially uniform intensity on the detector 
+            at roughly the same energy as the measurements being corrected. When the flat field file is read, 
+            the average pixel value (averageFlatField) is computed using all pixels with intensities 
+            >PilatusMinFlatField. All pixels with intensity <PilatusMinFlatField in the flat field are replaced 
+            with averageFlatField. When images are collected before the NDArray callbacks are performed the following 
+            per-pixel correction is applied:
+                ImageData[i] = (averageFlatField * ImageData[i])/flatField[i];
+            or
+                ImageData[i] *= averageFlatField/flatField[i]
+        """ 
+        self.flatfield.put(fn, wait=True)
+    
+    def set_cbf_file_default(self, path, fn):
+        self.cbf_file_path.put(path, wait=True)
+        self.cbf_file_name.put(fn, wait=True)
 
     def set_thresh(self, ene):
         """ set threshold
         """
-        set_and_wait(self.ThresholdEnergy, ene)
+        self.ThresholdEnergy.put(ene, wait=True)
         self.cam.threshold_apply.put(1)
 
     def stage(self, trigger_mode):
@@ -140,6 +228,7 @@ class LIXPilatus(PilatusDetector):
     def unstage(self):
         if self._staged == Staged.no:
             return
+
         print(self.name, "unstaging ...")
         print(self.name, "checking detector Armed status:", end="")
         while self.armed.get():
@@ -166,7 +255,7 @@ class LIXPilatus(PilatusDetector):
             
 class LiXPilatusDetectors(Device):
     pil1M = Cpt(LIXPilatus, '{Det:SAXS}', name="pil1M", detector_id="SAXS")
-    pilW1 = Cpt(LIXPilatus, '{Det:WAXS1}', name="pilW1", detector_id="WAXS1")
+    #pilW1 = Cpt(LIXPilatus, '{Det:WAXS1}', name="pilW1", detector_id="WAXS1")
     pilW2 = Cpt(LIXPilatus, '{Det:WAXS2}', name="pilW2", detector_id="WAXS2")
     trigger_lock = None
     reset_file_number = True
@@ -179,12 +268,12 @@ class LiXPilatusDetectors(Device):
     
     def __init__(self, prefix):
         super().__init__(prefix=prefix, name="pil")
-        self.dets = {"pil1M": self.pil1M, "pilW1": self.pilW1, "pilW2": self.pilW2}
+        self.dets = {"pil1M": self.pil1M,  "pilW2": self.pilW2} # "pilW1": self.pilW1,
         if self.trigger_lock is None:
             self.trigger_lock = threading.Lock()
         for dname,det in self.dets.items():
             det.name = dname
-            det.read_attrs = ['file']
+            det.read_attrs = ['hdf'] #['file']
         self.active_detectors = list(self.dets.values())
             
         self._trigger_signal = EpicsSignal('XF:16IDC-ES{Zeb:1}:SOFT_IN:B0')
@@ -193,8 +282,7 @@ class LiXPilatusDetectors(Device):
             RE.md['pilatus'] = {}
         # ver 0, or none at all: filename template must be set by CBF file handler
         # ver 1: filename template is already revised by the file plugin
-        RE.md['pilatus']['cbf_file_handler_ver'] = 0 
-        self.set_trigger_mode(PilatusTriggerMode.soft)
+        #RE.md['pilatus']['cbf_file_handler_ver'] = 0 
         
     def update_header(self, uid):
         for det in self.active_detectors:
@@ -222,12 +310,14 @@ class LiXPilatusDetectors(Device):
         
     def number_reset(self, reset=True):
         self.reset_file_number = reset
-        for det in self.dets.values():
-            det.file.file_number.put(0)
+        if reset:
+            for det in self.dets.values():
+                det.cbf_file_number.put(0)
+                det.hdf.file_number.put(0)
         
     def exp_time(self, exp):
         for det_name in self.dets.keys():
-            self.dets[det_name].read_attrs = ['file']
+            self.dets[det_name].read_attrs = ['hdf']
             self.dets[det_name].cam.acquire_time.put(exp)
             self.dets[det_name].cam.acquire_period.put(exp+0.005)
         self.acq_time = exp+0.005
@@ -252,11 +342,11 @@ class LiXPilatusDetectors(Device):
         if self._staged == Staged.yes:
             return
         change_path()
-        fno = np.max([det.file.file_number.get() for det in self.dets.values()])        
+        fno = np.max([det.cbf_file_number.get() for det in self.dets.values()])        
         if self.reset_file_number:
             fno = 1
         for det in self.dets.values():
-            det.file.file_number.put(fno+1)
+            det.cbf_file_number.put(fno+1)
             
         for det in self.active_detectors:
             det.stage(self.trigger_mode)
@@ -320,11 +410,11 @@ class LiXPilatusDetectors(Device):
 #        common_attrs = self.active_detectors[0].describe()
         
                                     
-try:
-    pil = LiXPilatusDetectors("XF:16IDC-DT")   
-    pil.activate(["pil1M", "pilW2"])
-    pil.set_trigger_mode(PilatusTriggerMode.ext_multi)
-    #pil.pilW2.flatfield.put("/home/det/WAXS2ff_2020Oct26.tif")
-except:
-    print("Unable to initialize the Pilatus detectors ...")
+#try:
+pil = LiXPilatusDetectors("XF:16IDC-DT")   
+pil.activate(["pil1M", "pilW2"])
+pil.set_trigger_mode(PilatusTriggerMode.ext_multi)
+#pil.pilW2.flatfield.put("/home/det/WAXS2ff_2020Oct26.tif")
+#except:
+#    print("Unable to initialize the Pilatus detectors ...")
 

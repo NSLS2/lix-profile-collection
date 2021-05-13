@@ -116,6 +116,9 @@ class LiXXspress(XspressTrigger, Xspress3Detector):
         
         return self._status
 
-xsp3 = LiXXspress("XF:16IDC-ES{Xsp:1}:", name="xsp3")
-xsp3.channel1.rois.read_attrs = ["roi{:02}".format(j) for j in [1, 2, 3, 4]]
+try:
+    xsp3 = LiXXspress("XF:16IDC-ES{Xsp:1}:", name="xsp3")
+    xsp3.channel1.rois.read_attrs = ["roi{:02}".format(j) for j in [1, 2, 3, 4]]
+except:
+    print("Xspress3 is not accessible ...")
 

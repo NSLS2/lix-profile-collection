@@ -19,12 +19,10 @@ class TIFFPluginWithFileStore(TIFFPlugin, FileStoreTIFFIterativeWrite):
         return fname, read_path, write_path
 
     def stage(self):
-        global proposal_id
-        global run_id
-        path = '/nsls2/xf16id1/data/'
-        rpath = str(proposal_id)+"/"+str(run_id)+"/tif/"
-        makedirs(path+rpath)
-        self.write_path_template = path+rpath
+        global data_path
+        rpath = f"{data_path}/tif/"
+        makedirs(rpath, mode=0o0777)
+        self.write_path_template = rpath
         super().stage()
 
 
@@ -49,39 +47,45 @@ class StandardProsilica(SingleTrigger, DetectorBase):
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self._exp_completed = 0
         self.watch_timeouts_limit = 3
         self.watch_timeouts = 0
         self.watch_list = {}
 
+    def _acquire_changed(self, value=None, old_value=None, **kwargs):
+        if old_value==1 and value==0:
+            self._status._finished()    
+        
     def stage(self):  
-        super().stage()
         # when using as a detector, some parameters need to be set correctly
+        self.stage_sigs[self.cam.image_mode] = 'Single'
+        self.stage_sigs[self.cam.trigger_mode] = 'Fixed Rate'
         if hasattr(self, 'tiff'):
-            self.tiff.enable.put(1, wait=True)
-        self.cam.acquire.put(0)
-        self.cam.image_mode.put(0, wait=True)  # single
-        self.cam.trigger_mode.put(6, wait=True)  # software
+            self.stage_sigs[self.tiff.enable] = True
+
+        super().stage()
+        self._acquisition_signal.subscribe(self._acquire_changed)
+
 
     def unstage(self):
+        #if hasattr(self, 'tiff'):
+        #    self.tiff.enable.put(0, wait=True)
+        self._acquisition_signal.clear_sub(self._acquire_changed)
         super().unstage()
-        if hasattr(self, 'tiff'):
-            self.tiff.enable.put(0, wait=True)
-        self.cam.image_mode.put(2, wait=True)  # continuous
-        self.cam.trigger_mode.put(0, wait=True)  # free run
-        self.cam.acquire.put(1)
-        
+
+    
     def trigger(self):
         if self._staged != Staged.yes:
             raise RuntimeError("This detector is not ready to trigger."
                                "Call the stage() method before triggering.")
 
-        self._status = self._status_type(self)
+        self._status = DeviceStatus(self) # self._status_type(self)
         self._acquisition_signal.put(1, wait=False)
-        self.cam.trigger_software.put(1, wait=False)
-        threading.Timer(self.cam.acquire_period.get(), self._status._finished, ()).start()
+        time.sleep(self.cam.acquire_period.get())
+        #self.cam.trigger_software.put(1, wait=False)
+        #threading.Timer(self.cam.acquire_period.get(), self._status._finished, ()).start()
         self.dispatch(self._image_name, ttime.time())
         return self._status
-
         
     # ROIs = [ROI1, ROI2, ...]
     # each ROI is defined as [startX, sizeX, startY, sizeY]
@@ -224,6 +228,7 @@ def setup_cam(pv, name):
 
     return cam
 
+"""
 camMono      = setup_cam("XF:16IDA-BI{Cam:Mono}", "camMono")
 camKB        = setup_cam("XF:16IDA-BI{Cam:KB}", "camKB")
 
@@ -239,7 +244,6 @@ camSF        = setup_cam("XF:16IDC-BI{Cam:SF}", "camSF")
 camSol        = setup_cam("XF:16IDC-BI{Cam:Sol}", "camSol")
 camTop       = setup_cam("XF:16IDC-BI{Cam:sam_top}", "camTop")
 #camOAM       = setup_cam("XF:16IDA-BI{Cam:OAM}", "camOAM")
-"""
 
 camSampleTV  = setup_cam("XF:16IDC-BI{Cam:sam_top}", "camSampleTV")
 camOAM       = setup_cam("XF:16IDA-BI{Cam:OAM}", "camOAM")

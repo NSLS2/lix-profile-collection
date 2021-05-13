@@ -209,7 +209,7 @@ class XPStraj(Device):
         for det in pil.active_detectors:
             k = f'{det.name}_image'
             #det.dispatch(k, ttime.time())
-            (name, resource), = det.file.collect_asset_docs()
+            (name, resource), = det.hdf.collect_asset_docs()
             assert name == 'resource'
             asset_docs_cache.append(('resource', resource))
             resource_uid = resource['uid']

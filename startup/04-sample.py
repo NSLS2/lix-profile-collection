@@ -1,9 +1,6 @@
 import glob,re
 from enum import Enum
 
-#global default_data_path_root
-#global substitute_data_path_root
-
 class data_file_path(Enum):
     old_gpfs = '/GPFS/xf16id/exp_path'
     gpfs = '/nsls2/xf16id1/data'
@@ -24,10 +21,8 @@ def check_sample_name(sample_name, sub_dir=None, check_for_duplicate=True, check
         f_path = data_path
         if sub_dir is not None:
             f_path += ('/'+sub_dir+'/')
-        #if DET_replace_data_path:
-            #f_path = data_path.replace(default_data_path_root, substitute_data_path_root)
-        if PilatusFilePlugin.froot == data_file_path.ramdisk:
-            f_path = data_path.replace(data_file_path.gpfs.value, data_file_path.ramdisk.value)
+        #if PilatusFilePlugin.froot == data_file_path.ramdisk:
+        #    f_path = data_path.replace(data_file_path.gpfs.value, data_file_path.ramdisk.value)
         if check_dir:
             fl = glob.glob(f_path+sample_name)
         else:

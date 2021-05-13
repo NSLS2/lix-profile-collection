@@ -138,7 +138,6 @@ class SMCchiller(serial_port):
 class tctrl_FTC100D(serial_port):
     """
     This works with the FTC100D temperature controller from AccuThermo
-    The controller is connected to port 2 on the Moxa device shared with the pizeo controller (10.16.2.50)
     port setting: 38400, 8N1
     Communication is not MODBUS, not ascii 
     The protocol is complicated
@@ -206,8 +205,8 @@ class tctrl_FTC100D(serial_port):
         self.get_enable_status()
         
 
-#tctrl = tctrl_FTC100D(("10.16.2.50", 7002))
-#smc = SMCchiller(("10.16.2.50", 7005))
+#tctrl = tctrl_FTC100D(("xf16idc-tsvr-sena", 7002))
+#smc = SMCchiller(("xf16idc-tsvr-sena", 7005))
 
 
 

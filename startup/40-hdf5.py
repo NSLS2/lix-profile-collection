@@ -184,7 +184,7 @@ def send_to_packing_queue(uid, datatype, froot=data_file_path.gpfs, move_first=F
     if datatype not in ["scan", "flyscan", "HPLC", "multi", "sol", "mscan", "mfscan"]:
         raise Exception("invalid data type: {datatype}, valid options are scan and HPLC.")
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM) 
-    s.connect(('10.16.0.4', packing_queue_sock_port))
+    s.connect(('xf16id-gpu1', packing_queue_sock_port))
     msg = f"{datatype}::{uid}::{proc_path}::{froot.name}::{move_first}"
     s.send(msg.encode('ascii'))
     s.close()
@@ -325,10 +325,10 @@ def process_packing_queue():
     """    
     serversocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM) 
     host = socket.gethostname()                           
-    if host!='xf16idc-gpu1':
-        raise Exception("this function can only run on xf16idc-gpu1.")
+    if host!='xf16id-gpu1':
+        raise Exception("this function can only run on xf16id-gpu1.")
     serversocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    serversocket.bind(('10.16.0.4', packing_queue_sock_port))  
+    serversocket.bind(('xf16id-gpu1', packing_queue_sock_port))  
     serversocket.listen(5)
     print('listening ...')
     

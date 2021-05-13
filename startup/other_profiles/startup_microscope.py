@@ -5,10 +5,14 @@ PilatusFilePlugin.froot = data_file_path.gpfs
 PilatusCBFHandler.froot = data_file_path.gpfs
 
 ss = PositioningStackMicroscope()
-xps_trj = XPStraj('10.16.2.104', 'scan', 'test', devices={'scan.rY': ss.ry, 'scan.Y': ss.y, 'scan.X': ss.x})
+xps_trj = XPStraj('xf16idc-mc-xps-rl4.nsls2.bnl.local', 
+                  'scan', 'test', devices={'scan.rY': ss.ry, 'scan.Y': ss.y, 'scan.X': ss.x})
 
-camOAM       = StandardProsilica("XF:16IDA-BI{Cam:OAM}", name="camOAM")
-camScope     = setup_cam("XF:16IDC-BI{Cam:Stereo}", "camScope")
+try:
+    camOAM       = StandardProsilica("XF:16IDA-BI{Cam:OAM}", name="camOAM")
+    camScope     = setup_cam("XF:16IDC-BI{Cam:Stereo}", "camScope")
+except Exception as e:
+    print(f"at least one of the cameras is not avaiable: {e}")
 
 #def raster(detectors, exp_time, fast_axis, f_start, f_end, Nfast, 
 def raster(exp_time, fast_axis, f_start, f_end, Nfast,

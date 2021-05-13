@@ -192,3 +192,53 @@ screen_SS = Screen('XF:16IDB-BI{SCN:SS',name='screen_ss')
 screen_SF = Screen('XF:16IDC-BI{FS:SF',name='screen_sf')
 
 microscope = Microscope(name='microscope', concurrent=True)
+
+def home_motor(mot, forward=True, ref_position=0, travel_range=-1, safety=0.2):
+    """ this function homes a motor without EPICS support; must have hard limits
+    
+        move mot in the specified direction (forward by default) until the motor hit the hard limit (must be present)
+        will adjust/remove soft limits to permit motion
+        set the position at the hard limit to ref_position
+        and return the the starting position once the limit is found
+        the soft limit will be reset to a safety distance from the hard limit
+        the soft limit on the othe end will be reset based on the travel_range, if given
+    """
+    if not isinstance(mot, EpicsMotor):
+        print(f"{mot} is not a EpicsMotor.")
+        return
+
+    print(f"Warning: running this function will move {mot.name} indefinity, hard limit must be present.")
+    response = input("OK to preceed (n/Y)?")
+    if response!="Y":
+        print("Aborted.")
+
+    pos0 = mot.position
+    pos1 = pos0
+    step = (100 if forward else -100)
+
+    try:
+        while True:
+            pos1 += step
+            if step>0 and pos1>mot.limits[1]:
+                mot.set_lim(low=mot.limits[0], high=pos1+safety)
+            if step<0 and pos1<mot.limits[0]:
+                mot.set_lim(low=pos1-safety, high=mot.limits[1])
+            RE(mov(mot, pos1))
+    except Exception as e:
+        print(f"motion aborted, exception: {e}")
+
+    disp = pos0-mot.position
+    mot.set_current_position(ref_position)
+    time.sleep(1)  # not sure why this is necessary, but otherwise things break
+    RE(mov(mot, disp+ref_position))
+    ll,hl = mot.limits
+    if forward:
+        hl = ref_position-safety
+        if travel_range>0:
+            ll = ref_position-travel_range+safety
+    else:
+        ll = ref_position+safety
+        if travel_range>0:
+            hl = ref_position+travel_range-safety
+    mot.set_lim(ll,hl)
+
