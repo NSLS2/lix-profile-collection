@@ -142,31 +142,13 @@ def hdf5_export(headers, filename,
                         res = res_docs[res_dict[key][0]] 
                         if res['spec'] == "AD_HDF5" and bulk_h5_res:
                             rawdata = None
-                            # copy data directly from the resource h5 file
-                            # this works for a single h5 file for the entire scan
-                            #     example: 0d82d016-7bc2-4192-822b-ff9a92b674b6
-                            # there could be multiple h5 files that belong to the same field
-                            #     example:
-                            
-                            # attempt to use Dask, need Tables
-                            #fns = []
-                            #for res_uid in res_dict[key]:
-                            #    res = res_docs[res_uid]
-                            #    fns.append(res["root"]+res["resource_path"])
-                            #if len(fns)==1:
-                            #    fns=fns[0]
-                            #df = dd.read_hdf(fns, "/entry/data/data")
-                            #df.to_hdf(filename, f'{data_group.name}/{key}')
-                            
                             if len(res_dict[key])==1:
                                 res = res_docs[res_dict[key][0]]
                                 hf5 = h5py.File(res["root"]+res["resource_path"], "r")
                                 data = hf5["/entry/data/data"]
-                                dataset = data_group.create_dataset(
-                                            key, data=data, compression=data.compression,
-                                            chunks=data.chunks)
-                                hf5.close()  
-                            else:
+                                data_group.copy(data, key)
+                                hf5.close()
+                            else: # ideally this should never happen, only 1 hdf5 file/resource per scan
                                 N = len(res_dict[key])
                                 for i in range(N):
                                     res = res_docs[res_dict[key][i]]
@@ -179,7 +161,6 @@ def hdf5_export(headers, filename,
                                                 chunks=(1, *data.chunks))
                                     dataset[i,:] = data
                                     hf5.close()
-                            
                         else:
                             rawdata = header.table(stream_name=descriptor['name'], 
                                                    fields=[key], fill=True)

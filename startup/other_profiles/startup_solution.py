@@ -1,8 +1,8 @@
 from py4xs.hdf import h5exp
 import time,sys,random,openpyxl
 
-PilatusFilePlugin.froot = data_file_path.gpfs
-PilatusCBFHandler.froot = data_file_path.gpfs
+#PilatusFilePlugin.froot = data_file_path.gpfs
+#PilatusCBFHandler.froot = data_file_path.gpfs
 froot=data_file_path.gpfs
 
 sol = SolutionScatteringExperimentalModule(camPV="XF:16IDC-BI{Cam:Sol}")

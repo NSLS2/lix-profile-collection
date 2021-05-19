@@ -104,6 +104,8 @@ class LiXFileStoreHDF5(LiXFileStorePluginBase):
 
 
 class LIXhdfPlugin(HDF5Plugin, LiXFileStoreHDF5):
+    sub_directory = None
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fnbr = 0        
@@ -122,7 +124,7 @@ class LIXhdfPlugin(HDF5Plugin, LiXFileStoreHDF5):
         global data_path,current_sample
         
         filename = f"{current_sample}_{self.parent.detector_id}"
-        write_path = data_path
+        write_path = data_path if self.sub_directory is None else f"{data_path}/self.{sub_directory}"
         read_path = self.file_path.get()
         return filename, read_path, write_path
     
@@ -253,7 +255,7 @@ class LIXPilatus(PilatusDetector):
         self.dispatch(f'{self.name}_image', ttime.time())
 
             
-class LiXPilatusDetectors(Device):
+class LiXDetectors(Device):
     pil1M = Cpt(LIXPilatus, '{Det:SAXS}', name="pil1M", detector_id="SAXS")
     #pilW1 = Cpt(LIXPilatus, '{Det:WAXS1}', name="pilW1", detector_id="WAXS1")
     pilW2 = Cpt(LIXPilatus, '{Det:WAXS2}', name="pilW2", detector_id="WAXS2")
@@ -327,11 +329,11 @@ class LiXPilatusDetectors(Device):
             if sd[-1]!='/':
                 sd += '/'
             makedirs(data_path+sd, mode=0o0777)
-            RE.md['subdir'] = PilatusFilePlugin.sub_directory
-            PilatusFilePlugin.sub_directory = sd
+            RE.md['subdir'] = LIXhdfPlugin.sub_directory
+            LIXhdfPlugin.sub_directory = sd
         elif 'subdir' in RE.md.keys():
             del RE.md['subdir'] 
-            PilatusFilePlugin.sub_directory = sd
+            LIsXhdfPlugin.sub_directory = sd
         
     def set_thresh(self):
         ene = int(pseudoE.energy.position/10*0.5+0.5)*0.01
@@ -410,11 +412,11 @@ class LiXPilatusDetectors(Device):
 #        common_attrs = self.active_detectors[0].describe()
         
                                     
-#try:
-pil = LiXPilatusDetectors("XF:16IDC-DT")   
-pil.activate(["pil1M", "pilW2"])
-pil.set_trigger_mode(PilatusTriggerMode.ext_multi)
-#pil.pilW2.flatfield.put("/home/det/WAXS2ff_2020Oct26.tif")
-#except:
-#    print("Unable to initialize the Pilatus detectors ...")
+try:
+    pil = LiXDetectors("XF:16IDC-DT")   
+    pil.activate(["pil1M", "pilW2"])
+    pil.set_trigger_mode(PilatusTriggerMode.ext_multi)
+    #pil.pilW2.flatfield.put("/home/det/WAXS2ff_2020Oct26.tif")
+except:
+    print("Unable to initialize the Pilatus detectors ...")
 

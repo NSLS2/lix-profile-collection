@@ -19,26 +19,82 @@ class ApertureDev(Device):
     dx = Cpt(EpicsMotor, '-Ax:dX}Mtr')
     dy = Cpt(EpicsMotor, '-Ax:dY}Mtr')
     
-class KBMirrorHorizontal(Device):
+class KBMirrorHorizontal(PseudoPositioner):
     x1 = Cpt(EpicsMotor, '-Ax:XU}Mtr')
     x2 = Cpt(EpicsMotor, '-Ax:XD}Mtr')
     y1 = Cpt(EpicsMotor, '-Ax:YU}Mtr')
     y2 = Cpt(EpicsMotor, '-Ax:YD}Mtr')
     pitch_rb = Cpt(EpicsSignalRO, '-Ax:PF_RDBK}Mtr.RBV')
+    pitch = Cpt(PseudoSingle, limits=(-15, 15)) # in mrad
+    x = Cpt(PseudoSingle)
+    Lx = 820 # mm
+    
+    @pseudo_position_argument
+    def forward(self, pos):
+        pyd = pos.x + self.Lx*0.001*pos.pitch/2   # mirror is deflecting toward outboard side
+        pyu = pos.x - self.Lx*0.001*pos.pitch/2   # pitch>0 ~ upstream x is more negative
+        return self.RealPosition(x1=pyu, x2=pud)
+        
+    @real_position_argument
+    def inverse(self, pos):
+        px = (pos.x1 + pos.x2)/2
+        pp = (pos.x2 - pos.x1)/self.Lx*1000
+        return self.PseudoPosition(x=px, pitch=pp)
 
-class KBMirrorVertical(Device):
+class KBMirrorVertical(PseudoPositioner):
     x = Cpt(EpicsMotor, '-Ax:X}Mtr')
     y1 = Cpt(EpicsMotor, '-Ax:YU}Mtr')
     y2 = Cpt(EpicsMotor, '-Ax:YD}Mtr')
-    fine_pitch = Cpt(EpicsMotor, '-Ax:PF}Mtr')
+    #fine_pitch = Cpt(EpicsMotor, '-Ax:PF}Mtr')
     pitch_rb = Cpt(EpicsSignalRO, '-Ax:PF_RDBK}Mtr.RBV')
-
-class Blades(Device):
+    pitch = Cpt(PseudoSingle, limits=(-5, 15)) # in mrad
+    y = Cpt(PseudoSingle)
+    L = 425 # mm
+    
+    @pseudo_position_argument
+    def forward(self, pos):
+        pyu = pos.y + L*0.001*pos.pitch/2
+        pyd = pos.y - L*0.001*pos.pitch/2
+        return self.RealPosition(y1=pyu, y2=pud)
+        
+    @real_position_argument
+    def inverse(self, pos):
+        py = (pos.y1 + pos.y2)/2
+        pp = (pos.y1 - pos.y2)/self.L*1000
+        return self.PseudoPosition(y=py, pitch=pp)
+        
+    
+class Blades(PseudoPositioner):
+    """ blade motor positions: >0 is away from the center
+    """
     top = Cpt(EpicsMotor, '-Ax:T}Mtr')
     bottom = Cpt(EpicsMotor, '-Ax:B}Mtr')
     outboard = Cpt(EpicsMotor, '-Ax:O}Mtr')
     inboard = Cpt(EpicsMotor, '-Ax:I}Mtr')
+    x = Cpt(PseudoSingle, limits=(-5, 5))
+    y = Cpt(PseudoSingle, limits=(-5, 5))
+    dx = Cpt(PseudoSingle, limits=(0, 5))
+    dy = Cpt(PseudoSingle, limits=(0, 5))
 
+    @pseudo_position_argument
+    def forward(self, pos):
+        """pos is a self.PseudoPosition"""
+        po = pos.x + pos.dx/2
+        pi = -pos.x + pos.dx/2
+        pt = pos.y + pos.dy/2
+        pb = -pos.y + pos.dy/2
+        return self.RealPosition(top=pt, bottom=pb, outboard=po, inboard=pi)
+
+    @real_position_argument
+    def inverse(self, pos):
+        """pos is self.RealPosition"""
+        px = (pos.outboard - pos.inboard)/2
+        pdx = pos.outboard + pos.inboard
+        py = (pos.top - pos.bottom)/2
+        pdy = pos.top + pos.bottom
+        return self.PseudoPosition(x=px, dx=pdx, y=py, dy=pdy)
+    
+    
 class SlitsCenterAndGap(Device):
     x = Cpt(EpicsMotor, '-Ax:X}Mtr')
     dx = Cpt(EpicsMotor, '-Ax:dX}Mtr')
@@ -71,8 +127,8 @@ class Microscope(PseudoPositioner):
     y = Cpt(EpicsMotor, 'XF:16IDC-ES:InAir{Mscp:1-Ax:Y}Mtr')
     kz1 = Cpt(EpicsMotor, 'XF:16IDC-ES:InAir{Mscp:1-Ax:kz1}Mtr')
     kz2 = Cpt(EpicsMotor, 'XF:16IDC-ES:InAir{Mscp:1-Ax:kz2}Mtr')
-    Rx = Cpt(PseudoSingle, limits=(-2, 2))
-    Ry = Cpt(PseudoSingle, limits=(-2, 2))
+    Rx = Cpt(PseudoSingle, limits=(-5, 5))
+    Ry = Cpt(PseudoSingle, limits=(-5, 5))
     # this is the distance between the two pushers
     Lx = 100
     # this is the distance between the pushers and the 3rd support
@@ -96,21 +152,12 @@ class Microscope(PseudoPositioner):
         return self.PseudoPosition(Rx=pRx, Ry=pRy)
 
     
-class Screen(Device):
-    y=Cpt(EpicsMotor, '-Ax:Y}Mtr')
-    
 #######################################################
 ### LIX First Optical Enclosure FOE Optics Hutch A
 #######################################################
 
 ## White Beam Mirror
 wbm = XYPitchMotor('XF:16IDA-OP{Mir:WBM', name='wbm')
-
-## Beam-viewing screen #3
-scn3y = EpicsMotor('XF:16IDA-BI{FS:3-Ax:Y}Mtr', name='scn3y')
-
-## Beam-viewing screen #4
-scn4y = EpicsMotor('XF:16IDA-BI{FS:4-Ax:Y}Mtr', name='scn4y')
 
 ## KB Mirror System
 # Horizontal
@@ -133,7 +180,7 @@ bpm2_pos = XYMotor('XF:16IDC-BI{BPM:2', name='bpm2')
 
 ## Secondary Source Aperture (SSA)
 #ssa = ApertureDev('XF:16IDB-OP{Slt:SSA', name='ssa')
-ssa1 = ApertureDev('XF:16IDB-OP{Slt:SSA1', name='ssa1')
+#ssa1 = ApertureDev('XF:16IDB-OP{Slt:SSA1', name='ssa1')
 
 
 ## Attenuator
@@ -144,14 +191,6 @@ atn2x = EpicsMotor('XF:16IDB-OP{Fltr:Attn-Ax:X2}Mtr', name='atn2x')
 # Absorber Set #3
 atn3x = EpicsMotor('XF:16IDB-OP{Fltr:Attn-Ax:X3}Mtr', name='atn3x')
 
-## Alternative SSA
-#assa = SlitsCenterAndGap('XF:16IDB-OP{Slt:aSSA', name="aSSA")
-
-## Visual Beam Monitor (VBM)
-# Focus
-#vbm_focus = EpicsMotor('XF:16IDB-BI{FS:VBM-Ax:F}Mtr', name='vbm_focus')
-# Zoom
-#vbm_zoom = EpicsMotor('XF:16IDB-BI{FS:VBM-Ax:Zm}Mtr', name='vbm_zoom')
 
 #######################################################
 ### LIX Experimental End Station Enclosure EESE Hutch C
@@ -186,10 +225,6 @@ waxs2 = XYZMotor('XF:16IDC-ES{Stg:WAXS2', name='waxs2')
 
 ## SAXS Beamstop
 sbs = XYMotor('XF:16IDC-ES{BS:SAXS', name='sbs')
-
-## screen
-screen_SS = Screen('XF:16IDB-BI{SCN:SS',name='screen_ss')
-screen_SF = Screen('XF:16IDC-BI{FS:SF',name='screen_sf')
 
 microscope = Microscope(name='microscope', concurrent=True)
 

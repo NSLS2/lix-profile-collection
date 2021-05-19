@@ -12,7 +12,7 @@ login_time = -1
 current_cycle = '2021-2'
 
 def login(uname = None, pID = None, rID = None, debug=True, 
-          root_path='/nsls2/xf16id1', share_with=[]):
+          root_path='/nsls2/xf16id1', replace_froot=None, share_with=[]):
     """ Ask the user for his credentials and proposal information for the data collection
         create_proc_dir: if True, create the directory where h5 files will be saved
         share_with: list of e-mails to share the proc_path with
@@ -54,6 +54,10 @@ def login(uname = None, pID = None, rID = None, debug=True,
     makedirs(data_path, mode=0o0777)
     RE.md['data_path'] = data_path
 
+    if replace_froot is not None:
+        data_path = data_path.replace(path, replace_froot)
+        input(f"make sure {data_path} exists on the detector conputer. Hit any key to continue ...")
+   
     proc_path = f"{root_path}/experiments/{current_cycle}/{proposal_id}/{run_id}/"
     RE.md['proc_path'] = proc_path
     if not os.path.isdir(proc_path):

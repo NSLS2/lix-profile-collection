@@ -1,16 +1,12 @@
 print("loading configuration for microscope-EM ...")
-#global DET_replace_data_path
-#DET_replace_data_path = True
-PilatusFilePlugin.froot = data_file_path.gpfs
-PilatusCBFHandler.froot = data_file_path.gpfs
 
 ss = PositioningStackMicroscope()
 xps_trj = XPStraj('xf16idc-mc-xps-rl4.nsls2.bnl.local', 
                   'scan', 'test', devices={'scan.rY': ss.ry, 'scan.Y': ss.y, 'scan.X': ss.x})
 
 try:
-    camOAM       = StandardProsilica("XF:16IDA-BI{Cam:OAM}", name="camOAM")
-    camScope     = setup_cam("XF:16IDC-BI{Cam:Stereo}", "camScope")
+    camES1       = setup_cam("camES1")
+    camScope     = setup_cam("camScope")
 except Exception as e:
     print(f"at least one of the cameras is not avaiable: {e}")
 
@@ -60,16 +56,12 @@ def raster(exp_time, fast_axis, f_start, f_end, Nfast,
 
     xps_trj.detectors = detectors
     
-    #pilatus_ct_time(exp_time)
-    #PilatusFilePlugin.file_number_reset = 1
-    #set_pil_num_images(Nfast) #*Nslow)
     pil.exp_time(exp_time)
     pil.number_reset(True)  # set file numbers to 0
     pil.number_reset(False) # but we want to auto increment
-    pil.set_num_images(Nfast)
+    pil.set_num_images(Nfast*Nslow)
     print('setting up to collect %d exposures of %.2f sec ...' % (Nfast*Nslow, exp_time))
     
-    #motors = [fast_axis, slow_axis]
     scan_shape = [Nslow, Nfast]
     _md = {'shape': tuple(scan_shape),
            'plan_args': {'detectors': list(map(repr, detectors))},
@@ -79,10 +71,8 @@ def raster(exp_time, fast_axis, f_start, f_end, Nfast,
            'hints': {},
            }
     _md.update(md or {})
-    _md['hints'].setdefault('dimensions', [(('time',), 'primary')])
-        
+    _md['hints'].setdefault('dimensions', [(('time',), 'primary')])        
    
-    @bpp.stage_decorator(detectors)
     @fast_shutter_decorator()
     def line():
         print("in line()")
@@ -91,7 +81,7 @@ def raster(exp_time, fast_axis, f_start, f_end, Nfast,
         yield from bps.collect(xps_trj)
         print("leaving line()")
 
-    @bpp.stage_decorator([xps_trj]) # + detectors)
+    @bpp.stage_decorator([xps_trj]+detectors)
     @bpp.run_decorator(md=_md)
     def inner(detectors, fast_axis, ready_pos, slow_axis, Nslow, pos_s):
         running_forward = True
@@ -107,14 +97,13 @@ def raster(exp_time, fast_axis, f_start, f_end, Nfast,
             xps_trj.select_forward_traj(running_forward)
             yield from line()
             running_forward = not running_forward
-            if PilatusFilePlugin.file_number_reset:
-                PilatusFilePlugin.file_number_reset = 0
+
         print("leaving inner()")
     
     yield from inner(detectors, fast_axis, ready_pos, slow_axis, Nslow, pos_s)
-    #PilatusFilePlugin.file_number_reset = 1    
     
     if slow_axis is not None:
         yield from mov(fast_axis, p0_fast, slow_axis, p0_slow)
     else:
         yield from mov(fast_axis, p0_fast)
+
