@@ -25,7 +25,7 @@ def raster(exp_time, fast_axis, f_start, f_end, Nfast,
     """
     #if not set(detectors).issubset(pilatus_detectors_ext):
     #    raise Exception("only pilatus_detectors_ext can be used in this raster scan.")
-    pil.set_trigger_mode(PilatusTriggerMode.ext)
+    pil.set_trigger_mode(PilatusTriggerMode.ext_multi)
     detectors = [pil]
     if fast_axis.name not in xps_trj.device_names:
         raise Exception("the fast_axis is not supported in this raster scan: ", fast_axis.name)
@@ -54,6 +54,8 @@ def raster(exp_time, fast_axis, f_start, f_end, Nfast,
         pos_s = []
         motor_names = [fast_axis.name]
 
+    print(pos_s)
+    print(motor_names)
     xps_trj.detectors = detectors
     
     pil.exp_time(exp_time)
@@ -73,33 +75,33 @@ def raster(exp_time, fast_axis, f_start, f_end, Nfast,
     _md.update(md or {})
     _md['hints'].setdefault('dimensions', [(('time',), 'primary')])        
    
-    @fast_shutter_decorator()
     def line():
         print("in line()")
         yield from bps.kickoff(xps_trj, wait=True)
         yield from bps.complete(xps_trj, wait=True)
-        yield from bps.collect(xps_trj)
         print("leaving line()")
 
-    @bpp.stage_decorator([xps_trj]+detectors)
+    @bpp.stage_decorator(detectors)
+    @bpp.stage_decorator([xps_trj])
     @bpp.run_decorator(md=_md)
+    @fast_shutter_decorator()
     def inner(detectors, fast_axis, ready_pos, slow_axis, Nslow, pos_s):
         running_forward = True
         
         print("in inner()")
-        for i in range(Nslow):
+        for sp in pos_s:
             print("start of the loop")
             if slow_axis is not None:
-                yield from mv(fast_axis, ready_pos[running_forward], slow_axis, pos_s[i])
+                yield from mv(fast_axis, ready_pos[running_forward], slow_axis, sp)
             else:
                 yield from mv(fast_axis, ready_pos[running_forward])
-
             xps_trj.select_forward_traj(running_forward)
             yield from line()
             running_forward = not running_forward
 
+        yield from bps.collect(xps_trj)
         print("leaving inner()")
-    
+
     yield from inner(detectors, fast_axis, ready_pos, slow_axis, Nslow, pos_s)
     
     if slow_axis is not None:

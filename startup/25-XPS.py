@@ -99,8 +99,7 @@ class XPStraj(Device):
                          'segment_displacement': 0,
                          'segment_duration': 0,
                          'motor': None,
-                         'rampup_distance': 0,
-                         #'motor2': None
+                         'rampup_distance': 0
                         }
         self.time_modified = time.time()
         self.start_time = 0
@@ -111,7 +110,8 @@ class XPStraj(Device):
     def stage(self):
         self.datum = {}
         self.aborted = False
-    
+        self.clear_readback()
+
     def unstage(self):
         """ abort whatever is still going on??
         """
@@ -187,7 +187,7 @@ class XPStraj(Device):
         if self.aborted:
             raise Exception("unable to complete the scan due to hardware issues ...")
         print("Done.")
-        
+             
         return self._traj_status
         
     def collect_asset_docs(self):
@@ -204,11 +204,10 @@ class XPStraj(Device):
             followed HXN example
         """
         asset_docs_cache = []
-
-        #for det in self.detectors:
+        
         for det in pil.active_detectors:
             k = f'{det.name}_image'
-            #det.dispatch(k, ttime.time())
+            print(list(det.hdf._asset_docs_cache))
             (name, resource), = det.hdf.collect_asset_docs()
             assert name == 'resource'
             asset_docs_cache.append(('resource', resource))
@@ -219,56 +218,33 @@ class XPStraj(Device):
                      'datum_id': datum_id,
                      'datum_kwargs': {'point_number': 0}}
             asset_docs_cache.append(('datum', datum))
-            
+        
         return tuple(asset_docs_cache)
-            
         
     def collect(self):
         """
+        this is the "event"???
         save position data, called at the end of a scan (not at the end of a trajectory)
         this is now recorded in self.readback, as accumulated by self.update_readback()
+        also include the detector image info
         """
         now = time.time()
         data = {}
         ts = {}
-        
+
         data[self.traj_par['fast_axis']] = self.read_back['fast_axis']
         ts[self.traj_par['fast_axis']] = self.read_back['timestamp']
         if self.motor2 is not None:
             data[self.traj_par['slow_axis']] = self.read_back['slow_axis']
             ts[self.traj_par['slow_axis']] = self.read_back['timestamp2']
-
-        #for det in self.detectors:
+        
         for det in pil.active_detectors:
-            # first make sure that all data file are saved, otherwise next time when the detector is
-            # staged, the files that are not yet saved will be lost
-            Ni = det.cam.num_images.get() 
-            #Nc1 = 0
-            t0 = time.time()
-            
-            while det.cam.detector_state.get(as_string=True) is "Acquire":
-                time.sleep(0.1)
-            
-            """
-            while True:
-                Nc = det.cam.array_counter.get()
-                #if Ni==Nc or Nc==Nc1:
-                if Ni==Nc or time.time()-t0>5:  
-                    # either the final file count is reached, or waited for too long (5s) and no new files 
-                    # show up, which can happen if one or more trajectories were cut short during the raster
-                    break
-                #Nc1 = Nc
-                print('data files are still being written for %s, %d -> %d' % (det.name, Nc, Ni))
-                #time.sleep(5)
-                time.sleep(0.5)
-            """
-                
             k = f'{det.name}_image'
             (data[k], ts[k]) = self.datum[k]
             for k,desc in det.read().items():
                 data[k] = desc['value']
                 ts[k] = desc['timestamp']
-                
+        
         ret = {'time': time.time(),
                'data': data,
                'timestamps': ts,
@@ -286,7 +262,6 @@ class XPStraj(Device):
             ret[self.traj_par['slow_axis']] = {'dtype': 'number',
                                                'shape': (1,),
                                                'source': 'motor position readback'}
-        #for det in self.detectors:
         for det in pil.active_detectors:
             ret[f'{det.name}_image'] = det.make_data_key() 
             for k,desc in det.describe().items():
@@ -376,7 +351,6 @@ class XPStraj(Device):
                          'segment_duration': dt,
                          'motor': motor,
                          'rampup_distance': self.ramp_dist,
-                         #'motor2': motor2,
                          'motor2_disp': dy
                         }
         self.traj_par['fast_axis'] = xps_trj.devices[motor].name
@@ -509,17 +483,22 @@ class XPStraj(Device):
             self.read_back['timestamp2'] = []
         
     def update_readback(self):
-        self.read_back['fast_axis'] = self.readback_traj()
+        pos = self.readback_traj()
         # start_time is the beginning of the execution
         # pulse is generated when the positioner enters the segment ??
         # timestamp correspond to the middle of the segment
         N = self.traj_par['no_of_segments']
         Nr = self.traj_par['no_of_rampup_points']
         dt = self.traj_par['segment_duration']
-        self.read_back['timestamp'] = list(self.start_time + (0.5 + Nr + np.arange(N+1))*dt)
+        ts = self.start_time + (0.5 + Nr + np.arange(N+1))*dt
+        if len(pos)!=N+1:
+            print(f"Warning: incorrect readback length {len(pos)}, expecting {N+1}")
+            print(pos)
+        self.read_back['fast_axis'] += pos
+        self.read_back['timestamp'] += list(ts)
         if self.motor2 is not None:
-            self.read_back['slow_axis'] = self.motor2.position
-            self.read_back['timestamp2'] = time.time()
+            self.read_back['slow_axis'].append(self.motor2.position)
+            self.read_back['timestamp2'].append(time.time())
 
             
     

@@ -142,14 +142,15 @@ def hdf5_export(headers, filename,
                         res = res_docs[res_dict[key][0]] 
                         if res['spec'] == "AD_HDF5" and bulk_h5_res:
                             rawdata = None
-                            if len(res_dict[key])==1:
+                            N = len(res_dict[key])
+                            if N==1:
                                 res = res_docs[res_dict[key][0]]
                                 hf5 = h5py.File(res["root"]+res["resource_path"], "r")
                                 data = hf5["/entry/data/data"]
                                 data_group.copy(data, key)
                                 hf5.close()
+                                dataset = data_group[key]
                             else: # ideally this should never happen, only 1 hdf5 file/resource per scan
-                                N = len(res_dict[key])
                                 for i in range(N):
                                     res = res_docs[res_dict[key][i]]
                                     hf5 = h5py.File(res["root"]+res["resource_path"], "r")

@@ -125,7 +125,8 @@ class LIXhdfPlugin(HDF5Plugin, LiXFileStoreHDF5):
         
         filename = f"{current_sample}_{self.parent.detector_id}"
         write_path = data_path if self.sub_directory is None else f"{data_path}/self.{sub_directory}"
-        read_path = self.file_path.get()
+        read_path = write_path # might want to handle this differently, this shows up in res/db
+        #read_path = self.parent.cbf_file_path.get()
         return filename, read_path, write_path
     
     #def stage(self):
