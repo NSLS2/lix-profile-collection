@@ -45,6 +45,7 @@ class com_code(enum.Enum):
     #set_offset = 0x36 # not supported
         
 class SMCchiller(serial_port):
+
     def __init__(self, sock_addr):
         super().__init__(sock_addr)
         
@@ -104,7 +105,10 @@ class SMCchiller(serial_port):
 
         return msg
 
-    def read_data(self, msg):
+    def alarm_msg(self, msg):
+        return f"{np.binary_repr(msg[0])[-4:]} {np.binary_repr(msg[1])[-4:]} {np.binary_repr(msg[2])[-4:]}"
+
+    def read_data(self, msg, as_err=False):
         """ return message that contains data:
                 starts with SOH it is contains unit information, two bytes 
                 followed by STX and 4-byte data (temperature or error code)
@@ -116,6 +120,8 @@ class SMCchiller(serial_port):
             return 
         if msg[0]==ctrl_code.SOH.value:
             msg = msg[2:]
+        if as_err:
+            return self.alarm_msg(msg[2:5])
         return self.a2f(msg[2:6])
 
     def setT(self, st):
@@ -124,15 +130,15 @@ class SMCchiller(serial_port):
 
     def getT(self):
         ret = self.comm(self.make_msg(com_code.getT))
-        return read_data(ret)
+        return self.read_data(ret)
 
     def get_set_point(self):
         ret = self.comm(self.make_msg(com_code.getTs))
-        return read_data(ret)
+        return self.read_data(ret)
         
     def get_alarm(self):
         ret = self.comm(self.make_msg(com_code.get_alarm))
-        return read_data(ret)
+        return self.read_data(ret, as_err=True)
    
     
 class tctrl_FTC100D(serial_port):

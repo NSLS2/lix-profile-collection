@@ -11,7 +11,7 @@ login_time = -1
 
 current_cycle = '2021-2'
 
-def login(uname = None, pID = None, rID = None, debug=True, 
+def login(uname = None, pID = None, rID = None, debug=True, test_only=False,
           root_path='/nsls2/xf16id1', replace_froot=None, share_with=[]):
     """ Ask the user for his credentials and proposal information for the data collection
         create_proc_dir: if True, create the directory where h5 files will be saved
@@ -34,6 +34,11 @@ def login(uname = None, pID = None, rID = None, debug=True,
         proposal_id = pID
         run_id = rID
         correct_info = True
+    elif test_only:
+        username = "lix"
+        proposal_id = "test"
+        run_id = "test"
+        correct_info = True
 
     while not correct_info:
         username = input("Please enter your username: ")
@@ -48,17 +53,26 @@ def login(uname = None, pID = None, rID = None, debug=True,
     RE.md['run_id'] = run_id
     login_time = time.time()
     
-    path = f"{root_path}/data/{current_cycle}/"
+    if test_only:
+        path = f"{root_path}/data/"
+    else:
+        path = f"{root_path}/data/{current_cycle}/"
     rpath = str(proposal_id)+"/"+str(run_id)+"/"
     data_path = path + rpath
     makedirs(data_path, mode=0o0777)
     RE.md['data_path'] = data_path
 
     if replace_froot is not None:
+        if replace_froot[-1]!="/":
+            replace_froot+="/"
         data_path = data_path.replace(path, replace_froot)
-        input(f"make sure {data_path} exists on the detector conputer. Hit any key to continue ...")
+        makedirs(data_path, mode=0o0777)
+        #input(f"make sure {data_path} exists on the detector conputer. Hit any key to continue ...")
    
-    proc_path = f"{root_path}/experiments/{current_cycle}/{proposal_id}/{run_id}/"
+    if test_only:
+        proc_path = data_path
+    else:
+        proc_path = f"{root_path}/experiments/{current_cycle}/{proposal_id}/{run_id}/"
     RE.md['proc_path'] = proc_path
     if not os.path.isdir(proc_path):
         makedirs(proc_path, mode=0o2755)

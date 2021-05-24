@@ -1,5 +1,5 @@
 #from ophyd import (ProsilicaDetector, SingleTrigger, TIFFPlugin,
-#                   ImagePlugin, DetectorBase, HDF5Plugin,
+#                   ImagePlugin, DetectorBase, HDF5Plugin, 
 #                   AreaDetector, EpicsSignal, EpicsSignalRO, ROIPlugin,
 #                   TransformPlugin, ProcessPlugin)
 from ophyd.areadetector.detectors import ProsilicaDetector
@@ -8,6 +8,7 @@ from ophyd.areadetector.plugins import StatsPlugin_V34 as StatsPlugin
 from ophyd.areadetector.plugins import ROIPlugin_V34 as ROIPlugin
 from ophyd.areadetector.plugins import OverlayPlugin_V34 as OverlayPlugin
 from ophyd.areadetector.plugins import ProcessPlugin_V34 as ProcessPlugin
+from ophyd.areadetector.plugins import PvaPlugin
 from ophyd.areadetector.trigger_mixins import SingleTrigger
 
 from ophyd.areadetector.filestore_mixins import (FileStoreTIFFIterativeWrite,
@@ -31,17 +32,17 @@ class TIFFPluginWithFileStore(TIFFPlugin, FileStoreTIFFIterativeWrite):
 class StandardProsilica(ProsilicaDetector, SingleTrigger):  
     # cam is defined in ProsilicaDetector
     #image = Cpt(ImagePlugin, 'image1:')
-    #pva = Cpt(PvaPlugin, 'PVA1')
+    pva = Cpt(PvaPlugin, 'PVA1')
     #trans = Cpt(TransformPlugin, 'Trans1:')
     #over = Cpt(OverlayPlugin, 'Over1:')
     #proc = Cpt(ProcessPlugin, 'Proc1:')
-    #roi1 = Cpt(ROIPlugin, 'ROI1:')
+    roi1 = Cpt(ROIPlugin, 'ROI1:')
     #roi2 = Cpt(ROIPlugin, 'ROI2:')
     #roi3 = Cpt(ROIPlugin, 'ROI3:')
     #roi4 = Cpt(ROIPlugin, 'ROI4:')
-    #stats1 = Cpt(StatsPlugin, 'Stats1:')
-    #stats2 = Cpt(StatsPlugin, 'Stats2:')
-    #stats3 = Cpt(StatsPlugin, 'Stats3:')
+    stats1 = Cpt(StatsPlugin, 'Stats1:')
+    stats2 = Cpt(StatsPlugin, 'Stats2:')
+    stats3 = Cpt(StatsPlugin, 'Stats3:')
     tiff = Cpt(TIFFPluginWithFileStore,
                suffix='TIFF1:',
                write_path_template='/nsls2/xf16id1/data/',   # this is updated when the plug in is staged
@@ -64,6 +65,8 @@ class StandardProsilica(ProsilicaDetector, SingleTrigger):
         
     def stage(self):  
         # when using as a detector, some parameters need to be set correctly
+        if data_path=="" and "tiff" in self.read_attrs:
+            raise Exception("data_path is empty, login() first.")
         self.stage_sigs[self.cam.image_mode] = 'Single'
         self.stage_sigs[self.cam.trigger_mode] = 'Fixed Rate'
         if hasattr(self, 'tiff'):
@@ -235,15 +238,15 @@ def setup_cam(name):
         cam = None
         print("%s is not accessible." % name)
 
-    cam.read_attrs = ['tiff'] #, 'stats1', 'stats2', 'stats3', 'roi1']
+    cam.read_attrs = ['tiff', 'stats1', 'stats2', 'stats3', 'roi1']
     #cam.image.read_attrs = [] #'array_data']
-    #cam.stats1.read_attrs = ['total', 'centroid', 'profile_average']
-    #cam.stats2.read_attrs = ['total', 'centroid']
-    #cam.stats3.read_attrs = ['total', 'centroid']
-    #cam.stats1.centroid.read_attrs=['x','y']
-    #cam.stats1.profile_average.read_attrs=['x','y']
-    #cam.roi1.read_attrs = ['min_xyz', 'size']
-    #cam.tiff.read_attrs = [] # we dont need anything other than the image
+    cam.stats1.read_attrs = ['total', 'centroid', 'profile_average']
+    cam.stats2.read_attrs = ['total', 'centroid']
+    cam.stats3.read_attrs = ['total', 'centroid']
+    cam.stats1.centroid.read_attrs=['x','y']
+    cam.stats1.profile_average.read_attrs=['x','y']
+    cam.roi1.read_attrs = ['min_xyz', 'size']
+    cam.tiff.read_attrs = [] # we dont need anything other than the image
     #cam.over.read_attrs = [] # we dont need anything from overlay
 
     return cam

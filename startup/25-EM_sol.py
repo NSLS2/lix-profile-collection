@@ -153,7 +153,7 @@ class SolutionScatteringExperimentalModule():
     
     cam = None 
     
-    def __init__(self, camPV="XF:16IDA-BI{Cam:OAM}"):
+    def __init__(self, camName="camES1"):
         # important to home the stages !!!!!
         # how to home sample_y???
         
@@ -168,7 +168,7 @@ class SolutionScatteringExperimentalModule():
         self.holder_x.velocity.put(25)
 
         self.int_handler = signal.getsignal(signal.SIGINT)
-        self.cam = setup_cam(camPV, "solOACam")
+        self.cam = setup_cam(camName)
 
     def set_xc_limits(self):
         self.xc.set_current_position(0)
