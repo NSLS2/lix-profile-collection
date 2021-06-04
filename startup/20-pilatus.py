@@ -104,6 +104,7 @@ class LiXFileStoreHDF5(LiXFileStorePluginBase):
 
 
 class LIXhdfPlugin(HDF5Plugin, LiXFileStoreHDF5):
+    run_time = Cpt(EpicsSignalRO, "RunTime")
     sub_directory = None
 
     def __init__(self, *args, **kwargs):
@@ -124,7 +125,7 @@ class LIXhdfPlugin(HDF5Plugin, LiXFileStoreHDF5):
         global data_path,current_sample
         
         filename = f"{current_sample}_{self.parent.detector_id}"
-        write_path = data_path if self.sub_directory is None else f"{data_path}/self.{sub_directory}"
+        write_path = data_path if self.sub_directory is None else f"{data_path}/{self.sub_directory}"
         read_path = write_path # might want to handle this differently, this shows up in res/db
         #read_path = self.parent.cbf_file_path.get()
         return filename, read_path, write_path
@@ -160,6 +161,8 @@ class LIXPilatus(PilatusDetector):
     ThresholdEnergy = Cpt(EpicsSignal, "cam1:ThresholdEnergy")
     armed = Cpt(EpicsSignal, "cam1:Armed")
     flatfield = Cpt(EpicsSignal, "cam1:FlatFieldFile")
+    ff_minv = Cpt(EpicsSignal, "cam1:MinFlatField")
+    ff_valid = Cpt(EpicsSignalRO, "cam1:FlatFieldValid")
 
     def __init__(self, *args, detector_id, **kwargs):
         self.detector_id = detector_id
@@ -168,9 +171,10 @@ class LIXPilatus(PilatusDetector):
         self._acquisition_signal = self.cam.acquire
         self._counter_signal = self.cam.array_counter
         self.set_cbf_file_default("/exp_path/current", "current")  # local to the detector server
-        self.hdf.warmup()
+        if self.hdf.run_time.get()==0: # first time using the plugin
+            self.hdf.warmup()
         
-    def set_flatfield(self, fn):
+    def set_flatfield(self, fn, minV=100):
         """ do some changing first
             make sure that the image size is correct and the values are reasonable
             
@@ -190,7 +194,11 @@ class LIXPilatus(PilatusDetector):
                 ImageData[i] *= averageFlatField/flatField[i]
         """ 
         self.flatfield.put(fn, wait=True)
-    
+        self.ff_minv.put(minV, wait=True)
+        time.sleep(0.5)
+        if not self.ff_valid.get():
+            print("Unable to set flat field!")
+
     def set_cbf_file_default(self, path, fn):
         self.cbf_file_path.put(path, wait=True)
         self.cbf_file_name.put(fn, wait=True)
@@ -334,7 +342,7 @@ class LiXDetectors(Device):
             LIXhdfPlugin.sub_directory = sd
         elif 'subdir' in RE.md.keys():
             del RE.md['subdir'] 
-            LIsXhdfPlugin.sub_directory = sd
+            LIXhdfPlugin.sub_directory = sd
         
     def set_thresh(self):
         ene = int(pseudoE.energy.position/10*0.5+0.5)*0.01
@@ -417,7 +425,7 @@ try:
     pil = LiXDetectors("XF:16IDC-DT")   
     pil.activate(["pil1M", "pilW2"])
     pil.set_trigger_mode(PilatusTriggerMode.ext_multi)
-    #pil.pilW2.flatfield.put("/home/det/WAXS2ff_2020Oct26.tif")
+    pil.pilW2.set_flatfield("/home/det/WAXS2_flat_5_26_21.tif")
 except:
     print("Unable to initialize the Pilatus detectors ...")
 

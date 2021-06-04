@@ -142,7 +142,7 @@ class SolutionScatteringExperimentalModule():
     vol_tube_to_cell = {'upstream': 95, 'downstream': 95} 
     vol_sample_headroom = 13 
     vol_flowcell_headroom = 20  
-    watch_list = {'stats1.total': 0.2e8}
+    watch_list = {'stats1.total': 0.2e7}
     
     Ntube = 18
     tube1_pos=-18.83   #4/10/20 sc[new sensor]    #12/20/17 by JB
@@ -467,7 +467,6 @@ class SolutionScatteringExperimentalModule():
         nd = self.verify_needle_for_tube(self.tube_pos, nd=None)
         
         change_sample(sample_name, check_sname=check_sname)
-        self.cam.setup_watch(self.watch_list)
 
         pil.set_trigger_mode(PilatusTriggerMode.ext)
         pil.exp_time(exp)

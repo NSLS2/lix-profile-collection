@@ -70,25 +70,26 @@ def collect_reference():
     pil.set_num_images(5)
     pil.exp_time(1)
     
+    sol.select_flow_cell("empty")
+    sname = f"empty_{ts}"
+    change_sample(sname)
+    RE(ct([pil,em1,em2], num=5))
+
     for nd in nd_list:
         fcell = sol.flowcell_nd[nd]
         sol.select_flow_cell(fcell)
-        sol.ctrl.water_pump_spd.put(0.3) 
-        sol.wash_needle(nd, option="wash only")
-        sol.ctrl.water_pump_spd.put(0.8)         
+        #sol.ctrl.water_pump_spd.put(0.3) 
+        sol.wash_needle(nd) #, option="wash only")
+        #sol.ctrl.water_pump_spd.put(0.8)         
 
-        for ref in ['water','blank']:
-            #em1.averaging_time.put(0.25)
-            #em2.averaging_time.put(0.25)
-            #em1.acquire.put(1)
-            #em2.acquire.put(1)
-            #sd.monitors = [em1.sum_all.mean_value, em2.sum_all.mean_value]
+        for ref in ['blank', 'water']:  #,'blank']:
             sname = f"{fcell}_{ref}_{ts}"
-            if ref=='blank':
-                sol.wash_needle(nd, option="dry only")
+            #if ref=='blank':
+            #    sol.wash_needle(nd, option="dry only")
+            if ref=='water':
+                sol.load_water(nd)
             change_sample(sname)
             RE(ct([pil,em1,em2], num=5))
-            #sd.monitors = []
     pil.use_sub_directory()
     del RE.md['holderName']    
 
@@ -711,5 +712,6 @@ sol.vol_sample_headroom = 10
 
 hplc.ready.set(0)
 
-# 2020-Oct-26
-sol.watch_list = {'stats1.total': 2e3} 
+sol.watch_list = {'stats1.total': 2e6} 
+sol.cam.setup_watch(sol.watch_list)
+
