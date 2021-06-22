@@ -9,10 +9,8 @@ collection_lock_file = "/nsls2/xf16id1/.lock"
 okay_to_move_file = "/nsls2/xf16id1/.okay_to_move"
 login_time = -1
 
-current_cycle = '2021-2'
-
 def login(uname = None, pID = None, rID = None, debug=True, test_only=False,
-          root_path='/nsls2/xf16id1', replace_froot=None, share_with=[]):
+          root_path='/nsls2/xf16id1', replace_froot=pilatus_data_dir, share_with=[]):
     """ Ask the user for his credentials and proposal information for the data collection
         create_proc_dir: if True, create the directory where h5 files will be saved
         share_with: list of e-mails to share the proc_path with

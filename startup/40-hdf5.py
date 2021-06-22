@@ -278,7 +278,10 @@ def pack_and_move(data_type, uid, dest_dir, move_first=True):
             del dt,dt_exp            
             if fh5_name is not "tmp.h5":  # temporary fix, for some reason other processes cannot open the packed file
                 os.system(f"cd {dest_dir} ; cp tmp.h5 {fh5_name} ; rm tmp.h5")
-            #gen_report(fh5_name)
+            try:
+                gen_report(fh5_name)
+            except:
+                pass
     elif data_type=="HPLC":
         uids = [uid]
         if db[uid].start['plan_name']=="hplc_scan":

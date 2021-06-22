@@ -169,21 +169,21 @@ class StandardProsilica(ProsilicaDetector, SingleTrigger):
         d = self.snapshot(ROIs=[[0, size_x, 0, size_y]])[0]
         imageio.imwrite(fn, d)    
     """
-    def setup_watch(self, watch_list):
+    def setup_watch(self, watch_name, sig_name, threshold, base_value=None):
         """ watch list is actually a dictionary
             the keys are the name of signals to watch, e.g. 
             the values are the threhsolds beyond which a change is deemed to be observed
         """
-        self.watch_list = {}
-        for sig_name in watch_list.keys():
-            if not sig_name in self.read_attrs:
-                raise Exception(f"{sig_name} is not a valid signal for {self.name}")
-            sig = getattr(self, sig_name)
-            self.watch_list[sig_name] = {'signal': sig, 
-                                         'base_value': sig.get(), 
-                                         'thresh': watch_list[sig_name]}
+        if not sig_name in self.read_attrs:
+            raise Exception(f"{sig_name} is not a valid signal for {self.name}")
+        sig = getattr(self, sig_name)
+        if base_value is None:
+            base_value = sig.get()
+        self.watch_list[watch_name] = {'signal': sig, 
+		                 'base_value': base_value, 
+		                 'thresh': threshold}
     
-    def watch_for_change(self, lock=None, poll_rate=0.01, timeout=10):
+    def watch_for_change(self, lock=None, poll_rate=0.01, timeout=10, watch_name=None):
         """ lock should have been acquired before this function is called
             when a change is observed, release the lock and return
         """
@@ -193,7 +193,12 @@ class StandardProsilica(ProsilicaDetector, SingleTrigger):
         t1 = time.time()
         while True:
             changed = False
-            for sig_name,sig in self.watch_list.items():
+            if watch_name is None:
+                watch_name = list(self.watch_list.keys())
+            elif isinstance(watch_name, str):
+                watch_name = [watch_name]
+            for wn in watch_name:
+                sig = self.watch_list[wn]
                 cur_value = sig['signal'].get()
                 if abs(cur_value-sig['base_value'])>sig['thresh']:
                     print('change detected.')

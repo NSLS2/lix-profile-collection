@@ -37,7 +37,7 @@ def pack_ref_h5(run_id):
 def plot_ref_h5():
     pass
     
-def collect_std():
+def collect_std(r_range=1.5):
     holderName = "std"
     RE.md['holderName'] = holderName
     pil.use_sub_directory(holderName)
@@ -46,7 +46,7 @@ def collect_std():
     pil.exp_time(0.2)
     ts = gettimestamp()
 
-    sol.select_flow_cell('std', r_range=1.5)    
+    sol.select_flow_cell('std', r_range=r_range)    
 
     change_sample(f"AgBH-{ts}")
     RE(ct([pil,em1,em2], num=1))
@@ -58,6 +58,10 @@ def collect_std():
     pack_h5([last_scan_uid], fn="std.h5")
     dexp = h5exp("exp.h5")
     dexp.recalibrate("std.h5")
+
+    dexp.detectors[0].fix_scale = 0.93
+    dexp.detectors[1].fix_scale = (de.detectors[0].exp_para.Dd/de.detectors[1].exp_para.Dd)**2
+    dexp.save_detectors()
 
 
 def collect_reference():
@@ -78,18 +82,20 @@ def collect_reference():
     for nd in nd_list:
         fcell = sol.flowcell_nd[nd]
         sol.select_flow_cell(fcell)
-        #sol.ctrl.water_pump_spd.put(0.3) 
         sol.wash_needle(nd) #, option="wash only")
-        #sol.ctrl.water_pump_spd.put(0.8)         
-
+        
         for ref in ['blank', 'water']:  #,'blank']:
             sname = f"{fcell}_{ref}_{ts}"
             #if ref=='blank':
             #    sol.wash_needle(nd, option="dry only")
             if ref=='water':
-                sol.load_water(nd)
+                sol.ctrl.water_pump_spd.put(0.3) 
+                sol.wash_needle(nd, option="wash only")
+                sol.ctrl.water_pump_spd.put(0.8)         
+                sol.load_water(nd, vol=50)
             change_sample(sname)
             RE(ct([pil,em1,em2], num=5))
+            sol.wash_needle(nd, option="dry only")
     pil.use_sub_directory()
     del RE.md['holderName']    
 
@@ -358,7 +364,8 @@ def validate_sample_spreadSheet_HT(spreadSheet, sheet_name=0, holderName=None, c
         if neither holderName or configName is given, check all holders
     """
     # force check spreadsheet, mainly for sample names 
-    samples = get_samples(spreadSheet, holderName=holderName, configName=configName, sheet_name=sheet_name, check_for_duplicate=True)
+    samples = get_samples(spreadSheet, holderName=holderName, configName=configName, 
+                          sheet_name=sheet_name, check_for_duplicate=True)
 
     
 def check_pause():
@@ -472,7 +479,7 @@ def measure_mailin_spreadsheets(sh_list, sample_locs=None, check_QR_only=False):
             1. the first sheet is named as proposal#_SAF#
             2. a "UIDs" tab that lists all sample holder names and UIDs
     """
-    cs = sock_client(('10.16.0.10', 9999)) # webcam on babyIOC
+    cs = sock_client(('xf16idc-babyioc1', 9999)) # webcam on babyIOC
 
     if sample_locs is None:
         sample_locs = list(range(1,21))
@@ -533,7 +540,7 @@ def HT_pack_h5(spreadSheet=None, holderName=None, froot=data_file_path.gpfs,
         it will not perform buffer subtraction
     """
     if samples is None:
-        samples = get_samples(spreadSheet, holderName, sheet_name="Holders")
+        samples = get_samples(spreadSheet, holderName, sheet_name=0)
     if uids is None:
         uids = list_scans(run_id=run_id, holderName=holderName, **kwargs)
 
@@ -708,10 +715,12 @@ def run_hplc_from_spreadsheet(spreadsheet_fn, batchID, sheet_name='Samples', exp
     
 sol.default_wash_repeats=2
 sol.default_dry_time=20
+sol.drain_duration=5
 sol.vol_sample_headroom = 10 
 
 hplc.ready.set(0)
 
 sol.watch_list = {'stats1.total': 2e6} 
-sol.cam.setup_watch(sol.watch_list)
+sol.cam.setup_watch("upstream", "stats1.total", 2e6, base_value=9e6)
+sol.cam.setup_watch("downstream", "stats1.total", 4e5, base_value=2.6e6)
 

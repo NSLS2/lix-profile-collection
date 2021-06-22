@@ -198,6 +198,10 @@ class LIXPilatus(PilatusDetector):
         time.sleep(0.5)
         if not self.ff_valid.get():
             print("Unable to set flat field!")
+        else:
+            if not "flat_field" in RE.md['pilatus'].keys():
+                RE.md['pilatus']["flat_field"] = {}
+            RE.md['pilatus']["flat_field"][self.name] = self.flatfield.get(as_string=True)
 
     def set_cbf_file_default(self, path, fn):
         self.cbf_file_path.put(path, wait=True)
@@ -289,8 +293,12 @@ class LiXDetectors(Device):
             
         self._trigger_signal = EpicsSignal('XF:16IDC-ES{Zeb:1}:SOFT_IN:B0')
         self._exp_completed = 0
-        if not "pilatus" in RE.md.keys():
-            RE.md['pilatus'] = {}
+
+        RE.md['pilatus'] = {}
+        RE.md['pilatus']["flat_field"] = {}
+        for det in self.active_detectors:
+            RE.md['pilatus']["flat_field"][det.name] = det.flatfield.get(as_string=True)
+
         # ver 0, or none at all: filename template must be set by CBF file handler
         # ver 1: filename template is already revised by the file plugin
         #RE.md['pilatus']['cbf_file_handler_ver'] = 0 

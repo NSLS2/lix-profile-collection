@@ -394,7 +394,7 @@ class SolutionScatteringExperimentalModule():
             self.wash_needle(nd)
         self.select_tube_pos(tn)
     
-    def load_water(self,nd=None):
+    def load_water(self,nd=None, vol=45):
         #loading water for reference measurement
         self.ctrl.vc_4port.put(self.p4_needle_to_load[nd])
         # make room to load sample from teh PCR tube
@@ -408,7 +408,7 @@ class SolutionScatteringExperimentalModule():
         # fill the tubing with water only upto the end of the flow channel
         self.ctrl.pump_mvR(self.vol_p4_to_cell[nd]) 
         self.ctrl.wait()
-        self.ctrl.pump_mvR(-45)
+        self.ctrl.pump_mvR(-vol)
     
     def load_sample(self, vol, nd=None):
         nd = self.verify_needle_for_tube(self.tube_pos, nd)
@@ -483,7 +483,8 @@ class SolutionScatteringExperimentalModule():
         # stage the pilatus detectors first to be sure that the detector are ready
         pil.stage()
         pil.trigger_lock.acquire()
-        threading.Thread(target=self.cam.watch_for_change, args=(pil.trigger_lock,)).start()
+        threading.Thread(target=self.cam.watch_for_change, 
+                         kwargs={"lock": pil.trigger_lock, "watch_name": nd}).start()
         self.ctrl.pump_mvR(vol+self.vol_flowcell_headroom)
         RE(ct([pil], num=1))   # number of exposures determined by pil.set_num_images()
         sd.monitors = []
