@@ -51,7 +51,7 @@ def raster(exp_time, fast_axis, f_start, f_end, Nfast,
         if Nslow != 1:
             raise Exception(f"invlaid input, did not pass slow_axis, but passed Nslow != 1 ({Nslow})")
         p0_slow = None
-        pos_s = []
+        pos_s = [0]   # needed for the loop in inner()
         motor_names = [fast_axis.name]
 
     print(pos_s)

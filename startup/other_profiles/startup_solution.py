@@ -60,7 +60,7 @@ def collect_std(r_range=1.5):
     dexp.recalibrate("std.h5")
 
     dexp.detectors[0].fix_scale = 0.93
-    dexp.detectors[1].fix_scale = (de.detectors[0].exp_para.Dd/de.detectors[1].exp_para.Dd)**2
+    dexp.detectors[1].fix_scale = (dexp.detectors[0].exp_para.Dd/dexp.detectors[1].exp_para.Dd)**2
     dexp.save_detectors()
 
 
