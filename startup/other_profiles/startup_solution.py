@@ -29,8 +29,8 @@ def gettimestamp():
     ts = time.localtime()
     return f"{ts.tm_year}-{ts.tm_mon:02d}-{ts.tm_mday:02d}_{ts.tm_hour:02d}{ts.tm_min:02d}"
 
-def pack_ref_h5(run_id):
-    uids = list_scans(run_id=run_id, holderName="reference")
+def pack_ref_h5(run_id, **kwargs):
+    uids = list_scans(run_id=run_id, holderName="reference", **kwargs)
     send_to_packing_queue('|'.join(uids), "multi",froot=data_file_path.gpfs)    
     # consider adding the ref intensity to the h5 file, need to know when the file is ready
     
@@ -62,7 +62,34 @@ def collect_std(r_range=1.5):
     dexp.detectors[0].fix_scale = 0.93
     dexp.detectors[1].fix_scale = (dexp.detectors[0].exp_para.Dd/dexp.detectors[1].exp_para.Dd)**2
     dexp.save_detectors()
+    
+def collect_reference_from_tube12():
+    nd_list = ['upstream','downstream']
+    holderName='reference'
+    RE.md['holderName'] = holderName
+    pil.use_sub_directory(holderName)
+    ts = gettimestamp()   
+    pil.set_trigger_mode(PilatusTriggerMode.ext_multi)
+    pil.set_num_images(5)
+    pil.exp_time(1)
+    
+    sol.select_flow_cell("empty")
+    sname = f"empty_{ts}"
+    change_sample(sname)
+    RE(ct([pil,em1,em2], num=5))
 
+    for pos in [1,2]:
+        nd = sol.verify_needle_for_tube(pos, None)
+        fcell = sol.flowcell_nd[nd]
+        sol.select_flow_cell(fcell)
+        sol.wash_needle(nd) #, option="wash only")
+        sname = f"{fcell}_blank_{ts}"
+        change_sample(sname)
+        RE(ct([pil,em1,em2], num=5))
+        sname = f"{fcell}_water_{ts}"
+        sol.measure(pos, sample_name=sname, exp=1, repeats=5)
+    pil.use_sub_directory()
+    del RE.md['holderName'] 
 
 def collect_reference():
     nd_list = ['upstream','downstream']
@@ -724,3 +751,5 @@ sol.watch_list = {'stats1.total': 2e6}
 sol.cam.setup_watch("upstream", "stats1.total", 2e6, base_value=9e6)
 sol.cam.setup_watch("downstream", "stats1.total", 4e5, base_value=2.6e6)
 
+smc = SMCchiller(("10.66.122.85", 4001))
+tctrl = tctrl_FTC100D(("xf16idc-tsvr-sena", 7002))

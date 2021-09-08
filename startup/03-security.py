@@ -20,6 +20,7 @@ def login(uname = None, pID = None, rID = None, debug=True, test_only=False,
     global proposal_id
     global run_id
     global data_path 
+    global o_data_path 
     global proc_path
     global login_time
 
@@ -59,6 +60,7 @@ def login(uname = None, pID = None, rID = None, debug=True, test_only=False,
     data_path = path + rpath
     makedirs(data_path, mode=0o0777)
     RE.md['data_path'] = data_path
+    o_data_path = data_path    # for IOCs on xf16id-ioc1
 
     if replace_froot is not None:
         if replace_froot[-1]!="/":

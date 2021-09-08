@@ -263,7 +263,11 @@ def home_motor(mot, forward=True, ref_position=0, travel_range=-1, safety=0.2):
         print(f"motion aborted, exception: {e}")
 
     disp = pos0-mot.position
+    msg = f"setting {mot.name} position from {mot.position} to {ref_position}"
+    print(msg)
+    write_log_msg(msg)
     mot.set_current_position(ref_position)
+
     time.sleep(1)  # not sure why this is necessary, but otherwise things break
     RE(mov(mot, disp+ref_position))
     ll,hl = mot.limits

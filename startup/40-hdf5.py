@@ -51,7 +51,7 @@ def pack_h5(uids, dest_dir='', fn=None, fix_sample_name=True, stream_name=None,
             attach_uv_file=False, delete_old_file=True, include_motor_pos=True,
             fields=['em2_current1_mean_value', 'em2_current2_mean_value',
                     'em1_sum_all_mean_value', 'em2_sum_all_mean_value',
-                    'xsp3_spectrum_array_data',
+                    'xsp3_spectrum_array_data', "pilatus_trigger_time",
                     'pil1M_image', 'pilW1_image', 'pilW2_image', 
                     'pil1M_ext_image', 'pilW1_ext_image', 'pilW2_ext_image']):
     """ if only 1 uid is given, use the sample name as the file name

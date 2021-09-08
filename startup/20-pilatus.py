@@ -210,8 +210,14 @@ class LIXPilatus(PilatusDetector):
     def set_thresh(self, ene):
         """ set threshold
         """
-        self.ThresholdEnergy.put(ene, wait=True)
-        self.cam.threshold_apply.put(1)
+        if self.cam.acquire.get()==0 and self.cam.armed.get()==0:
+            self.ThresholdEnergy.put(ene, wait=True)
+            self.cam.threshold_apply.put(1)
+        else:
+            ene = pseudoE.energy.position/1000
+            eth = self.ThresholdEnergy.get()
+            print(f"Threshold is not set for {self.name} due to active data collection.")
+            print(f"x-ray enegy = 2x {ene/2:.2f} keV, threshold is at {eth:.2f} keV")
 
     def stage(self, trigger_mode):
         if self._staged == Staged.yes:
@@ -280,6 +286,7 @@ class LiXDetectors(Device):
     trig_wait = 1.
     acq_time = 1.
     trigger_mode = PilatusTriggerMode.soft
+
     
     def __init__(self, prefix):
         super().__init__(prefix=prefix, name="pil")
@@ -290,6 +297,7 @@ class LiXDetectors(Device):
             det.name = dname
             det.read_attrs = ['hdf'] #['file']
         self.active_detectors = list(self.dets.values())
+        self.trigger_time = Signal(name="pilatus_trigger_time")
             
         self._trigger_signal = EpicsSignal('XF:16IDC-ES{Zeb:1}:SOFT_IN:B0')
         self._exp_completed = 0
@@ -326,6 +334,7 @@ class LiXDetectors(Device):
     def set_num_images(self, num, rep=1):
         self._num_images = num
         self._num_repeats = rep
+        RE.md['pilatus']['num_images'] = [num, rep]
         
     def number_reset(self, reset=True):
         self.reset_file_number = reset
@@ -340,6 +349,8 @@ class LiXDetectors(Device):
             self.dets[det_name].cam.acquire_time.put(exp)
             self.dets[det_name].cam.acquire_period.put(exp+0.005)
         self.acq_time = exp+0.005
+        RE.md['pilatus']['exposure_time'] = exp
+
 
     def use_sub_directory(self, sd=None):
         if sd is not None:
@@ -353,7 +364,7 @@ class LiXDetectors(Device):
             LIXhdfPlugin.sub_directory = sd
         
     def set_thresh(self):
-        ene = int(pseudoE.energy.position/10*0.5+0.5)*0.01
+        ene = int(pseudoE.energy.position/100*0.5+0.5)*0.1
         for det in self.dets.values():
             det.set_thresh(ene)
             
@@ -387,6 +398,7 @@ class LiXDetectors(Device):
         if self.trigger_mode is not PilatusTriggerMode.soft:  
             while self.trigger_lock.locked():
                 time.sleep(0.005)
+            self.trigger_time.put(time.time())
             print("generating triggering pulse ...")
             self._trigger_signal.put(1, wait=True)
             self._trigger_signal.put(0, wait=True)
@@ -433,7 +445,8 @@ try:
     pil = LiXDetectors("XF:16IDC-DT")   
     pil.activate(["pil1M", "pilW2"])
     pil.set_trigger_mode(PilatusTriggerMode.ext_multi)
-    pil.pilW2.set_flatfield("/home/det/WAXS2_flat_5_26_21.tif")
+    pil.set_thresh()
+    pil.pilW2.set_flatfield("/home/det/WAXS2_flat_current.tif")
 except:
     print("Unable to initialize the Pilatus detectors ...")
 

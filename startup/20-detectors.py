@@ -4,6 +4,7 @@
 #                   TransformPlugin, ProcessPlugin)
 from ophyd.areadetector.detectors import ProsilicaDetector
 from ophyd.areadetector.plugins import TIFFPlugin_V34 as TIFFPlugin
+from ophyd.areadetector.plugins import TransformPlugin_V34 as TransformPlugin
 from ophyd.areadetector.plugins import StatsPlugin_V34 as StatsPlugin
 from ophyd.areadetector.plugins import ROIPlugin_V34 as ROIPlugin
 from ophyd.areadetector.plugins import OverlayPlugin_V34 as OverlayPlugin
@@ -23,8 +24,8 @@ class TIFFPluginWithFileStore(TIFFPlugin, FileStoreTIFFIterativeWrite):
         return fname, read_path, write_path
 
     def stage(self):
-        global data_path
-        rpath = f"{data_path}/tif/"
+        global o_data_path
+        rpath = f"{o_data_path}/tif/"
         makedirs(rpath, mode=0o0777)
         self.write_path_template = rpath
         super().stage()    
@@ -33,7 +34,7 @@ class StandardProsilica(ProsilicaDetector, SingleTrigger):
     # cam is defined in ProsilicaDetector
     #image = Cpt(ImagePlugin, 'image1:')
     pva = Cpt(PvaPlugin, 'PVA1')
-    #trans = Cpt(TransformPlugin, 'Trans1:')
+    trans = Cpt(TransformPlugin, 'Trans1:')
     #over = Cpt(OverlayPlugin, 'Over1:')
     #proc = Cpt(ProcessPlugin, 'Proc1:')
     roi1 = Cpt(ROIPlugin, 'ROI1:')
@@ -179,9 +180,7 @@ class StandardProsilica(ProsilicaDetector, SingleTrigger):
         sig = getattr(self, sig_name)
         if base_value is None:
             base_value = sig.get()
-        self.watch_list[watch_name] = {'signal': sig, 
-		                 'base_value': base_value, 
-		                 'thresh': threshold}
+        self.watch_list[watch_name] = {'signal': sig, 'base_value': base_value, 'thresh': threshold}
     
     def watch_for_change(self, lock=None, poll_rate=0.01, timeout=10, watch_name=None):
         """ lock should have been acquired before this function is called

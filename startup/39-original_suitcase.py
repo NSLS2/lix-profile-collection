@@ -164,7 +164,7 @@ def hdf5_export(headers, filename,
                                     hf5.close()
                         else:
                             rawdata = header.table(stream_name=descriptor['name'], 
-                                                   fields=[key], fill=True)
+                                                   fields=[key], fill=True)[key]   # this returns the time stamps as well
                     else:
                         rawdata = [e['data'][key] for e in events]
 
@@ -189,10 +189,18 @@ def hdf5_export(headers, filename,
                                 raise ValueError('Array of str with ndim >= 3 can not be saved.')
                         else:  # save numerical data
                             try:                               
-                                if isinstance(rawdata[0], np.ndarray): # detector image
+                                if isinstance(rawdata, list):
+                                    blk = rawdata[0]
+                                else: 
+                                    blk = rawdata[1]
+                                if isinstance(blk, np.ndarray): # detector image
+                                    data = np.vstack(rawdata)
                                     chunks = np.ones(len(data.shape), dtype=int)
-                                    n = len(rawdata[0].shape)
-                                    chunks[-2:] = data.shape[-2:]
+                                    n = len(blk.shape)
+                                    if chunks[-1]<10:
+                                        chunks[-3:] = data.shape[-3:]
+                                    else:
+                                        chunks[-2:] = data.shape[-2:]
                                     chunks = tuple(chunks)
                                     print("data shape: ", data.shape, "     chunks: ", chunks)
                                     dataset = data_group.create_dataset(
@@ -205,9 +213,10 @@ def hdf5_export(headers, filename,
                                         key, data=data, 
                                         compression='gzip', fletcher32=True)
                             except:
-                                print("failed to convert data: ")
-                                print(np.array(conv_to_list(rawdata)))
-                                continue
+                                raise
+                            #    print("failed to convert data: ")
+                            #    print(np.array(conv_to_list(rawdata)))
+                            #    continue
 
                     # Put contents of this data key (source, etc.)
                     # into an attribute on the associated data set.
