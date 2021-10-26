@@ -11,6 +11,8 @@ class FastShutter(Device):
     SETTLE_TIME = 0.1  # seconds
     output = Cpt(EpicsSignal,'{shutter:1}sts', string=True, put_complete=True)
     busy = Cpt(EpicsSignal,'{shutter}busy')
+    stage = None
+    stage_move = 0
 
     def open(self):
         while True:
@@ -23,12 +25,18 @@ class FastShutter(Device):
         print("opening shutter ...",)
         #self.output.put(FastShutter.OPEN_SHUTTER)
         self.output.set(FastShutter.OPEN_SHUTTER, settle_time=FastShutter.SETTLE_TIME)
+        if np.fabs(self.stage_move)>0.01 and isinstance(self.stage, EpicsMotor):
+            print("move shutter stage to compensate for position.")
+            self.stage.move(self.stage.position+self.stage_move)
         print(" done.")
         
     def close(self):
         print("closing shutter ...",)
         #self.output.put(FastShutter.CLOSE_SHUTTER)
         self.output.set(FastShutter.CLOSE_SHUTTER, settle_time=FastShutter.SETTLE_TIME)
+        if np.fabs(self.stage_move)>0.01 and isinstance(self.stage, EpicsMotor):
+            print("move shutter stage to compensate for position.")
+            self.stage.move(self.stage.position-self.stage_move)
         print(" done.")
 
 class PhotonShutter(Device):
@@ -43,4 +51,6 @@ class PhotonShutter(Device):
         self.output.set(Scintillator.CLOSE_SHUTTER)
           
 fast_shutter = FastShutter('XF:16IDB-BI', name='fast_shutter')
+fast_shutter.stage = EpicsMotor("XF:16IDB-OP{fastshutter:Ax:X}Mtr", name="shutter_z")
+
 photon_shutter = PhotonShutter('XF:16IDA-PPS', name='photon_shutter')

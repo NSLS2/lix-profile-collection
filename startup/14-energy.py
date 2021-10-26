@@ -28,8 +28,8 @@ class MonoDCM(Device):
 mono = MonoDCM("XF:16IDA-OP{Mono:DCM", name="dcm")
 
 class XBPM(Device):
-    x = Cpt(EpicsSignalRO, 'Pos:X-CL')
-    y = Cpt(EpicsSignalRO, 'Pos:Y-CL')
+    x = Cpt(EpicsSignalRO, 'Pos:X-I')
+    y = Cpt(EpicsSignalRO, 'Pos:Y-I')
 
     def pos(self, navg=5):
         if self.x.connected==False or self.y.connected==False:
@@ -37,7 +37,7 @@ class XBPM(Device):
         
         xpos = np.average([self.x.get() for _ in range(navg)])
         ypos = np.average([self.y.get() for _ in range(navg)])
-        return (xpos/navg, ypos/navg)
+        return (xpos, ypos)
 
 xbpm = XBPM('SR:C16-BI{XBPM:1}', name="C16XBPM")
         

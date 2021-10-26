@@ -18,7 +18,10 @@ class XYPitchMotor(XYMotor):
 class ApertureDev(Device):
     dx = Cpt(EpicsMotor, '-Ax:dX}Mtr')
     dy = Cpt(EpicsMotor, '-Ax:dY}Mtr')
-    
+
+
+
+
 class KBMirrorHorizontal(PseudoPositioner):
     x1 = Cpt(EpicsMotor, '-Ax:XU}Mtr')
     x2 = Cpt(EpicsMotor, '-Ax:XD}Mtr')
@@ -73,8 +76,8 @@ class Blades(PseudoPositioner):
     inboard = Cpt(EpicsMotor, '-Ax:I}Mtr')
     x = Cpt(PseudoSingle, limits=(-5, 5))
     y = Cpt(PseudoSingle, limits=(-5, 5))
-    dx = Cpt(PseudoSingle, limits=(0, 5))
-    dy = Cpt(PseudoSingle, limits=(0, 5))
+    dx = Cpt(PseudoSingle, limits=(-1, 5))
+    dy = Cpt(PseudoSingle, limits=(-1, 5))
 
     @pseudo_position_argument
     def forward(self, pos):
@@ -179,8 +182,7 @@ bpm_pos = XYMotor('XF:16IDB-BI{BPM:1', name='bpm_pos')
 bpm2_pos = XYMotor('XF:16IDC-BI{BPM:2', name='bpm2')
 
 ## Secondary Source Aperture (SSA)
-#ssa = ApertureDev('XF:16IDB-OP{Slt:SSA', name='ssa')
-#ssa1 = ApertureDev('XF:16IDB-OP{Slt:SSA1', name='ssa1')
+ssa = Blades('XF:16IDB-OP{Slt:SSA1', name="ssa")
 
 
 ## Attenuator
