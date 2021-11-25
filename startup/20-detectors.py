@@ -3,6 +3,7 @@
 #                   AreaDetector, EpicsSignal, EpicsSignalRO, ROIPlugin,
 #                   TransformPlugin, ProcessPlugin)
 from ophyd.areadetector.detectors import ProsilicaDetector
+from ophyd.areadetector.plugins import ImagePlugin_V34 as ImagePlugin
 from ophyd.areadetector.plugins import TIFFPlugin_V34 as TIFFPlugin
 from ophyd.areadetector.plugins import TransformPlugin_V34 as TransformPlugin
 from ophyd.areadetector.plugins import StatsPlugin_V34 as StatsPlugin
@@ -15,6 +16,7 @@ from ophyd.areadetector.trigger_mixins import SingleTrigger
 from ophyd.areadetector.filestore_mixins import (FileStoreTIFFIterativeWrite,
                                                  FileStoreHDF5IterativeWrite)
 from ophyd import Component as Cpt
+import imageio,time
 
 class TIFFPluginWithFileStore(TIFFPlugin, FileStoreTIFFIterativeWrite):
     def make_filename(self):
@@ -24,19 +26,22 @@ class TIFFPluginWithFileStore(TIFFPlugin, FileStoreTIFFIterativeWrite):
         return fname, read_path, write_path
 
     def stage(self):
-        global o_data_path
-        rpath = f"{o_data_path}/tif/"
-        makedirs(rpath, mode=0o0777)
+        global o_data_path,proposal_id,run_id,current_cycle,current_sample
+        # rpath = f"{o_data_path}/tif/"
+        rpath = f"/nsls2/data/lix/legacy/{self.parent.name}/{current_cycle}/{proposal_id}/{run_id}/{current_sample}"
+        #makedirs(rpath, mode=0o0777)
+        #set_and_wait(self.file_path, rpath)
         self.write_path_template = rpath
+        self.create_directory.put(-5)  # create up to 4 levels: ioc, cycle, pid, rid
         super().stage()    
 
 class StandardProsilica(ProsilicaDetector, SingleTrigger):  
     # cam is defined in ProsilicaDetector
-    #image = Cpt(ImagePlugin, 'image1:')
+    image = Cpt(ImagePlugin, 'image1:')
     pva = Cpt(PvaPlugin, 'PVA1')
     trans = Cpt(TransformPlugin, 'Trans1:')
-    #over = Cpt(OverlayPlugin, 'Over1:')
-    #proc = Cpt(ProcessPlugin, 'Proc1:')
+    over = Cpt(OverlayPlugin, 'Over1:')
+    proc = Cpt(ProcessPlugin, 'Proc1:')
     roi1 = Cpt(ROIPlugin, 'ROI1:')
     #roi2 = Cpt(ROIPlugin, 'ROI2:')
     #roi3 = Cpt(ROIPlugin, 'ROI3:')
@@ -97,7 +102,7 @@ class StandardProsilica(ProsilicaDetector, SingleTrigger):
         self.dispatch(self._image_name, ttime.time())
         return self._status
         
-    """
+
     # ROIs = [ROI1, ROI2, ...]
     # each ROI is defined as [startX, sizeX, startY, sizeY]
     def setROI(self,i,ROI):
@@ -169,7 +174,8 @@ class StandardProsilica(ProsilicaDetector, SingleTrigger):
         size_x,size_y = self.cam.size.get()
         d = self.snapshot(ROIs=[[0, size_x, 0, size_y]])[0]
         imageio.imwrite(fn, d)    
-    """
+
+
     def setup_watch(self, watch_name, sig_name, threshold, base_value=None):
         """ watch list is actually a dictionary
             the keys are the name of signals to watch, e.g. 

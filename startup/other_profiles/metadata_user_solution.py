@@ -15,14 +15,17 @@ RE.md['optics'] = ({'wbm_y': wbm.y.position,
                     })
 del wbm,hfm,vfm
 
-RE.md['CRL'] = ({'state': crl.state(), 
-                 'x1': crl.x1.position,
-                 'y1': crl.y1.position,
-                 'x2': crl.x2.position,
-                 'y1': crl.y2.position,
-                 'z': crl.z.position,
-                })
-del crl
+if crl:
+    RE.md['CRL'] = ({'state': crl.state(), 
+                     'x1': crl.x1.position,
+                     'y1': crl.y1.position,
+                     'x2': crl.x2.position,
+                     'y1': crl.y2.position,
+                     'z': crl.z.position,
+                    })
+    del crl
+else:
+    RE.md['CRL'] = 'undefined'
 
 def update_metadata():
     print('updating meta data ...', end='')

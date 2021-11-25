@@ -125,6 +125,7 @@ class LIXhdfPlugin(HDF5Plugin, LiXFileStoreHDF5):
         global data_path,current_sample
         
         filename = f"{current_sample}_{self.parent.detector_id}"
+        #write_path = f"/nsls2/data/lix/legacy/{self.parent.name}/{current_cycle}/{proposal_id}/{run_id}/{current_sample}/"
         write_path = data_path if self.sub_directory is None else f"{data_path}/{self.sub_directory}"
         read_path = write_path # might want to handle this differently, this shows up in res/db
         #read_path = self.parent.cbf_file_path.get()
@@ -164,13 +165,16 @@ class LIXPilatus(PilatusDetector):
     ff_minv = Cpt(EpicsSignal, "cam1:MinFlatField")
     ff_valid = Cpt(EpicsSignalRO, "cam1:FlatFieldValid")
 
-    def __init__(self, *args, detector_id, **kwargs):
+    def __init__(self, *args, hostname, detector_id, **kwargs):
         self.detector_id = detector_id
+        self.hostname = hostname
         super().__init__(*args, **kwargs)
         
         self._acquisition_signal = self.cam.acquire
         self._counter_signal = self.cam.array_counter
-        self.set_cbf_file_default("/exp_path/current", "current")  # local to the detector server
+        self.set_cbf_file_default(f"/ramdisk/{self.name}/", "current")
+        self.ts = []         
+
         if self.hdf.run_time.get()==0: # first time using the plugin
             self.hdf.warmup()
         
@@ -244,6 +248,7 @@ class LIXPilatus(PilatusDetector):
             while self.armed.get() != 1:
                 time.sleep(0.1)
 
+        self.ts = []
         print(self.name, "staged")
         
     def unstage(self):
@@ -261,8 +266,10 @@ class LIXPilatus(PilatusDetector):
             self._acquisition_signal.put(0, wait=True)
             self.cam.trigger_mode.put(0, wait=True)   # always set back to software trigger
             self.cam.num_images.put(1, wait=True)
+
         super().unstage()
         print(self.name, "unstaging completed.")
+
             
     def trigger(self):
         if self._staged != Staged.yes:
@@ -275,9 +282,9 @@ class LIXPilatus(PilatusDetector):
 
             
 class LiXDetectors(Device):
-    pil1M = Cpt(LIXPilatus, '{Det:SAXS}', name="pil1M", detector_id="SAXS")
-    #pilW1 = Cpt(LIXPilatus, '{Det:WAXS1}', name="pilW1", detector_id="WAXS1")
-    pilW2 = Cpt(LIXPilatus, '{Det:WAXS2}', name="pilW2", detector_id="WAXS2")
+    pil1M = Cpt(LIXPilatus, '{Det:SAXS}', name="pil1M", detector_id="SAXS", hostname="xf16idc-pilatus1m.nsls2.bnl.local")
+    #pilW1 = Cpt(LIXPilatus, '{Det:WAXS1}', name="pilW1", detector_id="WAXS1", hostname="xf16idc-pilatus300k1.nsls2.bnl.local")
+    pilW2 = Cpt(LIXPilatus, '{Det:WAXS2}', name="pilW2", detector_id="WAXS2", hostname="xf16idc-pilatus900k.nsls2.bnl.local")
     trigger_lock = None
     reset_file_number = True
     _num_images = 1
@@ -446,7 +453,7 @@ try:
     pil.activate(["pil1M", "pilW2"])
     pil.set_trigger_mode(PilatusTriggerMode.ext_multi)
     pil.set_thresh()
-    pil.pilW2.set_flatfield("/home/det/WAXS2_flat_current.tif")
+    pil.pilW2.set_flatfield("/exp_path/WAXS2_flat_current.tif")
 except:
     print("Unable to initialize the Pilatus detectors ...")
 

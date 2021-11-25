@@ -12,7 +12,7 @@ except Exception as e:
 
 #def raster(detectors, exp_time, fast_axis, f_start, f_end, Nfast, 
 def raster(exp_time, fast_axis, f_start, f_end, Nfast,
-           slow_axis=None, s_start=0, s_end=0, Nslow=1, md=None):
+           slow_axis=None, s_start=0, s_end=0, Nslow=1, md=None, return_pos=True):
     """ raster scan in fly mode using detectors with exposure time of exp_time
         detectors must be a member of pilatus_detectors_ext
         fly on the fast_axis, step on the slow_axis, both specified as Ophyd motors
@@ -60,7 +60,7 @@ def raster(exp_time, fast_axis, f_start, f_end, Nfast,
     
     pil.exp_time(exp_time)
     pil.number_reset(True)  # set file numbers to 0
-    pil.number_reset(False) # but we want to auto increment
+    #pil.number_reset(False) # but we want to auto increment
     pil.set_num_images(Nfast*Nslow)
     print('setting up to collect %d exposures of %.2f sec ...' % (Nfast*Nslow, exp_time))
     
@@ -92,11 +92,15 @@ def raster(exp_time, fast_axis, f_start, f_end, Nfast,
         for sp in pos_s:
             print("start of the loop")
             if slow_axis is not None:
+                print(f"moving {fast_axis.name} to {ready_pos[running_forward]}, {slow_axis.name} to {sp}")
                 yield from mv(fast_axis, ready_pos[running_forward], slow_axis, sp)
             else:
+                print(f"moving {fast_axis.name} to {ready_pos[running_forward]}")
                 yield from mv(fast_axis, ready_pos[running_forward])
+            print("starting trajectory ...")
             xps_trj.select_forward_traj(running_forward)
             yield from line()
+            print("Done")
             running_forward = not running_forward
 
         yield from bps.collect(xps_trj)
@@ -104,8 +108,9 @@ def raster(exp_time, fast_axis, f_start, f_end, Nfast,
 
     yield from inner(detectors, fast_axis, ready_pos, slow_axis, Nslow, pos_s)
     
-    if slow_axis is not None:
-        yield from mov(fast_axis, p0_fast, slow_axis, p0_slow)
-    else:
-        yield from mov(fast_axis, p0_fast)
+    if return_pos:
+        if slow_axis is not None:
+            yield from mov(fast_axis, p0_fast, slow_axis, p0_slow)
+        else:
+            yield from mov(fast_axis, p0_fast)
 

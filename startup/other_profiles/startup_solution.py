@@ -751,5 +751,13 @@ sol.watch_list = {'stats1.total': 2e6}
 sol.cam.setup_watch("upstream", "stats1.total", 2e6, base_value=9e6)
 sol.cam.setup_watch("downstream", "stats1.total", 4e5, base_value=2.6e6)
 
-smc = SMCchiller(("10.66.122.85", 4001))
-tctrl = tctrl_FTC100D(("xf16idc-tsvr-sena", 7002))
+try:
+    smc = SMCchiller(("10.66.122.85", 4001))
+except:
+    print("cannot connect to SMC chiller")
+
+try:
+    tctrl = tctrl_FTC100D(("xf16idc-tsvr-sena", 7002))
+except:
+    print("cannot connect to sample storage temperature controller")
+

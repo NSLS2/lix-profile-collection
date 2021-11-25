@@ -232,8 +232,17 @@ class XPStraj(Device):
         data = {}
         ts = {}
 
+        # bandage solution for getting timestamps
+        fn0 = "/tmp/data.log"	
+        fn = caget(f"{pil.active_detectors[0].cam.prefix}FullFileName_RBV", as_string=True).rsplit("_", maxsplit=1)[0]+".log"
+        os.system(f"scp det@{pil.pil1M.hostname}:{fn} {fn0}")
+        fh = open(fn0, "r")
+        lns = fh.read().split('\n')[1:-2]
+        fh.close()
+        timestamps = [datetime.fromisoformat(l.split()[0]).timestamp() for l in lns]
+
         data[self.traj_par['fast_axis']] = self.read_back['fast_axis']
-        ts[self.traj_par['fast_axis']] = self.read_back['timestamp']
+        ts[self.traj_par['fast_axis']] = timestamps    # self.read_back['timestamp']
         if self.motor2 is not None:
             data[self.traj_par['slow_axis']] = self.read_back['slow_axis']
             ts[self.traj_par['slow_axis']] = self.read_back['timestamp2']
