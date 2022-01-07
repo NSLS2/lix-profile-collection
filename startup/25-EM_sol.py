@@ -143,6 +143,7 @@ class SolutionScatteringExperimentalModule():
     vol_sample_headroom = 13 
     vol_flowcell_headroom = 20  
     watch_list = {'stats1.total': 0.2e7}
+    delay_before_release = 0.5
     
     Ntube = 18
     tube1_pos=-18.83   #4/10/20 sc[new sensor]    #12/20/17 by JB
@@ -484,7 +485,9 @@ class SolutionScatteringExperimentalModule():
         pil.stage()
         pil.trigger_lock.acquire()
         threading.Thread(target=self.cam.watch_for_change, 
-                         kwargs={"lock": pil.trigger_lock, "watch_name": nd}).start()
+                         kwargs={"lock": pil.trigger_lock, 
+                                 "watch_name": nd, 
+                                 "release_delay": self.delay_before_release}).start()
         self.ctrl.pump_mvR(vol+self.vol_flowcell_headroom)
         RE(ct([pil], num=1))   # number of exposures determined by pil.set_num_images()
         sd.monitors = []

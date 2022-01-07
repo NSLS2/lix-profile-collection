@@ -188,7 +188,7 @@ class StandardProsilica(ProsilicaDetector, SingleTrigger):
             base_value = sig.get()
         self.watch_list[watch_name] = {'signal': sig, 'base_value': base_value, 'thresh': threshold}
     
-    def watch_for_change(self, lock=None, poll_rate=0.01, timeout=10, watch_name=None):
+    def watch_for_change(self, lock=None, poll_rate=0.01, timeout=10, watch_name=None, release_delay=0):
         """ lock should have been acquired before this function is called
             when a change is observed, release the lock and return
         """
@@ -220,6 +220,7 @@ class StandardProsilica(ProsilicaDetector, SingleTrigger):
                 break
             time.sleep(poll_rate)
         if lock is not None:
+            time.sleep(release_delay)
             lock.release()
 
 known_cameras = {"camMono": "XF:16IDA-BI{Cam:Mono}",
