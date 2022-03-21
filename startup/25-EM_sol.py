@@ -140,8 +140,8 @@ class SolutionScatteringExperimentalModule():
     default_load_pump_speed = 350     
     vol_p4_to_cell = {'upstream': -120, 'downstream': -120}
     vol_tube_to_cell = {'upstream': 95, 'downstream': 95} 
-    vol_sample_headroom = 13 
-    vol_flowcell_headroom = 20  
+    vol_sample_headroom = 5
+    vol_flowcell_headroom = 10  
     watch_list = {'stats1.total': 0.2e7}
     delay_before_release = 0.5
     
@@ -479,7 +479,7 @@ class SolutionScatteringExperimentalModule():
         em2.acquire.put(1)
         sd.monitors = [em1.sum_all.mean_value, em2.sum_all.mean_value]
         # pump_spd unit is ul/min
-        self.ctrl.pump_spd.put(60.*vol/(repeats*exp)) # *0.85) # this was necesary when there is a delay between frames
+        self.ctrl.pump_spd.put(60.*(vol-self.vol_sample_headroom)/(repeats*exp)) # *0.85) # this was necesary when there is a delay between frames
         
         # stage the pilatus detectors first to be sure that the detector are ready
         pil.stage()
@@ -528,7 +528,7 @@ class SolutionScatteringExperimentalModule():
         # headroom may need to be adjusted depending on the mode of operations
         # can be minimal if sample cam is used to trigger data collection, but never zero
         print('loading')
-        self.load_sample(vol + self.vol_sample_headroom)
+        self.load_sample(vol)
         print('done')
         # this is where operations can be concurrent on both flow channels
         if concurrentOp:

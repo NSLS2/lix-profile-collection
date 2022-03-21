@@ -37,6 +37,7 @@ class XPS:
             while (ret.find(',EndOfAPI') == -1):
                 ret += XPS.__sockets[socketId].recv(1024).decode()
         except socket.timeout:
+            print("xps timeout.")
             return [-2, '']
         except socket.error as e: # (errNb, errString):
             print('Socket error: %s ' % e)

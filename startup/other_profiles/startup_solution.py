@@ -743,7 +743,6 @@ def run_hplc_from_spreadsheet(spreadsheet_fn, batchID, sheet_name='Samples', exp
 sol.default_wash_repeats=2
 sol.default_dry_time=20
 sol.drain_duration=5
-sol.vol_sample_headroom = 10 
 
 hplc.ready.set(0)
 

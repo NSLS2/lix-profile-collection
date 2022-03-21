@@ -1,8 +1,15 @@
 print("loading configuration for microscope-EM ...")
 
+from bluesky.plan_stubs import sleep as sleeplan
+
 ss = PositioningStackMicroscope()
-xps_trj = XPStraj('xf16idc-mc-xps-rl4.nsls2.bnl.local', 
-                  'scan', 'test', devices={'scan.rY': ss.ry, 'scan.Y': ss.y, 'scan.X': ss.x})
+#xps_trj = XPStraj('xf16idc-mc-xps-rl4.nsls2.bnl.local', 
+#                  'scan', 'test', devices={'scan.Y': ss.y, 'scan.X': ss.x})  # 'scan.rY': ss.ry,
+xps = XPSController("xf16idc-mc-xps-rl4.nsls2.bnl.local", "XPS-RL4")
+ss.x = xps.def_motor("scan.X", "ss_x", direction=-1)
+ss.y = xps.def_motor("scan.Y", "ss_y")
+#ss.ry = xps.def_motor("rot.rY", "ss_ry")
+xps.init_traj("scan")
 
 try:
     camES1       = setup_cam("camES1")
@@ -27,21 +34,21 @@ def raster(exp_time, fast_axis, f_start, f_end, Nfast,
     #    raise Exception("only pilatus_detectors_ext can be used in this raster scan.")
     pil.set_trigger_mode(PilatusTriggerMode.ext_multi)
     detectors = [pil]
-    if fast_axis.name not in xps_trj.device_names:
-        raise Exception("the fast_axis is not supported in this raster scan: ", fast_axis.name)
-    fast_axis_name = list(xps_trj.devices.keys())[list(xps_trj.devices.values()).index(fast_axis)]
-    # 
+
     step_size = (f_end-f_start)/(Nfast-1)
     dt = exp_time + 0.005    # exposure_period is 5ms longer than exposure_time, as defined in Pilatus
-    xps_trj.define_traj(fast_axis_name, Nfast-1, step_size, dt, motor2=slow_axis)
+    xps.traj.define_traj(fast_axis, Nfast-1, step_size, dt, motor2=slow_axis)
     p0_fast = fast_axis.position
 
     ready_pos = {}
     # the user motor position may be defined in opposite sign compared to the dial position (XPS)
-    running_forward = (fast_axis.user_offset_dir.get()==0)
-    ready_pos[running_forward] = p0_fast+f_start-xps_trj.traj_par['rampup_distance']-step_size/2
-    ready_pos[not running_forward] = p0_fast+f_end+xps_trj.traj_par['rampup_distance']+step_size/2
-    xps_trj.clear_readback()
+    running_forward = (fast_axis.user_offset_dir()==0)
+    motor_pos_sign = (1 if running_forward else -1)
+    ready_pos[running_forward] = (p0_fast+f_start-xps.traj.traj_par['rampup_distance'])*motor_pos_sign-step_size/2
+    ready_pos[not running_forward] = (p0_fast+f_end+xps.traj.traj_par['rampup_distance'])*motor_pos_sign+step_size/2
+    xps.traj.traj_par['ready_pos'] = [ready_pos[True], ready_pos[False]]
+    
+    xps.traj.clear_readback()
     
     if slow_axis is not None:
         p0_slow = slow_axis.position
@@ -56,7 +63,7 @@ def raster(exp_time, fast_axis, f_start, f_end, Nfast,
 
     print(pos_s)
     print(motor_names)
-    xps_trj.detectors = detectors
+    xps.traj.detectors = detectors
     
     pil.exp_time(exp_time)
     pil.number_reset(True)  # set file numbers to 0
@@ -77,37 +84,36 @@ def raster(exp_time, fast_axis, f_start, f_end, Nfast,
    
     def line():
         print("in line()")
-        yield from bps.kickoff(xps_trj, wait=True)
-        yield from bps.complete(xps_trj, wait=True)
+        yield from bps.kickoff(xps.traj, wait=True)
+        yield from bps.complete(xps.traj, wait=True)
         print("leaving line()")
 
     @bpp.stage_decorator(detectors)
-    @bpp.stage_decorator([xps_trj])
+    @bpp.stage_decorator([xps.traj])
     @bpp.run_decorator(md=_md)
     @fast_shutter_decorator()
-    def inner(detectors, fast_axis, ready_pos, slow_axis, Nslow, pos_s):
+    def inner(detectors, fast_axis, slow_axis, Nslow, pos_s):
         running_forward = True
         
         print("in inner()")
         for sp in pos_s:
             print("start of the loop")
             if slow_axis is not None:
-                print(f"moving {fast_axis.name} to {ready_pos[running_forward]}, {slow_axis.name} to {sp}")
-                yield from mv(fast_axis, ready_pos[running_forward], slow_axis, sp)
-            else:
-                print(f"moving {fast_axis.name} to {ready_pos[running_forward]}")
-                yield from mv(fast_axis, ready_pos[running_forward])
+                print(f"moving {slow_axis.name} to {sp}")
+                yield from mv(slow_axis, sp)
+
             print("starting trajectory ...")
-            xps_trj.select_forward_traj(running_forward)
+            xps.traj.select_forward_traj(running_forward)
             yield from line()
             print("Done")
             running_forward = not running_forward
 
-        yield from bps.collect(xps_trj)
+        yield from bps.collect(xps.traj)
         print("leaving inner()")
 
-    yield from inner(detectors, fast_axis, ready_pos, slow_axis, Nslow, pos_s)
-    
+    yield from inner(detectors, fast_axis, slow_axis, Nslow, pos_s)
+    yield from sleeplan(1.0)  # give time for the current em timeseries to finish
+         
     if return_pos:
         if slow_axis is not None:
             yield from mov(fast_axis, p0_fast, slow_axis, p0_slow)

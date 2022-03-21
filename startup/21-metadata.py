@@ -23,7 +23,7 @@ def update_metadata():
                          'x1': crl.x1.position,
                          'y1': crl.y1.position,
                          'x2': crl.x2.position,
-                         'y1': crl.y2.position,
+                         'y2': crl.y2.position,
                          'z': crl.z.position,
                         })
     except: 
@@ -38,8 +38,9 @@ def update_metadata():
     sdict['Sg'] = {'x': sg2.x.position, 'y': sg2.y.position, 'dx': sg2.dx.position, 'dy': sg2.dy.position }
     RE.md['slits'] = (sdict)
 
-    RE.md['BPM'] = ({'stage position': {'x': bpm_pos.x.position, 'y': bpm_pos.y.position},
-                     'beam position': {'x': best.x_mean.get(), 'y': best.y_mean.get()}
+    RE.md['BPM'] = ({"XBPM": xbpm.pos(),
+                     "FOE": {'x': em0.x_position.get(), 'y': em0.y_position.get()},
+                     "SS": {'stage position': {'x': bpm_pos.x.position, 'y': bpm_pos.y.position},
+                           'beam position': {'x': bpm.x_mean.get(), 'y': bpm.y_mean.get()}},
                     })
-    RE.md['XBPM'] = xbpm.pos() 
     print('Done.')

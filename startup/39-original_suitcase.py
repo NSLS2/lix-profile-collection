@@ -27,10 +27,17 @@ def conv_to_list(d):
         d1 += conv_to_list(i) 
     return d1 
 
+def update_res_path(res_path, replace_res_path={}):
+    #res_path = res["resource_path"]
+    for rp1,rp2 in replace_res_path.items():
+        print("updating resource path ...")
+        if rp1 in res_path:
+            res_path = res_path.replace(rp1, rp2)  
+    return res_path
 
 def hdf5_export(headers, filename,
            stream_name=None, fields=None, bulk_h5_res=True,
-           timestamps=True, use_uid=True, db=None):
+           timestamps=True, use_uid=True, db=None, replace_res_path={}):
     """
     Create hdf5 file to preserve the structure of databroker.
 
@@ -55,6 +62,8 @@ def hdf5_export(headers, filename,
         Otherwise group name is created based on beamline id and run id.
     db : databroker object, optional
         db should be included in hdr.
+    replace_res_path: in case the resource has been moved, specify how the path should be updated
+        e.g. replace_res_path = {"exp_path/hdf": "nsls2/xf16id1/data/2022-1"}
         
     Revision 2021 May
         Now that the resource is a h5 file, copy data directly from the file 
@@ -145,7 +154,7 @@ def hdf5_export(headers, filename,
                             N = len(res_dict[key])
                             if N==1:
                                 res = res_docs[res_dict[key][0]]
-                                hf5 = h5py.File(res["root"]+res["resource_path"], "r")
+                                hf5 = h5py.File(res["root"]+update_res_path(res["resource_path"], replace_res_path), "r")
                                 data = hf5["/entry/data/data"]
                                 data_group.copy(data, key)
                                 hf5.close()
@@ -153,7 +162,7 @@ def hdf5_export(headers, filename,
                             else: # ideally this should never happen, only 1 hdf5 file/resource per scan
                                 for i in range(N):
                                     res = res_docs[res_dict[key][i]]
-                                    hf5 = h5py.File(res["root"]+res["resource_path"], "r")
+                                    hf5 = h5py.File(res["root"]+update_res_path(res["resource_path"], replace_res_path), "r")
                                     data = hf5["/entry/data/data"]
                                     if i==0:
                                         dataset = data_group.create_dataset(

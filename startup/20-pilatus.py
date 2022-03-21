@@ -100,7 +100,7 @@ class LiXFileStoreHDF5(LiXFileStorePluginBase):
     def stage(self):
         super().stage()
         res_kwargs = {'frame_per_point': self.get_frames_per_point()}
-        self._generate_resource(res_kwargs)
+        self._generate_resource(res_kwargs)        
 
 
 class LIXhdfPlugin(HDF5Plugin, LiXFileStoreHDF5):
@@ -177,6 +177,13 @@ class LIXPilatus(PilatusDetector):
 
         if self.hdf.run_time.get()==0: # first time using the plugin
             self.hdf.warmup()
+            
+    def update_cbf_name(self, cn=None):
+        if cn is None:
+            #ts = time.localtime()
+            #cn = f"{ts.tm_year}-{ts.tm_mon:02d}-{ts.tm_mday:02d}.{ts.tm_hour:02d}{ts.tm_min:02d}{ts.tm_sec:02d}"
+            cn = time.asctime().replace(" ","_").replace(":", "")
+        self.set_cbf_file_default(f"/ramdisk/{self.name}/", cn)
         
     def set_flatfield(self, fn, minV=100):
         """ do some changing first
@@ -251,15 +258,23 @@ class LIXPilatus(PilatusDetector):
         self.ts = []
         print(self.name, "staged")
         
-    def unstage(self):
+    def unstage(self, timeout=5):
         if self._staged == Staged.no:
             return
 
         print(self.name, "unstaging ...")
         print(self.name, "checking detector Armed status:", end="")
+        ts0 = time.time()
+        st = None
         while self.armed.get():
-            time.sleep(0.1)
+            time.sleep(0.2)
+            if time.time()-ts0>timeout and st is None:
+                st = self.cam.acquire.set(0)
+                print(f"force stop {self.name}")
         print(" unarmed.")
+        
+        
+        
         if self.parent.trigger_mode is PilatusTriggerMode.soft:  
             self._acquisition_signal.clear_sub(self.parent._acquire_changed)
         else:
@@ -317,6 +332,10 @@ class LiXDetectors(Device):
         # ver 0, or none at all: filename template must be set by CBF file handler
         # ver 1: filename template is already revised by the file plugin
         #RE.md['pilatus']['cbf_file_handler_ver'] = 0 
+        
+    def update_cbf_name(self, cn=None):
+        for det in self.active_detectors:
+            det.update_cbf_name(cn)
         
     def update_header(self, uid):
         for det in self.active_detectors:
@@ -453,7 +472,7 @@ try:
     pil.activate(["pil1M", "pilW2"])
     pil.set_trigger_mode(PilatusTriggerMode.ext_multi)
     pil.set_thresh()
-    pil.pilW2.set_flatfield("/exp_path/WAXS2_flat_current.tif")
+    #pil.pilW2.set_flatfield("/exp_path/WAXS2_flat_current.tif")
 except:
     print("Unable to initialize the Pilatus detectors ...")
 

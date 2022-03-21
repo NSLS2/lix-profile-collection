@@ -63,7 +63,8 @@ class Transfocator(Device):
         
     def restore_state(self, name="last"):
         for i in range(len(self.saved_states[name])):
-             self.lens_group[i].put(self.saved_states[name][i])
+            self.lens_group[i].put(self.saved_states[name][i])
+            self.wait()
         
     def save_state(self, name="last"):
         self.get_state(silent=True)
@@ -72,6 +73,7 @@ class Transfocator(Device):
     def remove_all(self):
         for i in range(self.num_lens_group):
             self.lens_group[i].put(state_removed)
+            self.wait()
         self.get_state(silent=True)
 
 try:

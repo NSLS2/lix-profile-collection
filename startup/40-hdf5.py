@@ -50,10 +50,10 @@ def pack_h5_with_lock(*args, **kwargs):
 def pack_h5(uids, dest_dir='', fn=None, fix_sample_name=True, stream_name=None, 
             attach_uv_file=False, delete_old_file=True, include_motor_pos=True,
             fields=['em2_current1_mean_value', 'em2_current2_mean_value',
-                    'em1_sum_all_mean_value', 'em2_sum_all_mean_value',
+                    'em1_sum_all_mean_value', 'em2_sum_all_mean_value', 'em2_ts_SumAll', 'em1_ts_SumAll',
                     'xsp3_spectrum_array_data', "pilatus_trigger_time",
                     'pil1M_image', 'pilW1_image', 'pilW2_image', 
-                    'pil1M_ext_image', 'pilW1_ext_image', 'pilW2_ext_image']):
+                    'pil1M_ext_image', 'pilW1_ext_image', 'pilW2_ext_image'], replace_res_path={}):
     """ if only 1 uid is given, use the sample name as the file name
         any metadata associated with each uid will be retained (e.g. sample vs buffer)
         
@@ -103,7 +103,7 @@ def pack_h5(uids, dest_dir='', fn=None, fix_sample_name=True, stream_name=None,
             pass
         
     print(fds)
-    hdf5_export(headers, fn, fields=fds, stream_name=stream_name, use_uid=False) #, mds= db.mds, use_uid=False) 
+    hdf5_export(headers, fn, fields=fds, stream_name=stream_name, use_uid=False, replace_res_path=replace_res_path) #, mds= db.mds, use_uid=False) 
     
     # by default the groups in the hdf5 file are named after the scan IDs
     if fix_sample_name:
@@ -174,7 +174,34 @@ import json
 import socket
 packing_queue_sock_port = 9999
 
-def send_to_packing_queue(uid, datatype, froot=data_file_path.gpfs, move_first=False):
+# process locally
+def send_to_packing_queue(uid, data_type, froot=data_file_path.gpfs, move_first=False):
+    """ data_type must be one of ["scan", "flyscan", "HPLC", "sol", "multi", "mscan"]
+        single uid only for "scan", "flyscan", "HPLC"
+        uids must be concatenated using '|' for "multi" and "sol"
+        if move_first is True, move the files from RAMDISK to GPFS first, otherwise the RAMDISK
+            may fill up since only one pack_h5 process is allow
+    """
+    if data_type not in ["scan", "flyscan", "HPLC", "multi", "sol", "mscan", "mfscan"]:
+        raise Exception("invalid data type: {datatype}, valid options are scan and HPLC.")
+
+    #msg = f"{datatype}::{uid}::{proc_path}::{froot.name}::{move_first}"
+    #data_type,uid,path,frn,t = msg.split("::") 
+
+    if data_type not in ["multi", "sol", "mscan", "mfscan"]: # single UID
+        if 'exit_status' not in db[uid].stop.keys():
+            print(f"in complete header for {uid}.")
+            return
+        if db[uid].stop['exit_status'] != 'success': # the scan actually finished
+            print(f"scan {uid} was not successful.")
+            return 
+
+    PilatusCBFHandler.froot = data_file_path[froot.name]
+    threading.Thread(target=pack_and_move, args=(data_type,uid,proc_path,move_first,)).start() 
+    print("processing thread started ...")                    
+        
+
+def send_to_packing_queue_remote(uid, datatype, froot=data_file_path.gpfs, move_first=False):
     """ data_type must be one of ["scan", "flyscan", "HPLC", "sol", "multi", "mscan"]
         single uid only for "scan", "flyscan", "HPLC"
         uids must be concatenated using '|' for "multi" and "sol"
@@ -184,7 +211,7 @@ def send_to_packing_queue(uid, datatype, froot=data_file_path.gpfs, move_first=F
     if datatype not in ["scan", "flyscan", "HPLC", "multi", "sol", "mscan", "mfscan"]:
         raise Exception("invalid data type: {datatype}, valid options are scan and HPLC.")
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM) 
-    s.connect(('xf16id-gpu1', packing_queue_sock_port))
+    s.connect(('xf16id-srv1', packing_queue_sock_port))
     msg = f"{datatype}::{uid}::{proc_path}::{froot.name}::{move_first}"
     s.send(msg.encode('ascii'))
     s.close()
@@ -323,15 +350,15 @@ def pack_and_move(data_type, uid, dest_dir, move_first=True):
 
             
 def process_packing_queue():
-    """ this should only run on xf16idc-gpu1
+    """ this should only run on xf16idc-gpu1, moved to srv1 Mar 2022
         needed for HPLC run and microbeam mapping
     """    
     serversocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM) 
     host = socket.gethostname()                           
-    if host!='xf16id-gpu1':
-        raise Exception("this function can only run on xf16id-gpu1.")
+    if host!='xf16id-srv1' and host!="xf16id-srv1.nsls2.bnl.local":
+        raise Exception(f"this function can only run on xf16id-srv1, not {host}.")
     serversocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    serversocket.bind(('xf16id-gpu1', packing_queue_sock_port))  
+    serversocket.bind(('xf16id-srv1', packing_queue_sock_port))  
     serversocket.listen(5)
     print('listening ...')
     

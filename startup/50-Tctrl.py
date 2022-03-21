@@ -192,6 +192,8 @@ class tctrl_FTC100D(serial_port):
         return v
 
     def setT(self, v):
+        if v>70:
+            raise Exception(f"the set point {v} is higher than the allowed limit.")
         v = np.int(v*10+0.5)
         v1 = v/256
         v2 = v%256

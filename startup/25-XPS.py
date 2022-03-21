@@ -2,20 +2,16 @@ import numpy as np
 from collections import ChainMap
 from ophyd import DeviceStatus
 from ophyd import EpicsSignal, EpicsMotor, EpicsSignalRO, Device, Component 
+from ophyd.positioner import PositionerBase
 from ophyd.utils.epics_pvs import data_type, data_shape
 import epics
 import bluesky.preprocessors as bpp
 import bluesky.plan_stubs as bps
 from collections import OrderedDict
-from threading import Thread
 
 import uuid
 import time, getpass
 
-#xps_path = "/nsls2/xf16id1/controls/profile_collection/startup"
-#if not xps_path in sys.path:
-#    sys.path += xps_path
-#from newportxps.XPS_C8_drivers import XPS
 from XPS_Q8_drivers3 import XPS
 from ftplib import FTP
 
@@ -43,9 +39,9 @@ class PositioningStackMicroscope(PositioningStack):
         
     """
     # Newport
-    x = EpicsMotor('XF:16IDC-ES:Scan2{Ax:X}Mtr', name='ss_x')
-    y = EpicsMotor('XF:16IDC-ES:Scan2{Ax:Y}Mtr', name='ss_y')
-    ry = EpicsMotor('XF:16IDC-ES:Scan2{Ax:RY}Mtr', name='ss_ry')  
+    x = None #EpicsMotor('XF:16IDC-ES:Scan2{Ax:X}Mtr', name='ss_x')
+    y = None #EpicsMotor('XF:16IDC-ES:Scan2{Ax:Y}Mtr', name='ss_y')
+    ry = None #EpicsMotor('XF:16IDC-ES:Scan2{Ax:RY}Mtr', name='ss_ry')  
     # SmarAct stages
     sx = EpicsMotor('XF:16IDC-ES:Scan2-Gonio{Ax:sX}Mtr', name='ss_sx')
     sz = EpicsMotor('XF:16IDC-ES:Scan2-Gonio{Ax:sZ}Mtr', name='ss_sz')
@@ -57,38 +53,172 @@ class PositioningStackMicroscope(PositioningStack):
         rx = None
         print("ss.rx not available")
 
-class XPStraj(Device):
-    def __init__(self, ip_addr, group, name, devices=None):
-        """ ip_addr: IP of the XPS controller
-            group: PVT positioner grouped defined in the controller
-            name: 
-            devices: the corresponding Ophyd device for the posiitoner group, useful in a scan
-        """
-        
-        if devices is None:
-            raise Exception("devices is None: the corelation between XPS and bs motor names must be defined.")
-        
-        super().__init__(name=name)
+class XPSController():
+    def __init__(self, ip_addr, name):
         self.xps = XPS()
+        self.name = name
         self.ip_addr = ip_addr
         self.sID = self.xps.TCP_ConnectToServer(ip_addr, 5001, 0.050)
         # 20 ms timeout is suggested for single-socket communication, per programming manual
-        
+        self.groups = {}
+        self.traj = None
+        self.motors = {}
+        self.update()
+
+    def update(self):
+        self.groups = {}
         objs = self.xps.ObjectsListGet(self.sID)[1].split(';;')[0].split(';')
-        if group not in objs:
-            print("group %s does not exist." % group)
-            print("valid objects are", objs)
-            raise Exception
-        self.group = group
-        self.motors = [mot for mot in objs if (group+'.') in mot] 
-        self.Nmot = len(self.motors) 
+        for obj in objs:
+            tl = obj.split('.')
+            if len(tl)==1:
+                err,ret = self.xps.GroupStatusGet(self.sID, tl[0])
+                if ret!='12':
+                    print(f"group {tl[0]} is not ready for use, err,status = {err,ret}")
+                else:
+                    self.groups[tl[0]] = []
+            elif tl[0] not in self.groups.keys():
+                continue
+                #print(f"skipping {obj}: group {tl[0]} is inactive or defined")
+            else:
+                self.groups[tl[0]].append(obj)
+                self.motors[obj] = {}
+                self.motors[obj]['group'] = tl[0] 
+                self.motors[obj]['index'] = self.groups[tl[0]].index(obj)               
         
-        self.devices = devices
-        for m in devices.keys():
-            if m not in self.motors:
-                raise Exception('invalid motor: ', m)
-            print(m, devices[m].name)
-        self.device_names = [devices[k].name for k in devices.keys()]
+    def def_motor(self, motorName, OphydName, egu="mm", direction=1): 
+        if not motorName in self.motors.keys():
+            raise Exception(f"{motorName} is not a valid motor.")
+        mot = XPSmotor(self, motorName, OphydName, egu, direction=direction)
+        self.motors[motorName]["ophyd"] = mot
+        return mot
+    
+    def init_traj(self, group): 
+        # the group must be of type MultiAxis 
+        self.traj = XPStraj(self, group)
+    
+    #def reboot(self):
+    #    pass
+        
+        
+class XPSmotor(PositionerBase):
+    def __init__(self, controller, motorName, OphydName, egu, direction=1, settle_time=0):
+        self.controller = controller
+        self.motorName = motorName
+        super().__init__(name=OphydName)
+        self.source = f"{controller.name}-{motorName}"
+        self._egu = egu
+        self._settle_time = settle_time
+        self._status = None
+        self._dir = direction
+        self._position = None
+        self.setpoint = None
+    
+    def user_offset_dir(self):
+        return self._dir
+    
+    def wait_for_stop(self, poll_time=0.1):
+        while self.moving:
+            pos = self.position
+            time.sleep(poll_time)
+        time.sleep(self.settle_time)
+        pos = self.position
+        self._done_moving(success=True, timestamp=time.time())
+    
+    def move(self, position, wait=True, **kwargs): #moved_cb=None, timeout=None, 
+        self._started_moving = False
+        self.set_point = position*self._dir
+        self._status = super().move(self.set_point, **kwargs)
+        err,ret = self.controller.xps.GroupMoveAbsolute(self.controller.sID, self.motorName, [self.set_point])
+        threading.Thread(target=self.wait_for_stop).start() 
+        
+        try:
+            if wait:
+                status_wait(self._status)
+        except KeyboardInterrupt:
+            self.stop()
+            raise
+
+        return self._status
+        
+    @property
+    def position(self):
+        grp = self.controller.motors[self.motorName]['group']
+        err = ""
+        while True:
+            err,ret = self.controller.xps.GroupPositionCurrentGet(self.controller.sID, grp, 
+                                                                  len(self.controller.groups[grp]))
+            if err=='0':
+                break
+            time.sleep(0.5)
+        self._position = float(ret.split(',')[self.controller.motors[self.motorName]['index']])
+
+        return self._position*self._dir
+        
+    @property
+    def moving(self):
+        grp = self.controller.motors[self.motorName]['group']
+        while True:
+            err,ret = self.controller.xps.GroupMotionStatusGet(self.controller.sID, grp, 
+                                                               len(self.controller.groups[grp]))
+            if err=='0':
+                break
+            time.sleep(0.5)
+        self._moving = bool(int(ret.split(',')[self.controller.motors[self.motorName]['index']]))
+
+        return self._moving
+    
+    @property
+    def egu(self):
+        return self._egu
+        
+    def stop(self, *, success: bool = False):
+        err,ret = self.controller.xps.GroupMoveAbort(self.controller.sID, motorName)
+        self._done_moving()
+        
+    def read(self):
+        d = OrderedDict()
+        d[self.name] = {'value': self.position,
+                        'timestamp': time.time()}
+        return d
+        
+    def describe(self):
+        desc = OrderedDict()
+        desc[self.name] = {'source': str(self.source),
+                           'dtype': data_type(self.position),
+                           'shape': data_shape(self.position),
+                           'units': self.egu,
+                           'lower_ctrl_limit': self.low_limit,
+                           'upper_ctrl_limit': self.high_limit,
+                           }
+        return desc
+
+    def read_configuration(self):
+        return OrderedDict()
+
+    def describe_configuration(self):
+        return OrderedDict()    
+    
+    
+        
+class XPStraj(Device):
+    def __init__(self, controller, group):
+        """ controller is a XPS controller instance
+            fast_axis is a XPS motor name, e.g. scan.X
+        """        
+        if not group in controller.groups.keys():
+            raise Exception(f"{fast_axis} is not a valid motor")
+        # also need to make sure that the group is a MultiAxis type
+            
+        super().__init__(name=controller.name+"_traj")
+        self.controller = controller
+        self.group = group
+        self.motors = {}
+        for m in controller.groups[group]:
+            if "ophyd" in controller.motors[m].keys():
+                self.motors[controller.motors[m]['ophyd'].name] = m
+        self.Nmot = len(self.motors.keys())
+        self.xps = controller.xps
+        self.sID = controller.sID
         
         self.verified = False
         uname = getpass.getuser()
@@ -106,7 +236,8 @@ class XPStraj(Device):
         self._traj_status = None
         self.detectors = None
         self.datum = None
-        
+        self.flying_motor = None
+    
     def stage(self):
         self.datum = {}
         self.aborted = False
@@ -115,15 +246,10 @@ class XPStraj(Device):
     def unstage(self):
         """ abort whatever is still going on??
         """
-        self.abort_traj()
+        #self.abort_traj()
+        while self.moving():
+            time.sleep(0.2)
         self._traj_status = None
-        
-    def pulse(self, duration=0.00001):
-        # GPIO3.DO, pin 4
-        mask = '1'   # it seems that only DO1 works
-        self.xps.GPIODigitalSet(self.sID, "GPIO3.DO", mask, 1)
-        #time.sleep(duration)
-        self.xps.GPIODigitalSet(self.sID, "GPIO3.DO", mask, 0)
         
     def read_configuration(self):
         ret = [(k, {'value': val, 
@@ -145,15 +271,13 @@ class XPStraj(Device):
             self.traj_par['run_forward_traj'] = False
         
     def moving(self):
-        err,msg = self.xps.GroupMotionStatusGet(self.sID, self.group, self.Nmot)
-        if (np.asarray(msg.split(','))=='0').all():
+        if self.flying_motor is None:
             return False
-        return True
+        return self.flying_motor.moving
     
     def abort_traj(self):
-        if self.moving():
-            err,msg = self.xps.GroupMoveAbort(self.sID, self.group)
-            return err,msg
+        if self.flying_motor is not None:
+            self.flying_motor.stop()
         return
         
     def kickoff(self):
@@ -163,15 +287,10 @@ class XPStraj(Device):
         if self.verified==False:
             raise Exception("trajectory not defined/verified.")
         
-        #self._traj_status = DeviceStatus(self.ExecuteState)
         self._traj_status = DeviceStatus(self)
       
-        ##self.exec_traj(self.traj_par['run_forward_traj'])  # should not block
         th = threading.Thread(target=self.exec_traj, args=(self.traj_par['run_forward_traj'], ) )
         th.start() 
-        # always done, the scan should never even try to wait for this
-        #status = DeviceStatus(self)
-        #status._finished()
         return self._traj_status
         
     def complete(self):
@@ -233,9 +352,10 @@ class XPStraj(Device):
         ts = {}
 
         # bandage solution for getting timestamps
-        fn0 = "/tmp/data.log"	
+        # need to have ssh key on the data collection workstation
+        fn0 = "/tmp/data.log"
         fn = caget(f"{pil.active_detectors[0].cam.prefix}FullFileName_RBV", as_string=True).rsplit("_", maxsplit=1)[0]+".log"
-        os.system(f"scp det@{pil.pil1M.hostname}:{fn} {fn0}")
+        os.system(f"scp det@{pil.active_detectors[0].hostname}:{fn} {fn0}")
         fh = open(fn0, "r")
         lns = fh.read().split('\n')[1:-2]
         fh.close()
@@ -298,13 +418,15 @@ class XPStraj(Device):
         """        
         self.verified = False
 
-        if motor not in self.motors:
-            print("motor %s not in the list of motors: "%motor, self.motors)
+        if motor.name not in self.motors.keys():
+            # motor is an Ophyd device 
+            print(f"{motor.name} not in the list of motors: ", self.motors)
             raise Exception
+        self.flying_motor = self.controller.motors[self.motors[motor.name]]['ophyd']
         
-        err,ret = self.xps.PositionerMaximumVelocityAndAccelerationGet(self.sID, motor)
+        err,ret = self.xps.PositionerMaximumVelocityAndAccelerationGet(self.sID, self.motors[motor.name])
         mvel,macc = np.asarray(ret.split(','), dtype=np.float)
-        midx = self.motors.index(motor)
+        midx = self.controller.motors[self.motors[motor.name]]['index']
         
         jj = np.zeros(Nr+N+Nr)
         jj[0] = 1; jj[Nr-1] = -1
@@ -336,7 +458,7 @@ class XPStraj(Device):
         
         np.savetxt("/tmp/"+self.traj_files[0], ot1, fmt='%f', delimiter=', ')
         np.savetxt("/tmp/"+self.traj_files[1], ot2, fmt='%f', delimiter=', ')
-        ftp = FTP(self.ip_addr)
+        ftp = FTP(self.controller.ip_addr)
         ftp.connect()
         ftp.login("Administrator", "Administrator")
         ftp.cwd("Public/Trajectories")
@@ -351,18 +473,18 @@ class XPStraj(Device):
             if err!='0':
                 print(ret)
                 raise Exception("trajectory verification failed.")
-            err,ret = self.xps.MultipleAxesPVTVerificationResultGet (self.sID, motor)
+            err,ret = self.xps.MultipleAxesPVTVerificationResultGet (self.sID, self.motors[motor.name])
         self.verified = True
         self.traj_par = {'run_forward_traj': True, 
                          'no_of_segments': N, 
                          'no_of_rampup_points': Nr,
                          'segment_displacement': dx,
                          'segment_duration': dt,
-                         'motor': motor,
+                         'motor': self.motors[motor.name],
                          'rampup_distance': self.ramp_dist,
-                         'motor2_disp': dy
+                         'motor2_disp': dy,
                         }
-        self.traj_par['fast_axis'] = xps_trj.devices[motor].name
+        self.traj_par['fast_axis'] = motor.name
         self.motor2 = motor2
         if motor2 is not None:
             self.traj_par['slow_axis'] = motor2.name
@@ -375,8 +497,6 @@ class XPStraj(Device):
         if self.verified==False:
             raise Exception("trajectory not defined/verified.")
 
-        print("executing trajectory ...")
-            
         N = self.traj_par['no_of_segments']
         Nr = self.traj_par['no_of_rampup_points']
         motor = self.traj_par['motor']
@@ -387,15 +507,20 @@ class XPStraj(Device):
         else:
             traj_fn = self.traj_files[1]
         
+        print("moving into starting position ...")
+        pos = (self.traj_par['ready_pos'][0] if forward else self.traj_par['ready_pos'][1])
+        err,ret = self.xps.GroupMoveAbsolute(self.sID, self.traj_par['motor'], [pos])
+            
         # otherwise starting the trajectory might generate an error
         while self.moving():
             time.sleep(0.2)
         
+        print("executing trajectory ...")
         # first set up gathering
         self.xps.GatheringReset(self.sID)        
         # pulse is generated when the positioner enters the segment
         print("starting a trajectory with triggering parameters: %d, %d, %.3f ..." % (Nr+1, N+Nr+1, dt))
-        self.xps.MultipleAxesPVTPulseOutputSet (self.sID, self.group, Nr+1, N+Nr+1, dt)
+        self.xps.MultipleAxesPVTPulseOutputSet(self.sID, self.group, Nr+1, N+Nr+1, dt)
         self.xps.MultipleAxesPVTVerification(self.sID, self.group, traj_fn)
         self.xps.GatheringConfigurationSet(self.sID, [motor+".CurrentPosition"])        
         self.xps.EventExtendedConfigurationTriggerSet(self.sID,
@@ -413,14 +538,7 @@ class XPStraj(Device):
         eID = self.xps.EventExtendedStart(self.sID)[1]
         self.start_time = time.time()
         
-        #for i in range(n_retry):
-        # can this generate some triggers and then fail? if so this failure should kill the run
-        # as there is no book keeping to know which images from the detectors are garbage
-        # and the postions and image sequences will be off
         [err, ret] = self.xps.MultipleAxesPVTExecution(self.sID, self.group, traj_fn, 1)
-        #if err=='0': 
-        #    break
-        #elif i==n_retry-1:
         if err!='0':
             self.safe_stop()
             print("motion group re-initialized ...")
@@ -446,6 +564,8 @@ class XPStraj(Device):
             
     def safe_stop(self):
         fast_shutter.close()
+        ## needs work
+        return
         
         # generate enough triggers to complete exposure 
         #det = self.detectors[0]
@@ -458,15 +578,15 @@ class XPStraj(Device):
             print('%d more data points to complete exposure ...   ' % (Ni-Nc-i), end='\r')
             time.sleep(self.traj_par['segment_duration'])     
         """
-        st = self.xps.GroupStatusGet(self.sID, 'scan') 
+        st = self.xps.GroupStatusGet(self.sID, self.group) 
         if st==['0', '1']: # group likely need initilization and homing
-            self.xps.GroupInitialize(self.sID, 'scan')
+            self.xps.GroupInitialize(self.sID, self.group)
             time.sleep(1)
-            st = self.xps.GroupStatusGet(self.sID, 'scan')
+            st = self.xps.GroupStatusGet(self.sID, self.group)
             if st==['0', '42']: # ready for home search
-                self.xps.GroupHomeSearch(self.sID, 'scan') 
+                self.xps.GroupHomeSearch(self.sID, self.group) 
                 time.sleep(1)
-                st = self.xps.GroupStatusGet(self.sID, 'scan')
+                st = self.xps.GroupStatusGet(self.sID, self.group)
                 if st==['0', '11']: # home search successful 
                     print('stages re-initialized ... ')
         
