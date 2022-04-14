@@ -549,7 +549,7 @@ def measure_mailin_spreadsheets(sh_list, sample_locs=None, check_QR_only=False):
         login("bot", prop_id, saf_id)
         hdict = parseSpreadsheet(sh, "UIDs", ["holderName"])
         hlist = list(hdict['holderName'].values())
-        ulist = list(hdict['UID'].values())
+        ulist = list(hdict['UIDs'].values())
         holders = {}
         for hn,uid in zip(hlist,ulist):
             if not uid in storage_uids:
@@ -581,13 +581,16 @@ def HT_pack_h5(spreadSheet=None, holderName=None, froot=data_file_path.gpfs,
             
 def createShimadzuBatchFile(spreadsheet_fn, batchID, sheet_name='Samples', 
                             check_sname=True, shutdown=False,
-                            strFields=['Method File', 'Sample Name'], numFields=['Inj. Volume']):
+                            strFields=['Method File', 'Sample Name'], numFields=['Inj. Volume'],
+                            HPLCdir="/nsls2/data/lix/legacy/HPLC", win_HPLCdir="Y:\\lix\\legecy\\HPLC"):   
     """ spreadsheet requiredColumns: sampleName, columnID, flowrate, runTime, collectionTime
         columnID: should be from a dropdown list to avoid problems
         ??collectionTime: the part of the HPLC run when data are actually collected
+        HPLCdir used to be "/nsls2/xf16id1/Windows/HPLC"
+        changed to "/nsls2/data/lix/legacy/HPLC" in Mar 2022
     """
-    template_batch_file = "/nsls2/xf16id1/Windows/HPLC/template/batch_template.txt"
-    template_method_file = "/nsls2/xf16id1/Windows/HPLC/template/method_template.lcm"
+    template_batch_file = f"{HPLCdir}/template/batch_template.txt"
+    template_method_file = f"{HPLCdir}/template/method_template.lcm"
     sections = readShimadzuDatafile(template_batch_file, return_all_sections=True)
     dd = parseSpreadsheet(spreadsheet_fn, sheet_name=sheet_name, strFields=['batchID', 'Tray Name'])
     autofillSpreadsheet(dd, fields=['batchID', 'Tray Name'])
@@ -606,11 +609,11 @@ def createShimadzuBatchFile(spreadsheet_fn, batchID, sheet_name='Samples',
         print("need to login first ...")
         login()
 
-    default_HPLC_path = '/nsls2/xf16id1/Windows/HPLC/'    
-    default_data_path = '/nsls2/xf16id1/Windows/HPLC/%s/%s/' % (proposal_id,run_id)
-    default_hplc_export_file = 'File\tZ:\\hplc_export.txt'
-    default_win_HPLC_dir = 'Z:\\HPLC\\'
-    default_win_data_path = default_win_HPLC_dir+proposal_id+'\\'+run_id+'\\'
+    default_HPLC_path = HPLCdir
+    default_data_path = f'{HPLCdir}/{current_cycle}/{proposal_id}/{run_id}/' 
+    default_win_HPLC_dir = win_HPLCdir
+    default_hplc_export_file = f'{win_HPLCdir}\\hplc_export.txt'
+    default_win_data_path = f'{win_HPLCdir}\\{current_cycle}\\{proposal_id}\\{run_id}\\'
     # make directory, makedirs() is defined in 02-utils.py
     makedirs(default_data_path, mode=0o777)
 
