@@ -6,7 +6,7 @@
 # The full license is in the file LICENSE, distributed with this software.
 #-------------------------------------------------------------------------
 
-import collections
+import collections.abc
 import numpy as np
 import warnings
 import h5py
