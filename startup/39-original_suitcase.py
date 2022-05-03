@@ -6,15 +6,13 @@
 # The full license is in the file LICENSE, distributed with this software.
 #-------------------------------------------------------------------------
 
-import collections.abc
+from collections.abc import Mapping
 import numpy as np
 import warnings
 import h5py
 import json
-import copy
+import copy,shutil
 from databroker import Header
-import copy
-import dask.dataframe as dd
 
 def conv_to_list(d): 
     if isinstance(d, float) or isinstance(d, int) or isinstance(d, str): 
@@ -28,14 +26,38 @@ def conv_to_list(d):
     return d1 
 
 def update_res_path(res_path, replace_res_path={}):
-    #res_path = res["resource_path"]
     for rp1,rp2 in replace_res_path.items():
         print("updating resource path ...")
         if rp1 in res_path:
             res_path = res_path.replace(rp1, rp2)  
     return res_path
 
-def hdf5_export(headers, filename,
+def locate_h5_resource(res, replace_res_path):
+    """ this is intended to move h5 file created by Pilatus
+        these files are originally saved on PPU RAMDISK, but should be moved to the IOC data directory
+        this function will look for the file at the original location, and relocate the file first if it is there
+        and return the h5 dataset
+    """
+    fn_orig = res["root"]+res["resource_path"]
+    fn = res["root"]+update_res_path(res["resource_path"], replace_res_path)
+    
+    if os.path.exists(fn_orig):
+        if os.path.exists(fn):
+            print(f"both {fn} and {fn_orig} exist, resolve the conflict manually first ..." )
+            raise Exception
+        fdir = os.path.dirname(fn)
+        if not os.path.exists(fdir):
+            makedirs(proc_path, mode=0o2775)
+        shutil.move(fn_orig, fn)  
+    elif not os.path.exists(fn):
+        print(f"could not location the resource at either {fn} or {fn_orig} ...")
+        raise Exception
+    
+    hf5 = h5py.File(fn, "r")
+    return hf5["/entry/data/data"]
+
+
+def hdf5_export(headers, filename, debug=False,
            stream_name=None, fields=None, bulk_h5_res=True,
            timestamps=True, use_uid=True, db=None, replace_res_path={}):
     """
@@ -73,6 +95,7 @@ def hdf5_export(headers, filename,
         headers = [headers]
 
     with h5py.File(filename, "w") as f:
+        #f.swmr_mode = True # Unable to start swmr writing (file superblock version - should be at least 3)
         for header in headers:
             try:
                 db = header.db
@@ -85,7 +108,9 @@ def hdf5_export(headers, filename,
             for n,d in header.documents():
                 if n=="resource":
                     res_docs[d['uid']] = d
-
+            if debug:
+                print("res_docs:\n", res_docs)
+                    
             try:
                 descriptors = header.descriptors
             except KeyError:
@@ -105,6 +130,8 @@ def hdf5_export(headers, filename,
                     if descriptor['name'] != stream_name:
                         continue
                 descriptor.pop('_name', None)
+                if debug:
+                    print(f"processing stream {stream_name}")
 
                 if use_uid:
                     desc_group = group.create_group(descriptor['uid'])
@@ -119,13 +146,18 @@ def hdf5_export(headers, filename,
                 events = list(header.events(stream_name=descriptor['name'], fill=False))
 
                 res_dict = {}
-                if "filled" in events[0].keys():
-                    for k in list(events[0]['filled'].keys()):
+                for k,v in list(events[0]['data'].items()):
+                    if not isinstance(v,str):
+                        continue
+                    if v.split('/')[0] in res_docs.keys():
                         res_dict[k] = []
                         for ev in events:
                             res_uid = ev['data'][k].split("/")[0]
                             if not res_uid in res_dict[k]:
                                 res_dict[k].append(res_uid)
+                
+                if debug:
+                    print("res_dict:\n", res_dict)
                         
                 event_times = [e['time'] for e in events]
                 desc_group.create_dataset('time', data=event_times,
@@ -149,21 +181,19 @@ def hdf5_export(headers, filename,
 
                     if key in list(res_dict.keys()):
                         res = res_docs[res_dict[key][0]] 
+                        print(f"preocessing resource ...\n", res)
                         if res['spec'] == "AD_HDF5" and bulk_h5_res:
                             rawdata = None
                             N = len(res_dict[key])
+                            print(f"copying data from source h5 file(s) directly, N={N} ...")
                             if N==1:
-                                res = res_docs[res_dict[key][0]]
-                                hf5 = h5py.File(res["root"]+update_res_path(res["resource_path"], replace_res_path), "r")
-                                data = hf5["/entry/data/data"]
+                                data = locate_h5_resource(res_docs[res_dict[key][0]])
                                 data_group.copy(data, key)
                                 hf5.close()
                                 dataset = data_group[key]
                             else: # ideally this should never happen, only 1 hdf5 file/resource per scan
                                 for i in range(N):
-                                    res = res_docs[res_dict[key][i]]
-                                    hf5 = h5py.File(res["root"]+update_res_path(res["resource_path"], replace_res_path), "r")
-                                    data = hf5["/entry/data/data"]
+                                    data = locate_h5_resource(res_docs[res_dict[key][i]])
                                     if i==0:
                                         dataset = data_group.create_dataset(
                                                 key, shape=(N, *data.shape), 
@@ -172,9 +202,11 @@ def hdf5_export(headers, filename,
                                     dataset[i,:] = data
                                     hf5.close()
                         else:
+                            print(f"getting resource data using handlers ...")
                             rawdata = header.table(stream_name=descriptor['name'], 
                                                    fields=[key], fill=True)[key]   # this returns the time stamps as well
                     else:
+                        print(f"compiling resource data from individual envents ...")
                         rawdata = [e['data'][key] for e in events]
 
                     if rawdata is not None:
@@ -195,7 +227,7 @@ def hdf5_export(headers, filename,
                                 dataset = data_group.create_dataset(
                                     key, data=data, compression='gzip')
                             else:
-                                raise ValueError('Array of str with ndim >= 3 can not be saved.')
+                                raise ValueError(f'Array of str with ndim >= 3 can not be saved: {key}')
                         else:  # save numerical data
                             try:                               
                                 if isinstance(rawdata, list):
@@ -236,7 +268,7 @@ def _clean_dict(d):
     d = dict(d)
     for k, v in list(d.items()):
         # Store dictionaries as JSON strings.
-        if isinstance(v, collections.Mapping):
+        if isinstance(v, Mapping):
             d[k] = _clean_dict(d[k])
             continue
         try:
