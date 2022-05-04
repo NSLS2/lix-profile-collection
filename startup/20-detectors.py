@@ -1,7 +1,3 @@
-#from ophyd import (ProsilicaDetector, SingleTrigger, TIFFPlugin,
-#                   ImagePlugin, DetectorBase, HDF5Plugin, 
-#                   AreaDetector, EpicsSignal, EpicsSignalRO, ROIPlugin,
-#                   TransformPlugin, ProcessPlugin)
 from ophyd.areadetector.detectors import ProsilicaDetector
 from ophyd.areadetector.plugins import ImagePlugin_V34 as ImagePlugin
 from ophyd.areadetector.plugins import TIFFPlugin_V34 as TIFFPlugin
@@ -26,13 +22,10 @@ class TIFFPluginWithFileStore(TIFFPlugin, FileStoreTIFFIterativeWrite):
         return fname, read_path, write_path
 
     def stage(self):
-        global o_data_path,proposal_id,run_id,current_cycle,current_sample
-        # rpath = f"{o_data_path}/tif/"
-        rpath = f"/nsls2/data/lix/legacy/{self.parent.name}/{current_cycle}/{proposal_id}/{run_id}/{current_sample}"
-        #makedirs(rpath, mode=0o0777)
-        #set_and_wait(self.file_path, rpath)
+        global proposal_id,run_id,current_cycle,current_sample
+        rpath = f"{get_IOC_datapath(self.parent.name)}/{current_sample}"
         self.write_path_template = rpath
-        self.create_directory.put(-5)  # create up to 4 levels: ioc, cycle, pid, rid
+        self.create_directory.put(-6)  # create up to 4 levels: ioc, cycle, pid, rid
         super().stage()    
 
 class StandardProsilica(ProsilicaDetector, SingleTrigger):  
@@ -51,7 +44,7 @@ class StandardProsilica(ProsilicaDetector, SingleTrigger):
     stats3 = Cpt(StatsPlugin, 'Stats3:')
     tiff = Cpt(TIFFPluginWithFileStore,
                suffix='TIFF1:',
-               write_path_template='/nsls2/xf16id1/data/',   # this is updated when the plug in is staged
+               write_path_template='/nsls2/xf16id1/data/',   # this is updated when the plugin is staged
                ) 
    
     def __init__(self, *args, detector_id=None, **kwargs): 

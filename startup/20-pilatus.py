@@ -73,7 +73,7 @@ class LiXFileStorePluginBase(FileStoreBase):
                                                self.file_number.get() - 1)
         self._fp = read_path
         if not self.file_path_exists.get():
-            raise IOError("Path %s does not exist on IOC."
+            raise IOError("Path %s does not exist on IOC server."
                           "" % self.file_path.get())
 
 
@@ -100,7 +100,7 @@ class LiXFileStoreHDF5(LiXFileStorePluginBase):
     def stage(self):
         super().stage()
         res_kwargs = {'frame_per_point': self.get_frames_per_point()}
-        self._generate_resource(res_kwargs)        
+        self._generate_resource(res_kwargs)
 
 
 class LIXhdfPlugin(HDF5Plugin, LiXFileStoreHDF5):
@@ -109,7 +109,7 @@ class LIXhdfPlugin(HDF5Plugin, LiXFileStoreHDF5):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fnbr = 0        
+        self.fnbr = 0
 
     def make_filename(self):
         ''' replaces FileStorePluginBase.make_filename()
@@ -122,15 +122,15 @@ class LIXhdfPlugin(HDF5Plugin, LiXFileStoreHDF5):
         write_path : str
             Path that the IOC can write to
         '''
-        global data_path,current_sample
-        
+        global current_sample
+
         filename = f"{current_sample}_{self.parent.detector_id}"
-        #write_path = f"/nsls2/data/lix/legacy/{self.parent.name}/{current_cycle}/{proposal_id}/{run_id}/{current_sample}/"
-        write_path = data_path if self.sub_directory is None else f"{data_path}/{self.sub_directory}"
+        write_path = get_IOC_datapath(self.parent.name, pilatus_data_dir) 
+        if self.sub_directory:
+            write_path += f"/{self.sub_directory}"
         read_path = write_path # might want to handle this differently, this shows up in res/db
-        #read_path = self.parent.cbf_file_path.get()
         return filename, read_path, write_path
-    
+
     #def stage(self):
     #    """ need to set the number of images to collect and file path
     #    """
@@ -140,79 +140,46 @@ class LIXhdfPlugin(HDF5Plugin, LiXFileStoreHDF5):
     #        filename, read_path, write_path = self.make_filename()
     #        self._fn = self.file_template.get() % (read_path, filename, self.fnbr)
     #        set_and_wait(self.full_file_name, self._fn)
-        
     #def unstage(self):
     #    self.fnbr = self.file_number.get()
     #    super().unstage()
-        
+
     def get_frames_per_point(self):
         if self.parent.trigger_mode is PilatusTriggerMode.ext:
             return self.parent.parent._num_images
         else:
             return 1
-    
+
 class LIXPilatus(PilatusDetector):
     hdf = Cpt(LIXhdfPlugin, suffix="HDF1:",
               write_path_template="", root='/')
-    
+
     cbf_file_path = ADComponent(EpicsSignalWithRBV, 'cam1:FilePath', string=True)
     cbf_file_name = ADComponent(EpicsSignalWithRBV, 'cam1:FileName', string=True)
     cbf_file_number = ADComponent(EpicsSignalWithRBV, 'cam1:FileNumber')
     HeaderString = Cpt(EpicsSignal, "cam1:HeaderString")
     ThresholdEnergy = Cpt(EpicsSignal, "cam1:ThresholdEnergy")
     armed = Cpt(EpicsSignal, "cam1:Armed")
-    flatfield = Cpt(EpicsSignal, "cam1:FlatFieldFile")
-    ff_minv = Cpt(EpicsSignal, "cam1:MinFlatField")
-    ff_valid = Cpt(EpicsSignalRO, "cam1:FlatFieldValid")
 
     def __init__(self, *args, hostname, detector_id, **kwargs):
         self.detector_id = detector_id
         self.hostname = hostname
         super().__init__(*args, **kwargs)
-        
+
         self._acquisition_signal = self.cam.acquire
         self._counter_signal = self.cam.array_counter
         self.set_cbf_file_default(f"/ramdisk/{self.name}/", "current")
-        self.ts = []         
+        self.ts = []
 
         if self.hdf.run_time.get()==0: # first time using the plugin
             self.hdf.warmup()
-            
+
     def update_cbf_name(self, cn=None):
         if cn is None:
             #ts = time.localtime()
             #cn = f"{ts.tm_year}-{ts.tm_mon:02d}-{ts.tm_mday:02d}.{ts.tm_hour:02d}{ts.tm_min:02d}{ts.tm_sec:02d}"
             cn = time.asctime().replace(" ","_").replace(":", "")
         self.set_cbf_file_default(f"/ramdisk/{self.name}/", cn)
-        
-    def set_flatfield(self, fn, minV=100):
-        """ do some changing first
-            make sure that the image size is correct and the values are reasonable
-            
-            documentation on the PV:
-            
-            Name of a file to be used to correct for the flat field. If this record does not point to a valid 
-            flat field file then no flat field correction is performed. The flat field file is simply a TIFF 
-            or CBF file collected by the Pilatus that is used to correct for spatial non-uniformity in the 
-            response of the detector. It should be collected with a spatially uniform intensity on the detector 
-            at roughly the same energy as the measurements being corrected. When the flat field file is read, 
-            the average pixel value (averageFlatField) is computed using all pixels with intensities 
-            >PilatusMinFlatField. All pixels with intensity <PilatusMinFlatField in the flat field are replaced 
-            with averageFlatField. When images are collected before the NDArray callbacks are performed the following 
-            per-pixel correction is applied:
-                ImageData[i] = (averageFlatField * ImageData[i])/flatField[i];
-            or
-                ImageData[i] *= averageFlatField/flatField[i]
-        """ 
-        self.flatfield.put(fn, wait=True)
-        self.ff_minv.put(minV, wait=True)
-        time.sleep(0.5)
-        if not self.ff_valid.get():
-            print("Unable to set flat field!")
-        else:
-            if not "flat_field" in RE.md['pilatus'].keys():
-                RE.md['pilatus']["flat_field"] = {}
-            RE.md['pilatus']["flat_field"][self.name] = self.flatfield.get(as_string=True)
 
     def set_cbf_file_default(self, path, fn):
         self.cbf_file_path.put(path, wait=True)
@@ -245,9 +212,9 @@ class LIXPilatus(PilatusDetector):
         super().stage()
         print(self.name, "super staged")
 
-        if trigger_mode is PilatusTriggerMode.soft:  
+        if trigger_mode is PilatusTriggerMode.soft:
             self._acquisition_signal.subscribe(self.parent._acquire_changed)
-        else: # external triggering 
+        else: # external triggering
             self._counter_signal.put(0)
             time.sleep(.1)
             print(self.name, "checking armed status")
@@ -257,7 +224,7 @@ class LIXPilatus(PilatusDetector):
 
         self.ts = []
         print(self.name, "staged")
-        
+
     def unstage(self, timeout=5):
         if self._staged == Staged.no:
             return
@@ -272,10 +239,8 @@ class LIXPilatus(PilatusDetector):
                 st = self.cam.acquire.set(0)
                 print(f"force stop {self.name}")
         print(" unarmed.")
-        
-        
-        
-        if self.parent.trigger_mode is PilatusTriggerMode.soft:  
+
+       	if self.parent.trigger_mode is PilatusTriggerMode.soft:
             self._acquisition_signal.clear_sub(self.parent._acquire_changed)
         else:
             self._acquisition_signal.put(0, wait=True)
@@ -285,7 +250,7 @@ class LIXPilatus(PilatusDetector):
         super().unstage()
         print(self.name, "unstaging completed.")
 
-            
+
     def trigger(self):
         if self._staged != Staged.yes:
             raise RuntimeError("This detector is not ready to trigger."
@@ -295,11 +260,11 @@ class LIXPilatus(PilatusDetector):
             self._acquisition_signal.put(1, wait=False)
         self.dispatch(f'{self.name}_image', ttime.time())
 
-            
+
 class LiXDetectors(Device):
     pil1M = Cpt(LIXPilatus, '{Det:SAXS}', name="pil1M", detector_id="SAXS", hostname="xf16idc-pilatus1m.nsls2.bnl.local")
     #pilW1 = Cpt(LIXPilatus, '{Det:WAXS1}', name="pilW1", detector_id="WAXS1", hostname="xf16idc-pilatus300k1.nsls2.bnl.local")
-    pilW2 = Cpt(LIXPilatus, '{Det:WAXS2}', name="pilW2", detector_id="WAXS2", hostname="xf16idc-pilatus900k.nsls2.bnl.local")
+    #pilW2 = Cpt(LIXPilatus, '{Det:WAXS2}', name="pilW2", detector_id="WAXS2", hostname="xf16idc-pilatus900k.nsls2.bnl.local")
     trigger_lock = None
     reset_file_number = True
     _num_images = 1
@@ -309,10 +274,10 @@ class LiXDetectors(Device):
     acq_time = 1.
     trigger_mode = PilatusTriggerMode.soft
 
-    
+
     def __init__(self, prefix):
         super().__init__(prefix=prefix, name="pil")
-        self.dets = {"pil1M": self.pil1M,  "pilW2": self.pilW2} # "pilW1": self.pilW1,
+        self.dets = {"pil1M": self.pil1M} #,  "pilW2": self.pilW2} # "pilW1": self.pilW1,
         if self.trigger_lock is None:
             self.trigger_lock = threading.Lock()
         for dname,det in self.dets.items():
@@ -320,23 +285,21 @@ class LiXDetectors(Device):
             det.read_attrs = ['hdf'] #['file']
         self.active_detectors = list(self.dets.values())
         self.trigger_time = Signal(name="pilatus_trigger_time")
-            
+
         self._trigger_signal = EpicsSignal('XF:16IDC-ES{Zeb:1}:SOFT_IN:B0')
         self._exp_completed = 0
 
         RE.md['pilatus'] = {}
-        RE.md['pilatus']["flat_field"] = {}
-        for det in self.active_detectors:
-            RE.md['pilatus']["flat_field"][det.name] = det.flatfield.get(as_string=True)
+        RE.md['pilatus']['ramdisk'] = pilatus_data_dir
 
         # ver 0, or none at all: filename template must be set by CBF file handler
         # ver 1: filename template is already revised by the file plugin
-        #RE.md['pilatus']['cbf_file_handler_ver'] = 0 
-        
+        #RE.md['pilatus']['cbf_file_handler_ver'] = 0
+
     def update_cbf_name(self, cn=None):
         for det in self.active_detectors:
             det.update_cbf_name(cn)
-        
+
     def update_header(self, uid):
         for det in self.active_detectors:
             det.HeaderString.put(f"uid={uid}")
@@ -349,26 +312,27 @@ class LiXDetectors(Device):
             if det not in self.dets.keys():
                 raise Exception(f"{det} is not a known Pilatus detector.")
         self.active_detectors = [self.dets[d] for d in det_list]
-    
+        RE.md['pilatus']['active_detectors'] = [d.name for d in self.active_detectors]
+
     def set_trigger_mode(self, trigger_mode):
         if isinstance(trigger_mode, PilatusTriggerMode):
             self.trigger_mode = trigger_mode
-        else: 
+        else:
             print(f"invalid trigger mode: {trigger_mode}")
         RE.md['pilatus']['trigger_mode'] = trigger_mode.name
-        
+
     def set_num_images(self, num, rep=1):
         self._num_images = num
         self._num_repeats = rep
         RE.md['pilatus']['num_images'] = [num, rep]
-        
+
     def number_reset(self, reset=True):
         self.reset_file_number = reset
         if reset:
             for det in self.dets.values():
                 det.cbf_file_number.put(0)
                 det.hdf.file_number.put(0)
-        
+
     def exp_time(self, exp):
         for det_name in self.dets.keys():
             self.dets[det_name].read_attrs = ['hdf']
@@ -382,46 +346,46 @@ class LiXDetectors(Device):
         if sd is not None:
             if sd[-1]!='/':
                 sd += '/'
-            makedirs(data_path+sd, mode=0o0777)
-            RE.md['subdir'] = LIXhdfPlugin.sub_directory
+            #makedirs(data_path+sd, mode=0o0777)
             LIXhdfPlugin.sub_directory = sd
+            RE.md['subdir'] = LIXhdfPlugin.sub_directory
         elif 'subdir' in RE.md.keys():
             del RE.md['subdir'] 
             LIXhdfPlugin.sub_directory = sd
-        
+
     def set_thresh(self):
         ene = int(pseudoE.energy.position/100*0.5+0.5)*0.1
-        for det in self.dets.values():
+        for det in self.active_detectors: #self.dets.values():
             det.set_thresh(ene)
-            
+
     def stage(self):
         if self._staged == Staged.yes:
             return
         change_path()
-        fno = np.max([det.cbf_file_number.get() for det in self.dets.values()])        
+        fno = np.max([det.cbf_file_number.get() for det in self.dets.values()])
         if self.reset_file_number:
             fno = 1
         for det in self.dets.values():
             det.cbf_file_number.put(fno+1)
-            
+
         for det in self.active_detectors:
             det.stage(self.trigger_mode)
-            
+
         if self.trigger_mode == PilatusTriggerMode.ext_multi:
             # the name is misleading, multi_triger means one image per trigger
             self.trig_wait = self.acq_time+0.02
         else:
             self.trig_wait = self.acq_time*self._num_images+0.02
-        
+
     def unstage(self):
         for det in self.active_detectors:
             det.unstage()
-                
+
     def trigger(self):
         #if len(self.active_detectors)==0:
         #    return
         self._status = DeviceStatus(self)
-        if self.trigger_mode is not PilatusTriggerMode.soft:  
+        if self.trigger_mode is not PilatusTriggerMode.soft:
             while self.trigger_lock.locked():
                 time.sleep(0.005)
             self.trigger_time.put(time.time())
@@ -435,9 +399,9 @@ class LiXDetectors(Device):
             # ext: set up callback to clear status after the end-of-exposure
             threading.Timer(self.trig_wait, self._status._finished, ()).start()
         # should advance the file number in external trigger mode???
-        
-        return self._status
-    
+
+       	return self._status
+
     def repeat_ext_trigger(self, rep):
         """ this is used to produce external triggers to complete data collection by camserver
         """
@@ -469,10 +433,9 @@ class LiXDetectors(Device):
                                     
 try:
     pil = LiXDetectors("XF:16IDC-DT")   
-    pil.activate(["pil1M", "pilW2"])
+    pil.activate(["pil1M"]) #, "pilW2"])
     pil.set_trigger_mode(PilatusTriggerMode.ext_multi)
-    pil.set_thresh()
-    #pil.pilW2.set_flatfield("/exp_path/WAXS2_flat_current.tif")
+    #pil.set_thresh()
 except:
     print("Unable to initialize the Pilatus detectors ...")
 

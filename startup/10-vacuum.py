@@ -49,7 +49,7 @@ class MKSGauge:
         elif Pr==">1.0E+03":
             P0 = 1.1e3
         else:
-            P0 = np.float(Pr)
+            P0 = float(Pr)
 
         return P0                
         

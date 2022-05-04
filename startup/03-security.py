@@ -1,16 +1,33 @@
-import os,stat,time,shutil
+import os,stat,time,shutil,subprocess,re
 from IPython import get_ipython
+from lixtools.atsas import run as run_cmd
 
 username = None
 proposal_id = None
 run_id = None
 data_path = ""
-collection_lock_file = "/nsls2/xf16id1/.lock"
-okay_to_move_file = "/nsls2/xf16id1/.okay_to_move"
+collection_lock_file = f"{data_file_path.lustre_legacy.value}/.lock"
 login_time = -1
 
-def login(uname = None, pID = None, rID = None, debug=True, test_only=False,
-          root_path='/nsls2/xf16id1', replace_froot=pilatus_data_dir, share_with=[]):
+def check_access(fn):
+    if not os.path.exists(fn):
+        raise Exception(f"{fn} does not exist ...")
+    if os.access(fn, os.W_OK):
+        print(f"write access to {fn} verified ...")
+        return
+    
+    # this below may not be necessary
+    out = run_cmd(["getfacl", "-cn", fn])
+    wgrps = [int(t[:-4].lstrip("group:")) for t in re.findall("groups:[0-9]*:rw.", out)]
+    ugrps = os.getgroups()
+    if len(set(wgrps) & set(ugrps))==0:
+        print("groups with write permission: ", wgrps)
+        print("user group memebership: ", ugrps)
+        raise Exception(f"the current user does not have write access to {fn}")
+    else:
+        print(f"write access to {fn} verified ...")
+
+def login(uname = None, pID = None, rID = None, debug=True, test_only=False):
     """ Ask the user for his credentials and proposal information for the data collection
         create_proc_dir: if True, create the directory where h5 files will be saved
         share_with: list of e-mails to share the proc_path with
@@ -20,7 +37,6 @@ def login(uname = None, pID = None, rID = None, debug=True, test_only=False,
     global proposal_id
     global run_id
     global data_path 
-    global o_data_path 
     global proc_path
     global login_time
 
@@ -53,26 +69,17 @@ def login(uname = None, pID = None, rID = None, debug=True, test_only=False,
     login_time = time.time()
     
     if test_only:
-        path = f"{root_path}/data/"
-    else:
-        path = f"{root_path}/data/{current_cycle}/"
-    rpath = str(proposal_id)+"/"+str(run_id)+"/"
-    data_path = path + rpath
-    makedirs(data_path, mode=0o0777)
-    RE.md['data_path'] = data_path
-    o_data_path = data_path    # for IOCs on xf16id-ioc1
+        proposal_id = bl_comm_proposal
+        run_id = 'test'
+    #rpath = f"{proposal_id}/{run_id}/"
+    #data_path = f"{data_destination}/{rpath}"
+    # makedirs(data_path, mode=0o0777) this will be created by the IOC?
+    data_path = f"{data_destination}/%s/{current_cycle}/{proposal_id}/{run_id}/"
+    RE.md['data_path'] = data_path   # different IOCs will be writing into subdirectories
 
-    if replace_froot is not None:
-        if replace_froot[-1]!="/":
-            replace_froot+="/"
-        data_path = data_path.replace(path, replace_froot)
-        makedirs(data_path, mode=0o0777)
-        #input(f"make sure {data_path} exists on the detector conputer. Hit any key to continue ...")
-   
-    if test_only:
-        proc_path = data_path
-    else:
-        proc_path = f"{root_path}/experiments/{current_cycle}/{proposal_id}/{run_id}/"
+    proc_path = f"{proc_destination}/{current_cycle}/{procdir_prefix}{proposal_id}/"
+    check_access(proc_path)
+    proc_path += f"{run_id}/"
     RE.md['proc_path'] = proc_path
     if not os.path.isdir(proc_path):
         makedirs(proc_path, mode=0o2755)
@@ -86,16 +93,13 @@ def login(uname = None, pID = None, rID = None, debug=True, test_only=False,
         elif os.path.isfile(f"{db[-1].start['proc_path']}/exp.h5"):
             shutil.copy(f"{db[-1].start['proc_path']}/exp.h5", f"{proc_path}") 
 
-    if len(share_with)>0:
-        share_dir(proc_path, share_with)
-    
     dw,mo,da,tt,yr = time.asctime().split()
     if not os.path.isdir(proc_path+"log"):
         os.mkdir(proc_path+"log")
     logfile = proc_path+("log/%s." % username)+yr+mo+("%02d_" % int(da))+tt.replace(':', '')
     ip = get_ipython()
-    ip.magic("logstop")
-    ip.magic("logstart -ort %s" % logfile)
+    ip.run_line_magic("logstop", "")
+    ip.run_line_magic("logstart", f"-ort {logfile}")
     ip.logger.log_write(f"**LOGIN** {username} @ {time.asctime()}\n")    
 
     if debug:
@@ -106,7 +110,15 @@ def login(uname = None, pID = None, rID = None, debug=True, test_only=False,
                 print("#STARTDOC : {}".format(time.ctime(t1)))
         RE.subscribe(print_time_callback)
 
-
+def get_IOC_datapath(ioc_name, substitute_path=None):
+    if data_path=="":
+        print("login first to specify data path:")
+        login()
+    if substitute_path:
+        return data_path.replace(data_destination, substitute_path)%ioc_name
+    else:
+        return data_path%ioc_name
+        
 def write_log_msg(msg):
     ip = get_ipython()
     ip.logger.log_write(msg)
@@ -155,12 +167,6 @@ def change_path():
     
     if username==None or proposal_id==None or run_id==None:
         login()
-    
-    # to be safe, need to have some kind of lock
-    #get_lock()
-    #if os.path.exists(link_to_data_path):
-    #    os.remove(link_to_data_path)
-    #os.symlink(data_path, link_to_data_path)
 
     
 def logoff(quiet=False):
@@ -189,12 +195,10 @@ def logoff(quiet=False):
     data_path = ""
     proc_path = None
 
-    del RE.md['owner']
-    del RE.md['proposal_id']
-    del RE.md['run_id']      
-    del RE.md['data_path']      
-    del RE.md['proc_path']      
+    for k in ['owner', 'proposal_id', 'run_id', 'data_path', 'proc_path']:
+        if k in RE.md.keys():
+            del RE.md[k]
 
     ip = get_ipython()
-    ip.magic("logstop")
+    ip.run_line_magic("logstop", "")
  

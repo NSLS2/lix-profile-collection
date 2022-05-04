@@ -32,14 +32,16 @@ def update_res_path(res_path, replace_res_path={}):
             res_path = res_path.replace(rp1, rp2)  
     return res_path
 
-def locate_h5_resource(res, replace_res_path):
+def locate_h5_resource(res, replace_res_path, debug=False):
     """ this is intended to move h5 file created by Pilatus
         these files are originally saved on PPU RAMDISK, but should be moved to the IOC data directory
         this function will look for the file at the original location, and relocate the file first if it is there
         and return the h5 dataset
     """
     fn_orig = res["root"]+res["resource_path"]
-    fn = res["root"]+update_res_path(res["resource_path"], replace_res_path)
+    fn = update_res_path(fn_orig, replace_res_path)
+    if debug:
+        print(f"resource locations: {fn_orig} -> {fn}")
     
     if os.path.exists(fn_orig):
         if os.path.exists(fn):
@@ -47,14 +49,19 @@ def locate_h5_resource(res, replace_res_path):
             raise Exception
         fdir = os.path.dirname(fn)
         if not os.path.exists(fdir):
-            makedirs(proc_path, mode=0o2775)
-        shutil.move(fn_orig, fn)  
+            makedirs(fdir, mode=0o2775)
+        if debug:
+            print(f"copying {fn_orig} to {fdir}")
+        tfn = fn+"_partial"
+        shutil.copy(fn_orig, tfn)
+        os.rename(tfn, fn)
+        os.remove(fn_orig)
     elif not os.path.exists(fn):
         print(f"could not location the resource at either {fn} or {fn_orig} ...")
         raise Exception
     
     hf5 = h5py.File(fn, "r")
-    return hf5["/entry/data/data"]
+    return hf5,hf5["/entry/data/data"]
 
 
 def hdf5_export(headers, filename, debug=False,
@@ -155,10 +162,10 @@ def hdf5_export(headers, filename, debug=False,
                             res_uid = ev['data'][k].split("/")[0]
                             if not res_uid in res_dict[k]:
                                 res_dict[k].append(res_uid)
-                
+
                 if debug:
                     print("res_dict:\n", res_dict)
-                        
+
                 event_times = [e['time'] for e in events]
                 desc_group.create_dataset('time', data=event_times,
                                           compression='gzip', fletcher32=True)
@@ -180,20 +187,25 @@ def hdf5_export(headers, filename, debug=False,
                                                 fletcher32=True)
 
                     if key in list(res_dict.keys()):
-                        res = res_docs[res_dict[key][0]] 
+                        res = res_docs[res_dict[key][0]]
                         print(f"preocessing resource ...\n", res)
+
+                        # pilatus data, change the path from ramdisk to IOC data directory
+                        if key in ["pil1M_image", "pilW2_image"]:
+                            rp = {pilatus_data_dir: data_destination}
+
                         if res['spec'] == "AD_HDF5" and bulk_h5_res:
                             rawdata = None
                             N = len(res_dict[key])
                             print(f"copying data from source h5 file(s) directly, N={N} ...")
                             if N==1:
-                                data = locate_h5_resource(res_docs[res_dict[key][0]])
+                                hf5,data = locate_h5_resource(res_docs[res_dict[key][0]], replace_res_path=rp, debug=debug)
                                 data_group.copy(data, key)
                                 hf5.close()
                                 dataset = data_group[key]
                             else: # ideally this should never happen, only 1 hdf5 file/resource per scan
                                 for i in range(N):
-                                    data = locate_h5_resource(res_docs[res_dict[key][i]])
+                                    hf5,data = locate_h5_resource(res_docs[res_dict[key][i]])
                                     if i==0:
                                         dataset = data_group.create_dataset(
                                                 key, shape=(N, *data.shape), 
@@ -229,10 +241,10 @@ def hdf5_export(headers, filename, debug=False,
                             else:
                                 raise ValueError(f'Array of str with ndim >= 3 can not be saved: {key}')
                         else:  # save numerical data
-                            try:                               
+                            try:
                                 if isinstance(rawdata, list):
                                     blk = rawdata[0]
-                                else: 
+                                else:
                                     blk = rawdata[1]
                                 if isinstance(blk, np.ndarray): # detector image
                                     data = np.vstack(rawdata)
@@ -251,7 +263,7 @@ def hdf5_export(headers, filename, debug=False,
                                     data = np.array(conv_to_list(rawdata)) # issue with list of lists
                                     chunks = False
                                     dataset = data_group.create_dataset(
-                                        key, data=data, 
+                                        key, data=data,
                                         compression='gzip', fletcher32=True)
                             except:
                                 raise
