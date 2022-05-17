@@ -264,7 +264,7 @@ class LIXPilatus(PilatusDetector):
 class LiXDetectors(Device):
     pil1M = Cpt(LIXPilatus, '{Det:SAXS}', name="pil1M", detector_id="SAXS", hostname="xf16idc-pilatus1m.nsls2.bnl.local")
     #pilW1 = Cpt(LIXPilatus, '{Det:WAXS1}', name="pilW1", detector_id="WAXS1", hostname="xf16idc-pilatus300k1.nsls2.bnl.local")
-    #pilW2 = Cpt(LIXPilatus, '{Det:WAXS2}', name="pilW2", detector_id="WAXS2", hostname="xf16idc-pilatus900k.nsls2.bnl.local")
+    pilW2 = Cpt(LIXPilatus, '{Det:WAXS2}', name="pilW2", detector_id="WAXS2", hostname="xf16idc-pilatus900k.nsls2.bnl.local")
     trigger_lock = None
     reset_file_number = True
     _num_images = 1
@@ -277,7 +277,7 @@ class LiXDetectors(Device):
 
     def __init__(self, prefix):
         super().__init__(prefix=prefix, name="pil")
-        self.dets = {"pil1M": self.pil1M} #,  "pilW2": self.pilW2} # "pilW1": self.pilW1,
+        self.dets = {"pil1M": self.pil1M,  "pilW2": self.pilW2} # "pilW1": self.pilW1,
         if self.trigger_lock is None:
             self.trigger_lock = threading.Lock()
         for dname,det in self.dets.items():
@@ -433,9 +433,9 @@ class LiXDetectors(Device):
                                     
 try:
     pil = LiXDetectors("XF:16IDC-DT")   
-    pil.activate(["pil1M"]) #, "pilW2"])
+    pil.activate(["pil1M", "pilW2"])
     pil.set_trigger_mode(PilatusTriggerMode.ext_multi)
-    #pil.set_thresh()
+    pil.set_thresh()
 except:
     print("Unable to initialize the Pilatus detectors ...")
 
