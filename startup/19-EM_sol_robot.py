@@ -38,11 +38,11 @@ class MethodPV(PV):
 
 def waitReady(timeout=-1):    
 	state = PV("SW:State")
-	start = time.clock()
+	start = time.perf_counter()
 	while True:
 		if state.get() not in ("Running","Moving","Busy","Initialize"):
 			break
-		if (timeout>=0) and ((time.clock() - start) > timeout):
+		if (timeout>=0) and ((time.perf_counter() - start) > timeout):
 			raise Exception("Timeout waiting ready")
 		time.sleep(0.01)
 
