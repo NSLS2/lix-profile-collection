@@ -22,7 +22,7 @@ class TIFFPluginWithFileStore(TIFFPlugin, FileStoreTIFFIterativeWrite):
         return fname, read_path, write_path
 
     def stage(self):
-        global proposal_id,run_id,current_cycle,current_sample
+        global proposal_id, run_id, current_cycle, current_sample
         rpath = f"{get_IOC_datapath(self.parent.name)}/{current_sample}"
         self.write_path_template = rpath
         self.create_directory.put(-6)  # create up to 4 levels: ioc, cycle, pid, rid
