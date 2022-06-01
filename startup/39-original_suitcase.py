@@ -205,7 +205,7 @@ def hdf5_export(headers, filename, debug=False,
                                 dataset = data_group[key]
                             else: # ideally this should never happen, only 1 hdf5 file/resource per scan
                                 for i in range(N):
-                                    hf5,data = locate_h5_resource(res_docs[res_dict[key][i]])
+                                    hf5, data = locate_h5_resource(res_docs[res_dict[key][i]])
                                     if i==0:
                                         dataset = data_group.create_dataset(
                                                 key, shape=(N, *data.shape), 
