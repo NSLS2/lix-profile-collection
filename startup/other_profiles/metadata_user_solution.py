@@ -2,7 +2,6 @@ RE.md['det_pos'] = ({'saxs': {'x':saxs.x.position, 'y':saxs.y.position, 'z':saxs
                      'waxs1': {'x':waxs1.x.position, 'y':waxs1.y.position, 'z':waxs1.z.position},
                      'waxs2': {'x':waxs2.x.position, 'y':waxs2.y.position, 'z':waxs2.z.position},
                     })
-del saxs,waxs1,waxs2
 
 RE.md['optics'] = ({'wbm_y': wbm.y.position,
                     'wbm_pitch': wbm.pitch.position,
@@ -13,7 +12,6 @@ RE.md['optics'] = ({'wbm_y': wbm.y.position,
                     'vfm_y1': vfm.y1.position,
                     'vfm_y2': vfm.y2.position,
                     })
-del wbm,hfm,vfm
 
 if crl:
     RE.md['CRL'] = ({'state': crl.state(), 
@@ -23,13 +21,11 @@ if crl:
                      'y1': crl.y2.position,
                      'z': crl.z.position,
                     })
-    del crl
 else:
     RE.md['CRL'] = 'undefined'
 
 def update_metadata():
     print('updating meta data ...', end='')
-#    RE.md['BPM']['beam position'] = ({'x': best.x_mean.get(), 'y': best.y_mean.get()})
     RE.md['energy'] = ({'mono_bragg': mono.bragg.position,
                     'energy': pseudoE.energy.position, 
                     'gap': pseudoE.IVUgap.position
@@ -41,7 +37,7 @@ def update_metadata():
                       })
 
     RE.md['BPM'] = ({'stage position': {'x': bpm_pos.x.position, 'y': bpm_pos.y.position},
-                     'beam position': {'x': best.x_mean.get(), 'y': best.y_mean.get()}
+                     'beam position': {'x': bpm.x_mean.get(), 'y': bpm.y_mean.get()}
                     })
-    #RE.md['XBPM'] = XBPM_pos() 
+    RE.md['XBPM'] = xbpm.pos() 
     print('Done.')
