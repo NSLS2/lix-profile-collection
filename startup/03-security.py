@@ -15,7 +15,7 @@ def check_access(fn):
     if os.access(fn, os.W_OK):
         print(f"write access to {fn} verified ...")
         return
-    
+
     # this below may not be necessary
     out = run_cmd(["getfacl", "-cn", fn])
     wgrps = [int(t[:-4].lstrip("group:")) for t in re.findall("groups:[0-9]*:rw.", out)]
@@ -51,8 +51,11 @@ def login(uname = None, pID = None, rID = None, debug=True, test_only=False):
         correct_info = True
     elif test_only:
         username = "lix"
-        proposal_id = "test"
-        run_id = "test"
+        proposal_id = bl_comm_proposal
+        if rID:
+            run_id = rID
+        else:
+            run_id = "test"
         correct_info = True
 
     while not correct_info:
@@ -67,10 +70,7 @@ def login(uname = None, pID = None, rID = None, debug=True, test_only=False):
     RE.md['proposal_id'] = proposal_id
     RE.md['run_id'] = run_id
     login_time = time.time()
-    
-    if test_only:
-        proposal_id = bl_comm_proposal
-        run_id = 'test'
+
     #rpath = f"{proposal_id}/{run_id}/"
     #data_path = f"{data_destination}/{rpath}"
     # makedirs(data_path, mode=0o0777) this will be created by the IOC?
