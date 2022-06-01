@@ -43,10 +43,13 @@ def locate_h5_resource(res, replace_res_path, debug=False):
     if debug:
         print(f"resource locations: {fn_orig} -> {fn}")
     
-    if os.path.exists(fn_orig):
-        if os.path.exists(fn):
-            print(f"both {fn} and {fn_orig} exist, resolve the conflict manually first ..." )
-            raise Exception
+    if not(os.path.exists(fn_orig) or os.path.exists(fn)):
+        print(f"could not location the resource at either {fn} or {fn_orig} ...")
+        raise Exception
+    if os.path.exists(fn_orig) and os.path.exists(fn) and fn_orig!=fn:
+        print(f"both {fn} and {fn_orig} exist, resolve the conflict manually first ..." )
+        raise Exception
+    if not os.path.exists(fn):
         fdir = os.path.dirname(fn)
         if not os.path.exists(fdir):
             makedirs(fdir, mode=0o2775)
@@ -56,9 +59,6 @@ def locate_h5_resource(res, replace_res_path, debug=False):
         shutil.copy(fn_orig, tfn)
         os.rename(tfn, fn)
         os.remove(fn_orig)
-    elif not os.path.exists(fn):
-        print(f"could not location the resource at either {fn} or {fn_orig} ...")
-        raise Exception
     
     hf5 = h5py.File(fn, "r")
     return hf5,hf5["/entry/data/data"]

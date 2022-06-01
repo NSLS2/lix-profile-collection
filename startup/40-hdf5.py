@@ -220,7 +220,8 @@ def send_to_packing_queue(uid, data_type, froot=data_file_path.gpfs, move_first=
             print(f"scan {uid} was not successful.")
             return 
 
-    threading.Thread(target=pack_and_process, args=(data_type,uid,proc_path,move_first,)).start() 
+    threading.Thread(target=pack_and_process, args=(data_type,uid,proc_path,)).start()
+    #threading.Thread(target=pack_and_process, args=(data_type,uid,proc_path,move_first,)).start() 
     print("processing thread started ...")                    
         
 
