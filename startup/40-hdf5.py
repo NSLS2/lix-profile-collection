@@ -284,7 +284,7 @@ def pack_and_process(data_type, uid, dest_dir):
                 dt.load_data(debug="quiet")
             dt.fh5.close()
             del dt,dt_exp            
-            if fh5_name!="tmp.h5":  # temporary fix, for some reason other processes cannot open the packed file
+            if fh5_name != "tmp.h5":  # temporary fix, for some reason other processes cannot open the packed file
                 os.system(f"cd {dest_dir} ; cp tmp.h5 {fh5_name} ; rm tmp.h5")
             if data_type=="sol":    
                 try:
