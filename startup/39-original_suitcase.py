@@ -154,7 +154,7 @@ def hdf5_export(headers, filename, debug=False,
 
                 res_dict = {}
                 for k, v in list(events[0]['data'].items()):
-                    if not isinstance(v,str):
+                    if not isinstance(v, str):
                         continue
                     if v.split('/')[0] in res_docs.keys():
                         res_dict[k] = []
