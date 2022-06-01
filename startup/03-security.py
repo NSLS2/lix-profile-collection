@@ -22,7 +22,7 @@ def check_access(fn):
     ugrps = os.getgroups()
     if len(set(wgrps) & set(ugrps))==0:
         print("groups with write permission: ", wgrps)
-        print("user group memebership: ", ugrps)
+        print("user group membership: ", ugrps)
         raise Exception(f"the current user does not have write access to {fn}")
     else:
         print(f"write access to {fn} verified ...")
