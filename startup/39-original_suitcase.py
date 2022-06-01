@@ -61,7 +61,7 @@ def locate_h5_resource(res, replace_res_path, debug=False):
         os.remove(fn_orig)
     
     hf5 = h5py.File(fn, "r")
-    return hf5,hf5["/entry/data/data"]
+    return hf5, hf5["/entry/data/data"]
 
 
 def hdf5_export(headers, filename, debug=False,
