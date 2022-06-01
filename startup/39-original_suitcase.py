@@ -218,7 +218,7 @@ def hdf5_export(headers, filename, debug=False,
                             rawdata = header.table(stream_name=descriptor['name'], 
                                                    fields=[key], fill=True)[key]   # this returns the time stamps as well
                     else:
-                        print(f"compiling resource data from individual envents ...")
+                        print(f"compiling resource data from individual events ...")
                         rawdata = [e['data'][key] for e in events]
 
                     if rawdata is not None:
