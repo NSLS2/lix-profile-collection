@@ -199,7 +199,7 @@ def hdf5_export(headers, filename, debug=False,
                             N = len(res_dict[key])
                             print(f"copying data from source h5 file(s) directly, N={N} ...")
                             if N==1:
-                                hf5,data = locate_h5_resource(res_docs[res_dict[key][0]], replace_res_path=rp, debug=debug)
+                                hf5, data = locate_h5_resource(res_docs[res_dict[key][0]], replace_res_path=rp, debug=debug)
                                 data_group.copy(data, key)
                                 hf5.close()
                                 dataset = data_group[key]
