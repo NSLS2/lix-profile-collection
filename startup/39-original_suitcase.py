@@ -11,7 +11,7 @@ import numpy as np
 import warnings
 import h5py
 import json
-import copy,shutil
+import copy, shutil
 from databroker import Header
 
 def conv_to_list(d): 
