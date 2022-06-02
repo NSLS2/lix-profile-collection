@@ -44,7 +44,7 @@ def locate_h5_resource(res, replace_res_path, debug=False):
         print(f"resource locations: {fn_orig} -> {fn}")
     
     if not(os.path.exists(fn_orig) or os.path.exists(fn)):
-        print(f"could not location the resource at either {fn} or {fn_orig} ...")
+        print(f"could not locate the resource at either {fn} or {fn_orig} ...")
         raise Exception
     if os.path.exists(fn_orig) and os.path.exists(fn) and fn_orig!=fn:
         print(f"both {fn} and {fn_orig} exist, resolve the conflict manually first ..." )
