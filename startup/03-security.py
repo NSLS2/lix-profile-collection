@@ -1,4 +1,10 @@
-import os,stat,time,shutil,subprocess,re
+import os
+import re
+import shutil
+import stat
+import subprocess
+import time
+
 from IPython import get_ipython
 from lixtools.atsas import run as run_cmd
 
