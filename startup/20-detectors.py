@@ -25,7 +25,7 @@ class TIFFPluginWithFileStore(TIFFPlugin, FileStoreTIFFIterativeWrite):
         global proposal_id, run_id, current_cycle, current_sample
         rpath = f"{get_IOC_datapath(self.parent.name)}/{current_sample}"
         self.write_path_template = rpath
-        self.create_directory.put(-6)  # create up to 4 levels: ioc, cycle, pid, rid
+        self.create_directory.put(-6)  # create up to 6 levels: ioc, cycle, pid, rid, ???, ??
         super().stage()    
 
 class StandardProsilica(ProsilicaDetector, SingleTrigger):  
