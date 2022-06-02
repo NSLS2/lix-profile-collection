@@ -345,7 +345,7 @@ def process_packing_queue():
                 print(f"scan {uid} was not successful.")
                 return 
 
-        threading.Thread(target=pack_and_process, args=(data_type,uid,path,move_first,)).start() 
+        threading.Thread(target=pack_and_process, args=(data_type,uid,path,)).start() 
         print("processing thread started ...")            
 
 
