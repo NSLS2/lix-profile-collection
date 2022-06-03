@@ -160,11 +160,12 @@ class XPSmotor(PositionerBase):
         while True:
             err,ret = self.controller.xps.GroupMotionStatusGet(self.controller.sID, grp, 
                                                                len(self.controller.groups[grp]))
-            if err=='0':
+            if err=='0' and len(ret)>0:
                 break
             time.sleep(0.5)
+            print("trouble getting group status, retrying ...: ", err,ret)
+ 
         self._moving = bool(int(ret.split(',')[self.controller.motors[self.motorName]['index']]))
-
         return self._moving
     
     @property
@@ -385,11 +386,11 @@ class XPStraj(Device):
         '''Describe details for the flyer collect() method'''
         ret = {}
         ret[self.traj_par['fast_axis']] = {'dtype': 'number',
-                                           'shape': (1,),
+                                           'shape': (len(self.read_back['fast_axis']),),
                                            'source': 'PVT trajectory readback position'}
         if self.motor2 is not None:
             ret[self.traj_par['slow_axis']] = {'dtype': 'number',
-                                               'shape': (1,),
+                                               'shape': (len(self.read_back['slow_axis']),),
                                                'source': 'motor position readback'}
         for det in pil.active_detectors:
             ret[f'{det.name}_image'] = det.make_data_key() 
@@ -425,7 +426,7 @@ class XPStraj(Device):
         self.flying_motor = self.controller.motors[self.motors[motor.name]]['ophyd']
         
         err,ret = self.xps.PositionerMaximumVelocityAndAccelerationGet(self.sID, self.motors[motor.name])
-        mvel,macc = np.asarray(ret.split(','), dtype=np.float)
+        mvel,macc = np.asarray(ret.split(','), dtype=float)
         midx = self.controller.motors[self.motors[motor.name]]['index']
         
         jj = np.zeros(Nr+N+Nr)

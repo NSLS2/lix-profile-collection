@@ -7,6 +7,6 @@ resources:
       endpoint: github
 
 jobs:
-  - template: collection-2021-1.0.yml@templates
+  - template: 2022-2.3-py39.yml@templates
     parameters:
       beamline_acronym: LIX

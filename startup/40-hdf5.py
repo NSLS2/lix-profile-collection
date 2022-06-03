@@ -1,14 +1,9 @@
-#from suitcase import hdf5  #,nexus # available in suitcase 0.6
-
 import h5py,json,os
 import threading
 import numpy as np
 import epics,socket
 from collections import deque
 
-#global default_data_path_root
-#global substitute_data_path_root
-#global DET_replace_data_path
 global proc_path
 
 def lsh5(hd, prefix='', top_only=False):
@@ -46,9 +41,33 @@ def pack_h5_with_lock(*args, **kwargs):
         ret = None
     pack_h5_lock.release()    
     return ret
+
+
+def compile_replace_res_path(h):
+    """ protocol prior to May 2022:
+            md['data_path'] specifies the directories all data files are supposed to go
+                e.g. /nsls2/xf16id1/data/2022-1/310121/308824
+            the original location of the data is recorded in the databroker, but not in the meta data
+            however, this location should follow the format of the {pilatus_data_dir}/{proposal_id}/{run_id} 
+        protocol since May 2022:
+            md['data_path'] specifies where all IOC data are supposed to go
+                e.g. /nsls2/data/lix/legacy/%s/2022-1/310032/test
+            md['pilatus']['ramdisk'] specifies where the Pilatus data are originally saved
+                e.g. /exp_path/hdf
+    """
+    md = h.start
+    ret = {}
+    dpath = md['data_path']
+    try:
+        ret[md['pilatus']['ramdisk']] = dpath.split("%s")[0]
+    except:
+        cycle_id = re.search("20[0-9][0-9]-[0-9]", dpath)[0]
+        ret[pilatus_data_dir] = dpath.split(cycle_id)[0]+cycle_id
     
+    return ret
+
 def pack_h5(uids, dest_dir='', fn=None, fix_sample_name=True, stream_name=None, 
-            attach_uv_file=False, delete_old_file=True, include_motor_pos=True,
+            attach_uv_file=False, delete_old_file=True, include_motor_pos=True, debug=False,
             fields=['em2_current1_mean_value', 'em2_current2_mean_value',
                     'em1_sum_all_mean_value', 'em2_sum_all_mean_value', 'em2_ts_SumAll', 'em1_ts_SumAll',
                     'xsp3_spectrum_array_data', "pilatus_trigger_time",
@@ -81,6 +100,10 @@ def pack_h5(uids, dest_dir='', fn=None, fix_sample_name=True, stream_name=None,
                 fn = header.table(fields=[f])[f][1]
         headers = [header]
 
+    # if replace_res_path is not specified, try to figure out whether it is necessary
+    if len(replace_res_path)==0: 
+        replace_res_path = compile_replace_res_path(headers[0])
+        
     fds0 = headers[0].fields()
     # only these fields are considered relevant to be saved in the hdf5 file
     fds = list(set(fds0) & set(fields))
@@ -103,7 +126,8 @@ def pack_h5(uids, dest_dir='', fn=None, fix_sample_name=True, stream_name=None,
             pass
         
     print(fds)
-    hdf5_export(headers, fn, fields=fds, stream_name=stream_name, use_uid=False, replace_res_path=replace_res_path) #, mds= db.mds, use_uid=False) 
+    hdf5_export(headers, fn, fields=fds, stream_name=stream_name, use_uid=False, 
+                replace_res_path=replace_res_path, debug=debug) #, mds= db.mds, use_uid=False) 
     
     # by default the groups in the hdf5 file are named after the scan IDs
     if fix_sample_name:
@@ -196,8 +220,8 @@ def send_to_packing_queue(uid, data_type, froot=data_file_path.gpfs, move_first=
             print(f"scan {uid} was not successful.")
             return 
 
-    PilatusCBFHandler.froot = data_file_path[froot.name]
-    threading.Thread(target=pack_and_move, args=(data_type,uid,proc_path,move_first,)).start() 
+    threading.Thread(target=pack_and_process, args=(data_type,uid,proc_path,)).start()
+    #threading.Thread(target=pack_and_process, args=(data_type,uid,proc_path,move_first,)).start() 
     print("processing thread started ...")                    
         
 
@@ -216,31 +240,7 @@ def send_to_packing_queue_remote(uid, datatype, froot=data_file_path.gpfs, move_
     s.send(msg.encode('ascii'))
     s.close()
 
-
-def move_files_from_RAMDISK(uids, dir_name=None):
-    for uid in uids:
-        print(f'moving files for {uid} from RAMDISK to GPFS ...')
-        h = db[uid]        
-        p1 = h.start['data_path']  
-        #p2 = p1.replace(default_data_path_root, '/ramdisk/')
-        p2 = p1.replace(data_file_path.gpfs.value, '/ramdisk')
-        sample_name = h.start['sample_name']
-        if dir_name is not None:
-            cmd = f"rsync -ahv --remove-source-files det@10.16.0.14:{p2}{dir_name} {p1}"
-        elif "subdir" in h.start.keys():
-            subdir = h.start['subdir']
-            cmd = f"rsync -ahv --remove-source-files det@10.16.0.14:{p2}{subdir} {p1}{subdir}"
-        elif os.system(f"ssh -q det@10.16.0.14 [[ -d {p2}{sample_name} ]]")==0:
-            # if sample name is a directory on the RAMDISK, move the entire directory
-            cmd = f"rsync -ahv --remove-source-files det@10.16.0.14:{p2}{sample_name} {p1}"
-        else:        
-            cmd = f"rsync -ahv --remove-source-files det@10.16.0.14:{p2}{sample_name}_*.* {p1}"
-            #os.system(f"rsync -ahv --remove-source-files det@10.16.0.14:{p2}{h.start['sample_name']}_*.log {p1}")          
-        print(cmd)
-        os.system(cmd)
-
-
-def pack_and_move(data_type, uid, dest_dir, move_first=True):
+def pack_and_process(data_type, uid, dest_dir):
     # useful for moving files from RAM disk to GPFS during fly scans
     # 
     # assume other type of data are saved on RAM disk as well (GPFS not working for WAXS2)
@@ -248,7 +248,6 @@ def pack_and_move(data_type, uid, dest_dir, move_first=True):
     #global pilatus_trigger_mode  #,CBF_replace_data_path 
     
     print(f"packing: {data_type}, {uid}, {dest_dir}")
-    print(f"data source: {PilatusCBFHandler.froot}")
     t0 = time.time()
     # if the dest_dir contains exp.h5, read detectors/qgrid from it
     try:
@@ -257,29 +256,11 @@ def pack_and_move(data_type, uid, dest_dir, move_first=True):
         dt_exp = None
 
     dir_name = None
-    original_file_path = PilatusCBFHandler.froot
-    
-    if PilatusCBFHandler.froot==data_file_path.ramdisk and move_first:
-        print("move files to GPFS first ...")
-        if isinstance(uid, str):
-            uids = [uid]
-        else:
-            uids = uid
-        hdr = db[uids[0]].start
-        if 'holderName' in list(hdr.keys()):
-            dir_name = hdr['holderName']
-        move_files_from_RAMDISK(uids, dir_name)
-        PilatusCBFHandler.froot=data_file_path.gpfs
     
     if data_type in ["multi", "sol", "mscan", "mfscan"]:
         uids = uid.split('|')
         if data_type=="sol":
             sb_dict = json.loads(uids.pop())
-            PilatusCBFHandler.trigger_mode = triggerMode.fly_scan
-        elif data_type=="mfscan":
-            PilatusCBFHandler.trigger_mode = triggerMode.fly_scan
-        else:
-            PilatusCBFHandler.trigger_mode = triggerMode.external_trigger
         ## assume that the meta data contains the holderName
         if 'holderName' not in list(db[uids[0]].start.keys()):
             print("cannot find holderName from the header, using tmp.h5 as filename ...")
@@ -303,24 +284,15 @@ def pack_and_move(data_type, uid, dest_dir, move_first=True):
                 dt.load_data(debug="quiet")
             dt.fh5.close()
             del dt,dt_exp            
-            if fh5_name is not "tmp.h5":  # temporary fix, for some reason other processes cannot open the packed file
+            if fh5_name != "tmp.h5":  # temporary fix, for some reason other processes cannot open the packed file
                 os.system(f"cd {dest_dir} ; cp tmp.h5 {fh5_name} ; rm tmp.h5")
-            try:
-                gen_report(fh5_name)
-            except:
-                pass
+            if data_type == "sol":
+                try:
+                    gen_report(fh5_name)
+                except:
+                    pass
     elif data_type=="HPLC":
         uids = [uid]
-        if db[uid].start['plan_name']=="hplc_scan":
-            # this was software_trigger_single_frame when using the flyer-based hplc_scan
-            PilatusCBFHandler.trigger_mode = triggerMode.software_trigger_single_frame
-        else:
-            # data collected using ct
-            # could be ct(num=1) (software multiframe trigger), or ct(num=N) (hardware trigger)
-            if db[uid].start['num_points']==1:
-                PilatusCBFHandler.trigger_mode = triggerMode.software_trigger_multi_frame
-            else:
-                PilatusCBFHandler.trigger_mode = triggerMode.external_trigger
         fn = pack_h5_with_lock(uid, dest_dir=dest_dir, attach_uv_file=True)
         if fn is not None and dt_exp is not None:
             print('procesing ...')
@@ -329,10 +301,6 @@ def pack_and_move(data_type, uid, dest_dir, move_first=True):
             dt.fh5.close()
             del dt,dt_exp
     elif data_type=="flyscan" or data_type=="scan":
-        if data_type=="flyscan":
-            PilatusCBFHandler.trigger_mode = triggerMode.fly_scan
-        else:
-            PilatusCBFHandler.trigger_mode = triggerMode.external_trigger
         uids = [uid]
         fn = pack_h5_with_lock(uid, dest_dir=dest_dir)
     else:
@@ -342,11 +310,6 @@ def pack_and_move(data_type, uid, dest_dir, move_first=True):
     if fn is None:
         return # packing unsuccessful, 
     print(f"{time.asctime()}: finished packing/processing, total time lapsed: {time.time()-t0:.1f} sec ...")
-
-    if PilatusCBFHandler.froot==data_file_path.ramdisk and not move_first:
-        move_files_from_RAMDISK(uids)
-        
-    original_file_path = PilatusCBFHandler.froot
 
             
 def process_packing_queue():
@@ -381,10 +344,8 @@ def process_packing_queue():
             if db[uid].stop['exit_status'] != 'success': # the scan actually finished
                 print(f"scan {uid} was not successful.")
                 return 
-        #print(uid)
-        #print(path)
-        PilatusCBFHandler.froot = data_file_path[frn]
-        threading.Thread(target=pack_and_move, args=(data_type,uid,path,move_first,)).start() 
+
+        threading.Thread(target=pack_and_process, args=(data_type,uid,path,)).start() 
         print("processing thread started ...")            
 
 

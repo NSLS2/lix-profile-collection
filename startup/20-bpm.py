@@ -89,7 +89,5 @@ em0 = LiX_EM('XF:16IDA{NSLS_EM:3}', name='em0')
 em0.read_attrs = ['x_position', 'y_position']
 
 #tetramm = TetrAMM('XF:16IDC-ES{TETRAMM:1}', name='tetramm')
-
-
 bpm = Best('XF:16IDB-CT{Best}', name='bpm')
 

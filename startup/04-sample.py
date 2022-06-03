@@ -1,14 +1,8 @@
 import glob,re
-from enum import Enum
-
-class data_file_path(Enum):
-    old_gpfs = '/GPFS/xf16id/exp_path'
-    gpfs = '/nsls2/xf16id1/data'
-    ramdisk = '/exp_path'
 
 current_sample="test"
 
-def check_sample_name(sample_name, sub_dir=None, check_for_duplicate=True, check_dir=False):    
+def check_sample_name(sample_name, ioc_name="pil1M", sub_dir=None, check_for_duplicate=True, check_dir=False):    
     if len(sample_name)>42:  # file name length limit for Pilatus detectors
         print("Error: the sample name is too long:", len(sample_name))
         return False
@@ -18,7 +12,7 @@ def check_sample_name(sample_name, sub_dir=None, check_for_duplicate=True, check
         return False
 
     if check_for_duplicate:
-        f_path = data_path
+        f_path = data_path%ioc_name
         if sub_dir is not None:
             f_path += ('/'+sub_dir+'/')
         #if PilatusFilePlugin.froot == data_file_path.ramdisk:
@@ -47,7 +41,11 @@ def change_sample(sample_name=None, check_sname=True, exception=True):
     if sample_name is None or sample_name == "":
         sample_name = "test"
     elif check_sname:
-        ret = check_sample_name(sample_name) #, exception)
+        try:
+            ioc_name = pil.active_detectors[0].name
+        except:
+            ioc_name = "pil1M"
+        ret = check_sample_name(sample_name, ioc_name=ioc_name) #, exception)
         if ret==False and exception:
             raise Exception()
 

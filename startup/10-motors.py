@@ -214,7 +214,7 @@ dda = SlitsCenterAndGap('XF:16IDC-OP{Slt:DDA', name='dda')
 sg1 = SlitsCenterAndGap('XF:16IDC-OP{Slt:G1', name='sg1')
 
 ## Guard Slits 2
-sg2 = SlitsCenterAndGap('XF:16IDC-OP{Slt:G2', name='sg2')
+sg2 = Blades('XF:16IDC-OP{Slt:G2', name='sg2')
 
 #########################################
 ## Detector System
