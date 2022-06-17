@@ -107,7 +107,7 @@ class LIXhdfPlugin(HDF5Plugin, LiXFileStoreHDF5):
         color_mode = self.parent.cam.color_mode.get(as_string=True)
         if color_mode == 'Mono':
             ret[key]['shape'] = [
-                1,
+                self.get_frames_per_point(),
                 self.array_size.height.get(),
                 self.array_size.width.get()
                 ]
