@@ -352,14 +352,10 @@ class XPStraj(Device):
         data = {}
         ts = {}
 
-        # bandage solution for getting timestamps
-        # need to have ssh key on the data collection workstation
-        fn0 = "/tmp/data.log"
-        fn = caget(f"{pil.active_detectors[0].cam.prefix}FullFileName_RBV", as_string=True).rsplit("_", maxsplit=1)[0]+".log"
-        os.system(f"scp det@{pil.active_detectors[0].hostname}:{fn} {fn0}")
-        fh = open(fn0, "r")
-        lns = fh.read().split('\n')[1:-2]
-        fh.close()
+        fn = pil.active_detectors[0].cam.full_file_name.get().rsplit("_", maxsplit=1)[0]+".log"
+        with open(fn.replace('ramdisk', 'exp_path')) as fh:
+            lns = fh.read().split('\n')[1:-2]
+
         timestamps = [datetime.fromisoformat(l.split()[0]).timestamp() for l in lns]
 
         data[self.traj_par['fast_axis']] = self.read_back['fast_axis']

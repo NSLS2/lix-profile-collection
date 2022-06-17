@@ -128,7 +128,14 @@ class LIXhdfPlugin(HDF5Plugin, LiXFileStoreHDF5):
         else:
             return 1
 
+from ophyd.areadetector.cam import PilatusDetectorCam as _PilatusDetectorCam
+
+class LIXPilatusCam(_PilatusDetectorCam):
+    full_file_name = ADComponent(EpicsSignalRO, 'FullFileName_RBV', string=True)
+    
+
 class LIXPilatus(PilatusDetector):
+    cam = ADComponent(LIXPilatusCam, 'cam1:')
     hdf = Cpt(LIXhdfPlugin, suffix="HDF1:",
               write_path_template="", root='/nsls2/data/lix/legacy/')
 
