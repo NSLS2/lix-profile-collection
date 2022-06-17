@@ -93,6 +93,11 @@ class SolutionScatteringExperimentalModule():
     holder_x = EpicsMotor('XF:16IDC-ES:Sol{Enc-Ax:Xl}Mtr', name='sol_holder_x')
     xc = EpicsMotor('XF:16IDC-ES:Scan{Ax:XC}Mtr', name='ss_xc')
 
+    ready_for_hplc = EpicsSignal('XF:16IDC-ES:Sol{ctrl}HPLCout')
+    hplc_injected = EpicsSignalRO('XF:16IDC-ES:Sol{ctrl}HPLCin1')
+    hplc_done = EpicsSignalRO('XF:16IDC-ES:Sol{ctrl}HPLCin2')
+    hplc_bypass = EpicsSignal('XF:16IDC-ES:Sol{ctrl}HPLC_bypass')
+    
     # the needles are designated 1 (upstream) and 2
     # the flow cells are designated 1 (bottom), 2 and 3
     # needle 1 is connected to the bottom flowcell, needle 2 connected to the top, HPLC middle
@@ -318,9 +323,12 @@ class SolutionScatteringExperimentalModule():
                 raise Exception("could not move the holder down.")
             self.tube_holder_pos = "down"                
         elif pos=='up':
-            # if self.pcr_v_enable.get()==0 and (self.holder_x.position**2>1e-4 and self.tube_pos!=12):
-            # revised by LY, 2017Mar23, to add bypass
-            if self.pcr_v_enable.get()==0 and self.bypass_tube_pos_ssr==False:
+            while retry>0:
+                if self.pcr_v_enable.get() or self.bypass_tube_pos_ssr:
+                    break
+                sleep(0.5)
+                retry -= 1
+            if retry==0:
                 raise RuntimeError('attempting to raise PCR tubes while mis-aligned !!') 
             print('moving PCR tube holder up ...')
             self.ctrl.sv_pcr_tubes.put('up')
@@ -464,7 +472,10 @@ class SolutionScatteringExperimentalModule():
         if wait:
             self.ctrl.wait()
            
-    def collect_data(self, vol=45, exp=2, repeats=3, sample_name='test', check_sname=True):
+    def collect_data(self, vol=45, exp=2, repeats=3, sample_name='test', check_sname=True, md=None):
+        _md = {"experiment": "solution"}
+        _md.update(md or {})
+        
         nd = self.verify_needle_for_tube(self.tube_pos, nd=None)
         
         change_sample(sample_name, check_sname=check_sname)
@@ -489,7 +500,7 @@ class SolutionScatteringExperimentalModule():
                                  "watch_name": nd, 
                                  "release_delay": self.delay_before_release}).start()
         self.ctrl.pump_mvR(vol+self.vol_flowcell_headroom)
-        RE(ct([pil], num=1))   # number of exposures determined by pil.set_num_images()
+        RE(ct([pil], num=1, md=_md))   # number of exposures determined by pil.set_num_images()
         sd.monitors = []
         change_sample()
         
@@ -507,8 +518,8 @@ class SolutionScatteringExperimentalModule():
         self.ctrl.wait()       
         self.move_tube_holder('down')
         
-    def measure(self, tn, nd=None, vol=50, exp=5, repeats=3, sample_name='test', 
-                delay=0, returnSample=True, washCell=True, concurrentOp=False, check_sname=True):
+    def measure(self, tn, nd=None, vol=50, exp=5, repeats=3, sample_name='test',
+                delay=0, returnSample=True, washCell=True, concurrentOp=False, check_sname=True, md=None):
         ''' tn: tube number: 1-18
             exp: exposure time
             repeats: # of exposures
@@ -545,7 +556,7 @@ class SolutionScatteringExperimentalModule():
         
         print('****************')
         print('collecting data %s' %sample_name)
-        self.collect_data(vol, exp, repeats, sample_name, check_sname=check_sname)
+        self.collect_data(vol, exp, repeats, sample_name, check_sname=check_sname, md=md)
         
         if returnSample:
             # move the sample back to the end of the injection needle

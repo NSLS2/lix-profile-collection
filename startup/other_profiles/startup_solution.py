@@ -39,7 +39,7 @@ def plot_ref_h5():
     
 def collect_std(r_range=1.5):
     holderName = "std"
-    RE.md['holderName'] = holderName
+    md = {'holderName': holderName}
     pil.use_sub_directory(holderName)
     pil.set_trigger_mode(PilatusTriggerMode.soft)
     pil.set_num_images(1)
@@ -49,10 +49,9 @@ def collect_std(r_range=1.5):
     sol.select_flow_cell('std', r_range=r_range)    
 
     change_sample(f"AgBH-{ts}")
-    RE(ct([pil,em1,em2], num=1))
+    RE(ct([pil,em1,em2], num=1, md=md))
     
     pil.use_sub_directory()
-    del RE.md['holderName']
 
     # now pack h5 file and recalibrate
     pack_h5([last_scan_uid], fn="std.h5")
@@ -66,7 +65,7 @@ def collect_std(r_range=1.5):
 def collect_reference_from_tube12():
     nd_list = ['upstream','downstream']
     holderName='reference'
-    RE.md['holderName'] = holderName
+    md = {'holderName': holderName}
     pil.use_sub_directory(holderName)
     ts = gettimestamp()   
     pil.set_trigger_mode(PilatusTriggerMode.ext_multi)
@@ -76,7 +75,7 @@ def collect_reference_from_tube12():
     sol.select_flow_cell("empty")
     sname = f"empty_{ts}"
     change_sample(sname)
-    RE(ct([pil,em1,em2], num=5))
+    RE(ct([pil,em1,em2], num=5, md=md))
 
     for pos in [1,2]:
         nd = sol.verify_needle_for_tube(pos, None)
@@ -87,14 +86,13 @@ def collect_reference_from_tube12():
         change_sample(sname)
         RE(ct([pil,em1,em2], num=5))
         sname = f"{fcell}_water_{ts}"
-        sol.measure(pos, sample_name=sname, exp=1, repeats=5)
+        sol.measure(pos, sample_name=sname, exp=1, repeats=5, md=md)
     pil.use_sub_directory()
-    del RE.md['holderName'] 
 
 def collect_reference():
     nd_list = ['upstream','downstream']
     holderName='reference'
-    RE.md['holderName'] = holderName
+    md = {'holderName': holderName}
     pil.use_sub_directory(holderName)
     ts = gettimestamp()   
     pil.set_trigger_mode(PilatusTriggerMode.ext_multi)
@@ -104,7 +102,7 @@ def collect_reference():
     sol.select_flow_cell("empty")
     sname = f"empty_{ts}"
     change_sample(sname)
-    RE(ct([pil,em1,em2], num=5))
+    RE(ct([pil,em1,em2], num=5, md=md))
 
     for nd in nd_list:
         fcell = sol.flowcell_nd[nd]
@@ -121,16 +119,15 @@ def collect_reference():
                 sol.ctrl.water_pump_spd.put(0.8)         
                 sol.load_water(nd, vol=50)
             change_sample(sname)
-            RE(ct([pil,em1,em2], num=5))
+            RE(ct([pil,em1,em2], num=5, md=md))
             sol.wash_needle(nd, option="dry only")
     pil.use_sub_directory()
-    del RE.md['holderName']    
 
 ref_beam_intensity = {"em1": 4200000, "em2": 160000}
 beam_intensity_history = {"em1": [], "em2": [], "timestamp": []}    
     
-def log_ref_intensity(thresh=0.05, update=False):    
-    RE(ct([em1,em2], num=10)) 
+def log_ref_intensity(thresh=0.05, update=False, md=None):    
+    RE(ct([em1,em2], num=10, md=md)) 
     
     h = db[-1]
     sn='em1_sum_all_mean_value_monitor' if 'em1_sum_all_mean_value_monitor' in h.stream_names else 'primary' 
@@ -150,15 +147,13 @@ def log_ref_intensity(thresh=0.05, update=False):
     return True
     
 def check_beam(It_thresh=10000):
-    RE.md['tag']='alignment_check'
-
+    md={'tag': 'alignment_check'}
     if ref_beam_intensity['em1'] is not None:
-        if log_ref_intensity():
-            del RE.md['tag']
+        if log_ref_intensity(md=md):
             return 
     
     mono.y.settle_time = 2
-    RE(dscan([em1,em2], mono.y, -0.3, 0.3, 40))
+    RE(dscan([em1,em2], mono.y, -0.3, 0.3, 40, md=md))
     mono.y.settle_time = 0
 
     d = db[-1].table()
@@ -169,10 +164,8 @@ def check_beam(It_thresh=10000):
     
     x0 = np.average(x[y>(1.-thresh)*np.max(y)])
     RE(mv(mono.y, x0))
-    log_ref_intensity(update=True)
+    log_ref_intensity(update=True, md=md)
     
-    del RE.md['tag']
-
 beam_current = EpicsSignal('SR:OPS-BI{DCCT:1}I:Real-I')
 bpm_current = EpicsSignal('XF:16IDB-CT{Best}:BPM0:Int')
 PShutter = EpicsSignal('XF:16IDB-PPS{PSh}Enbl-Sts')
@@ -340,7 +333,6 @@ def measure_holder(spreadSheet, holderName, sheet_name='Holders', exp_time=1, re
     
     update_metadata()
     pil.use_sub_directory(holderName)
-    RE.md['holderName'] = holderName 
 
     for k,s in samples.items():
         check_pause()
@@ -354,7 +346,7 @@ def measure_holder(spreadSheet, holderName, sheet_name='Holders', exp_time=1, re
                 time.sleep(check_bm_period)
 
             sol.measure(s['position'], vol=vol, exp=exp_time, repeats=repeats, sample_name=k, 
-                        returnSample=returnSample, concurrentOp=concurrentOp)
+                        returnSample=returnSample, concurrentOp=concurrentOp, md={'holderName': holderName})
             
             # check beam again, in case that the beam dropped out during the measurement
             while True: 
@@ -372,7 +364,6 @@ def measure_holder(spreadSheet, holderName, sheet_name='Holders', exp_time=1, re
         uids.append(db[-1].start['uid'])
         print(k,":",s)
         
-    del RE.md['holderName']
     pil.use_sub_directory()
     HT_pack_h5(samples=samples, uids=uids)
         
@@ -688,7 +679,10 @@ def createShimadzuBatchFile(spreadsheet_fn, batchID, sheet_name='Samples',
 
 
     
-def collect_hplc(sample_name, exp, nframes):
+def collect_hplc(sample_name, exp, nframes, md=None):
+    _md = {"experiment": "HPLC"}
+    _md.update(md or {})
+    
     change_sample(sample_name)
     pil.use_sub_directory(sample_name)
     sol.select_flow_cell('middle')
@@ -703,15 +697,15 @@ def collect_hplc(sample_name, exp, nframes):
     em2.acquire.put(1)
     sd.monitors = [em1.sum_all.mean_value, em2.sum_all.mean_value]
    
-    #hplc.ready.set(1)
-    while hplc.injected.get()==0:
-        if hplc.bypass.get()==1:
-            hplc.bypass.put(0)
+    #sol.ready_for_hplc.set(1)
+    while sol.hplc_injected.get()==0:
+        if sol.hplc_bypass.get()==1:
+            sol.hplc_bypass.put(0)
             break
         sleep(0.2)
 
-    #hplc.ready.set(0)
-    RE(ct([pil], num=nframes))
+    #sol.ready_for_hplc.set(0)
+    RE(ct([pil], num=nframes, md=_md))
     sd.monitors = []
     pil.use_sub_directory()
     change_sample()
@@ -725,15 +719,13 @@ def run_hplc_from_spreadsheet(spreadsheet_fn, batchID, sheet_name='Samples', exp
     print("HPLC batch file has been created in %s: %s" % (winDataPath,batch_fn))
     input("please start batch data collection from the Shimadzu software, then hit enter:")
     for sn in samples.keys():
-        RE.md['HPLC'] = samples[sn]['md']
         print(f"collecting data for {sn} ...")
         # for hardware multiple trigger, the interval between triggers is slightly longer
         #    than exp. but this extra time seems to fluctuates. it might be safe not to include
         #    it in the caulcation of nframes
-        collect_hplc(sn, exp=exp, nframes=int(samples[sn]["acq time"]*60/exp))   
+        collect_hplc(sn, exp=exp, nframes=int(samples[sn]["acq time"]*60/exp), md={'HPLC': samples[sn]['md']})   
         uid=db[-1].start['uid']
         send_to_packing_queue(uid, "HPLC", froot=data_file_path.gpfs)
-        del RE.md['HPLC']
     pil.use_sub_directory()    
     print('batch collection collected for %s from %s' % (sheet_name,spreadsheet_fn))
 
@@ -742,16 +734,6 @@ def run_hplc_from_spreadsheet(spreadsheet_fn, batchID, sheet_name='Samples', exp
     wdir = "/nsls2/xf16id1/Windows/"
     os.system(f"cp {wdir}hplc_export.txt {wdir}HPLC/{proposal_id}/{run_id}/export-{batchID}.txt")
 
-    
-sol.default_wash_repeats=2
-sol.default_dry_time=20
-sol.drain_duration=5
-
-hplc.ready.set(0)
-
-sol.watch_list = {'stats1.total': 2e6} 
-sol.cam.setup_watch("upstream", "stats1.total", 2e6, base_value=9e6)
-sol.cam.setup_watch("downstream", "stats1.total", 4e5, base_value=2.6e6)
 
 try:
     smc = SMCchiller(("10.66.122.85", 4001))
@@ -762,4 +744,9 @@ try:
     tctrl = tctrl_FTC100D(("xf16idc-tsvr-sena", 7002))
 except:
     print("cannot connect to sample storage temperature controller")
+
+
+sol.ready_for_hplc.set(0)
+
+reload_macros("/nsls2/data/lix/shared/config/SolutionScattering/config.py")
 
