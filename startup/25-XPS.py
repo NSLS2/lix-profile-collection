@@ -330,6 +330,8 @@ class XPStraj(Device):
             print(list(det.hdf._asset_docs_cache))
             (name, resource), = det.hdf.collect_asset_docs()
             assert name == 'resource'
+            # hack the resource
+            resource['resource_kwargs']['frame_per_point'] = pil._num_images
             asset_docs_cache.append(('resource', resource))
             resource_uid = resource['uid']
             datum_id = '{}/{}'.format(resource_uid, 0)
@@ -389,7 +391,8 @@ class XPStraj(Device):
                                                'shape': (len(self.read_back['slow_axis']),),
                                                'source': 'motor position readback'}
         for det in pil.active_detectors:
-            ret[f'{det.name}_image'] = det.make_data_key() 
+            ret[f'{det.name}_image'] = det.make_data_key()
+            ret[f'{det.name}_image']['shape'] = [pil._num_images, *ret[f'{det.name}_image']['shape'][1:]]
             for k,desc in det.describe().items():
                 ret[k] = desc
                 
