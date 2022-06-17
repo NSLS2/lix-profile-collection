@@ -31,25 +31,6 @@ class LiXFileStorePluginBase(FileStoreIterativeWrite):
         self._fn = None
         self._fp = None
 
-    def make_filename(self):
-        '''Make a filename.
-        This is a hook so that the read and write paths can either be modified
-        or created on disk prior to configuring the areaDetector plugin.
-        Returns
-        -------
-        filename : str
-            The start of the filename
-        read_path : str
-            Path that ophyd can read from
-        write_path : str
-            Path that the IOC can write to
-        '''
-        filename = new_short_uid()
-        formatter = datetime.now().strftime
-        write_path = formatter(self.write_path_template)
-        read_path = formatter(self.read_path_template)
-        return filename, read_path, write_path
-
     def stage(self):
         # Make a filename.
         filename, read_path, write_path = self.make_filename()
@@ -85,17 +66,6 @@ class LiXFileStoreHDF5(LiXFileStorePluginBase):
                                 ('file_write_mode', 'Stream'),
                                 ('capture', 1)
                                 ])
-
-    def get_frames_per_point(self):
-        num_capture = self.num_capture.get()
-        # If num_capture is 0, then the plugin will capture however many frames
-        # it is sent. We can get how frames it will be sent (unless
-        # interrupted) by consulting num_images on the detector's camera.
-        if num_capture == 0:
-            return self.parent.cam.num_images.get()
-        # Otherwise, a nonzero num_capture will cut off capturing at the
-        # specified number.
-        return num_capture
 
     def stage(self):
         super().stage()
