@@ -1,4 +1,10 @@
-import os,stat,time,shutil,subprocess,re
+import os
+import re
+import shutil
+import stat
+import subprocess
+import time
+
 from IPython import get_ipython
 from lixtools.atsas import run as run_cmd
 
@@ -22,7 +28,7 @@ def check_access(fn):
     ugrps = os.getgroups()
     if len(set(wgrps) & set(ugrps))==0:
         print("groups with write permission: ", wgrps)
-        print("user group memebership: ", ugrps)
+        print("user group membership: ", ugrps)
         raise Exception(f"the current user does not have write access to {fn}")
     else:
         print(f"write access to {fn} verified ...")

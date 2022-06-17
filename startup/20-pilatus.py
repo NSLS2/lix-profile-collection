@@ -3,7 +3,7 @@ from ophyd import ( Component as Cpt, ADComponent, Signal,
                     ROIPlugin, StatsPlugin, ImagePlugin,
                     SingleTrigger, PilatusDetector, Device)
 
-from ophyd.areadetector.filestore_mixins import FileStoreBase,FileStoreHDF5,FileStoreIterativeWrite
+from ophyd.areadetector.filestore_mixins import FileStoreHDF5, FileStoreIterativeWrite
 from ophyd.areadetector.plugins import HDF5Plugin
 
 from ophyd.utils import set_and_wait
@@ -16,11 +16,11 @@ from types import SimpleNamespace
 
 from enum import Enum
 class PilatusTriggerMode(Enum):
-    soft = 0        # Software 
+    soft = 0        # Software
     ext = 2         # ExtTrigger in camserver
     ext_multi = 3   # ExtMTrigger in camserver
 
-class LiXFileStorePluginBase(FileStoreBase):
+class LiXFileStorePluginBase(FileStoreIterativeWrite):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.stage_sigs.update([('auto_increment', 'Yes'),

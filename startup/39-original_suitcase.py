@@ -11,7 +11,7 @@ import numpy as np
 import warnings
 import h5py
 import json
-import copy,shutil
+import copy, shutil
 from databroker import Header
 
 def conv_to_list(d): 
@@ -38,13 +38,13 @@ def locate_h5_resource(res, replace_res_path, debug=False):
         this function will look for the file at the original location, and relocate the file first if it is there
         and return the h5 dataset
     """
-    fn_orig = res["root"]+res["resource_path"]
+    fn_orig = res["root"] + res["resource_path"]
     fn = update_res_path(fn_orig, replace_res_path)
     if debug:
         print(f"resource locations: {fn_orig} -> {fn}")
     
     if not(os.path.exists(fn_orig) or os.path.exists(fn)):
-        print(f"could not location the resource at either {fn} or {fn_orig} ...")
+        print(f"could not locate the resource at either {fn} or {fn_orig} ...")
         raise Exception
     if os.path.exists(fn_orig) and os.path.exists(fn) and fn_orig!=fn:
         print(f"both {fn} and {fn_orig} exist, resolve the conflict manually first ..." )
@@ -61,7 +61,7 @@ def locate_h5_resource(res, replace_res_path, debug=False):
         os.remove(fn_orig)
     
     hf5 = h5py.File(fn, "r")
-    return hf5,hf5["/entry/data/data"]
+    return hf5, hf5["/entry/data/data"]
 
 
 def hdf5_export(headers, filename, debug=False,
@@ -153,8 +153,8 @@ def hdf5_export(headers, filename, debug=False,
                 events = list(header.events(stream_name=descriptor['name'], fill=False))
 
                 res_dict = {}
-                for k,v in list(events[0]['data'].items()):
-                    if not isinstance(v,str):
+                for k, v in list(events[0]['data'].items()):
+                    if not isinstance(v, str):
                         continue
                     if v.split('/')[0] in res_docs.keys():
                         res_dict[k] = []
@@ -188,7 +188,7 @@ def hdf5_export(headers, filename, debug=False,
 
                     if key in list(res_dict.keys()):
                         res = res_docs[res_dict[key][0]]
-                        print(f"preocessing resource ...\n", res)
+                        print(f"processing resource ...\n", res)
 
                         # pilatus data, change the path from ramdisk to IOC data directory
                         if key in ["pil1M_image", "pilW2_image"]:
@@ -199,13 +199,13 @@ def hdf5_export(headers, filename, debug=False,
                             N = len(res_dict[key])
                             print(f"copying data from source h5 file(s) directly, N={N} ...")
                             if N==1:
-                                hf5,data = locate_h5_resource(res_docs[res_dict[key][0]], replace_res_path=rp, debug=debug)
+                                hf5, data = locate_h5_resource(res_docs[res_dict[key][0]], replace_res_path=rp, debug=debug)
                                 data_group.copy(data, key)
                                 hf5.close()
                                 dataset = data_group[key]
                             else: # ideally this should never happen, only 1 hdf5 file/resource per scan
                                 for i in range(N):
-                                    hf5,data = locate_h5_resource(res_docs[res_dict[key][i]])
+                                    hf5, data = locate_h5_resource(res_docs[res_dict[key][i]])
                                     if i==0:
                                         dataset = data_group.create_dataset(
                                                 key, shape=(N, *data.shape), 
@@ -218,7 +218,7 @@ def hdf5_export(headers, filename, debug=False,
                             rawdata = header.table(stream_name=descriptor['name'], 
                                                    fields=[key], fill=True)[key]   # this returns the time stamps as well
                     else:
-                        print(f"compiling resource data from individual envents ...")
+                        print(f"compiling resource data from individual events ...")
                         rawdata = [e['data'][key] for e in events]
 
                     if rawdata is not None:
