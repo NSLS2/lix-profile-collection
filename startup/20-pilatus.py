@@ -130,7 +130,30 @@ class LIXhdfPlugin(HDF5Plugin, LiXFileStoreHDF5):
             write_path += f"/{self.sub_directory}"
         read_path = write_path # might want to handle this differently, this shows up in res/db
         return filename, read_path, write_path
+    
+    def describe(self):
+        ret = super().describe()
+        key = f'{self.parent.name}_image'
+        color_mode = self.parent.cam.color_mode.get(as_string=True)
+        if color_mode == 'Mono':
+            ret[key]['shape'] = [
+                1,
+                self.array_size.height.get(),
+                self.array_size.width.get()
+                ]
 
+        elif color_mode in ['RGB1', 'Bayer']:
+            ret[key]['shape'] = [self.parent.cam.num_images.get(), *self.array_size.get()]
+        else:
+            raise RuntimeError("SHould never be here")
+
+        cam_dtype = self.parent.cam.data_type.get(as_string=True)
+        type_map = {'UInt8': '|u1', 'UInt16': '<u2', 'Float32':'<f4', "Float64":'<f8', 'Int8': '<i4'}
+        if cam_dtype in type_map:
+            ret[key].setdefault('dtype_str', type_map[cam_dtype])
+
+
+        return ret
     #def stage(self):
     #    """ need to set the number of images to collect and file path
     #    """
