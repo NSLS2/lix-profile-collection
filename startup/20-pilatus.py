@@ -111,6 +111,7 @@ class LIXhdfPlugin(HDF5Plugin, LiXFileStoreHDF5):
                 self.array_size.height.get(),
                 self.array_size.width.get()
                 ]
+            ret[key]['dims'] = ['frame', 'y', 'x']
 
         elif color_mode in ['RGB1', 'Bayer']:
             ret[key]['shape'] = [self.parent.cam.num_images.get(), *self.array_size.get()]
