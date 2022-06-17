@@ -186,3 +186,34 @@ runengine_metadata_dir = appdirs.user_data_dir(appname="bluesky") / Path("runeng
 
 # PersistentDict will create the directory if it does not exist
 RE.md = PersistentDict(runengine_metadata_dir)
+
+
+import re
+import warnings
+
+import httpx
+
+
+def md_validator(md):
+    "Ensure that if data_session is specified it is valid>"
+    PATTERN = re.compile("^pass-[0-9]+$")
+    data_session = md.get("data_session")
+    if data_session is None:
+        return
+    if (not isinstance(data_session, str)) or (not PATTERN.match(data_session)):
+        raise ValueError("data_session must be a string formed like 'pass-NUMBER', as in 'pass-123456'.")
+    try:
+        client = httpx.Client(base_url="https://api-staging.nsls2.bnl.gov")
+        response = client.get(f"/proposal/{data_session[5:]}")    
+    except Exception:
+        warnings.warn("Could not connect to API to verify data_session is valid.")
+        return
+    if response.is_client_error:
+        raise ValueError(MSG)
+    if response.is_error:
+        warnings.warn("Could not confirm with API that data_session is valid.")
+    elif "error_message" in response.json():
+        raise ValueError(f"data_session {data_session} could not be found.")
+
+
+RE.md_validator = md_validator

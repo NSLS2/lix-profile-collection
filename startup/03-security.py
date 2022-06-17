@@ -74,6 +74,7 @@ def login(uname = None, pID = None, rID = None, debug=True, test_only=False):
 
     RE.md['owner'] = username
     RE.md['proposal_id'] = proposal_id
+    RE.md['data_session'] = f'pass-{proposal_id}'
     RE.md['run_id'] = run_id
     login_time = time.time()
 
