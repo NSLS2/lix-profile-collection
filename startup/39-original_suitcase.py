@@ -5,7 +5,7 @@
 #
 # The full license is in the file LICENSE, distributed with this software.
 #-------------------------------------------------------------------------
-
+from pathlib import Path
 from collections.abc import Mapping
 import numpy as np
 import warnings
@@ -38,7 +38,7 @@ def locate_h5_resource(res, replace_res_path, debug=False):
         this function will look for the file at the original location, and relocate the file first if it is there
         and return the h5 dataset
     """
-    fn_orig = res["root"] + res["resource_path"]
+    fn_orig = str(Path(res["root"]) / Path(res["resource_path"]))
     fn = update_res_path(fn_orig, replace_res_path)
     if debug:
         print(f"resource locations: {fn_orig} -> {fn}")
