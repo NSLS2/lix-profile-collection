@@ -104,24 +104,8 @@ class LIXhdfPlugin(HDF5Plugin, LiXFileStoreHDF5):
     def describe(self):
         ret = super().describe()
         key = f'{self.parent.name}_image'
-        color_mode = self.parent.cam.color_mode.get(as_string=True)
-        if color_mode == 'Mono':
-            ret[key]['shape'] = [
-                self.get_frames_per_point(),
-                self.array_size.height.get(),
-                self.array_size.width.get()
-                ]
-            ret[key]['dims'] = ['frame', 'y', 'x']
-
-        elif color_mode in ['RGB1', 'Bayer']:
-            ret[key]['shape'] = [self.parent.cam.num_images.get(), *self.array_size.get()]
-        else:
-            raise RuntimeError("SHould never be here")
-
-        cam_dtype = self.parent.cam.data_type.get(as_string=True)
-        type_map = {'UInt8': '|u1', 'UInt16': '<u2', 'Float32':'<f4', "Float64":'<f8', 'Int8': '<i4'}
-        if cam_dtype in type_map:
-            ret[key].setdefault('dtype_str', type_map[cam_dtype])
+        if key not in ret:
+            return ret
 
 
         return ret
@@ -155,6 +139,26 @@ class LIXPilatus(PilatusDetector):
     ThresholdEnergy = Cpt(EpicsSignal, "cam1:ThresholdEnergy")
     armed = Cpt(EpicsSignal, "cam1:Armed")
 
+    def make_data_key(self):
+        ret = super().make_data_key()
+        color_mode = self.cam.color_mode.get(as_string=True)
+        if color_mode == 'Mono':
+            ret['shape'] = [
+                # TODO paramaterize this better
+                1,
+                self.hdf.array_size.height.get(),
+                self.hdf.array_size.width.get()
+                ]
+            ret['dims'] = ['frame', 'y', 'x']
+        else:
+            raise RuntimeError("SHould never be here")
+
+        cam_dtype = self.cam.data_type.get(as_string=True)
+        type_map = {'UInt8': '|u1', 'UInt16': '<u2', 'Float32':'<f4', "Float64":'<f8', 'Int8': '<i4'}
+        if cam_dtype in type_map:
+            ret['dtype_str'] = type_map[cam_dtype]
+        return ret
+    
     def __init__(self, *args, hostname, detector_id, **kwargs):
         self.detector_id = detector_id
         self.hostname = hostname
