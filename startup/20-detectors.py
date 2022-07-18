@@ -58,6 +58,35 @@ class StandardProsilica(ProsilicaDetector, SingleTrigger):
             self.detector_id = "unknown"
         super().__init__(*args, **kwargs)
 
+    def make_data_key(self):
+        ret = super().make_data_key()
+        color_mode = self.cam.color_mode.get(as_string=True)
+        if color_mode == 'Mono':
+            ret['shape'] = [
+                # TODO paramaterize this better
+                1,
+                self.tiff.array_size.height.get(),
+                self.tiff.array_size.width.get()
+                ]
+            ret['dims'] = ['frame', 'y', 'x']
+        else:
+            ret['shape'] = [
+                # this seems screwed up:
+                # In [8]: camES1.tiff.array_size.get()
+                # Out[8]: ArraySizeTuple(depth=1200, height=1600, width=3)
+                1,
+                self.tiff.array_size.depth.get(),
+                self.tiff.array_size.height.get(),
+                self.tiff.array_size.width.get()
+                ]
+            ret['dims'] = ['frame', 'y', 'x', 'z']
+
+        cam_dtype = self.cam.data_type.get(as_string=True)
+        type_map = {'UInt8': '|u1', 'UInt16': '<u2', 'Float32':'<f4', "Float64":'<f8', 'Int8': '<i4'}
+        if cam_dtype in type_map:
+            ret['dtype_str'] = type_map[cam_dtype]
+        return ret
+  
     def _acquire_changed(self, value=None, old_value=None, **kwargs):
         if old_value==1 and value==0:
             self._status._finished()    
