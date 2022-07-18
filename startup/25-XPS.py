@@ -64,6 +64,7 @@ class XPSController():
         self.traj = None
         self.motors = {}
         self.update()
+        self.lock = threading.Lock()
 
     def update(self):
         self.groups = {}
@@ -83,7 +84,19 @@ class XPSController():
                 self.groups[tl[0]].append(obj)
                 self.motors[obj] = {}
                 self.motors[obj]['group'] = tl[0] 
-                self.motors[obj]['index'] = self.groups[tl[0]].index(obj)               
+                self.motors[obj]['index'] = self.groups[tl[0]].index(obj)  
+                
+    def get_group_status(self, grp):
+        err,ret = self.xps.GroupMotionStatusGet(self.sID, grp,len(self.groups[grp]))
+        if err!='0' or len(ret)==0:
+            print(f"trouble getting group status for {grp}...: ", err,ret)
+        return err,ret
+        
+    def get_group_position(self, grp):
+        err,ret = self.xps.GroupPositionCurrentGet(self.sID, grp,len(self.groups[grp]))
+        if err!='0' or len(ret)==0:
+            print(f"trouble getting group position for {grp} ...: ", err,ret)
+        return err,ret
         
     def def_motor(self, motorName, OphydName, egu="mm", direction=1): 
         if not motorName in self.motors.keys():
@@ -121,7 +134,7 @@ class XPSmotor(PositionerBase):
             pos = self.position
             time.sleep(poll_time)
         time.sleep(self.settle_time)
-        pos = self.position
+        #pos = self.position
         self._done_moving(success=True, timestamp=time.time())
     
     def move(self, position, wait=True, **kwargs): #moved_cb=None, timeout=None, 
@@ -143,29 +156,32 @@ class XPSmotor(PositionerBase):
     @property
     def position(self):
         grp = self.controller.motors[self.motorName]['group']
-        err = ""
-        while True:
-            err,ret = self.controller.xps.GroupPositionCurrentGet(self.controller.sID, grp, 
-                                                                  len(self.controller.groups[grp]))
-            if err=='0':
+        success = False
+        while not success:
+            try:
+                err,ret = self.controller.get_group_position(grp)
+                self._position = float(ret.split(',')[self.controller.motors[self.motorName]['index']])
+                success = True
                 break
-            time.sleep(0.5)
-        self._position = float(ret.split(',')[self.controller.motors[self.motorName]['index']])
+            except:
+                print(f"issue getting position from {ret}, err = {err}")
 
         return self._position*self._dir
         
     @property
     def moving(self):
         grp = self.controller.motors[self.motorName]['group']
-        while True:
-            err,ret = self.controller.xps.GroupMotionStatusGet(self.controller.sID, grp, 
-                                                               len(self.controller.groups[grp]))
-            if err=='0' and len(ret)>0:
+        success = False
+        while not success:
+            try:
+                err,ret = self.controller.get_group_status(grp)
+                self._moving = bool(int(ret.split(',')[self.controller.motors[self.motorName]['index']]))
+                success = True
                 break
-            time.sleep(0.5)
-            print("trouble getting group status, retrying ...: ", err,ret)
- 
-        self._moving = bool(int(ret.split(',')[self.controller.motors[self.motorName]['index']]))
+            except:
+                print(f"issue getting status from {ret}, err = {err}")
+                return True   # assuming True if 
+        
         return self._moving
     
     @property
@@ -354,8 +370,14 @@ class XPStraj(Device):
         data = {}
         ts = {}
 
+        
+        # bandage solution for getting timestamps
+        # need to have ssh key on the data collection workstation
+        fn0 = "/tmp/data.log"
         fn = pil.active_detectors[0].cam.full_file_name.get().rsplit("_", maxsplit=1)[0]+".log"
-        with open(fn.replace('ramdisk', 'exp_path')) as fh:
+        os.system(f"scp det@{pil.active_detectors[0].hostname}:{fn} {fn0}")
+        #with open(fn.replace('ramdisk', 'exp_path')) as fh:
+        with open(fn0) as fh:
             lns = fh.read().split('\n')[1:-2]
 
         timestamps = [datetime.fromisoformat(l.split()[0]).timestamp() for l in lns]

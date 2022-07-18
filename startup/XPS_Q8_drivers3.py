@@ -9,6 +9,7 @@
 #
 
 import socket
+import threading
 
 class XPS:
     # Defines
@@ -23,12 +24,16 @@ class XPS:
     # Initialization Function
     def __init__ (self):
         XPS.__nbSockets = 0
+        self.lock = threading.Lock()
         for socketId in range(self.MAX_NB_SOCKETS):
             XPS.__usedSockets[socketId] = 0
 
     def sendAndReceive(self, socketId, command):
-        return self.__sendAndReceive(socketId, command)
-            
+        self.lock.acquire()
+        ret = self.__sendAndReceive(socketId, command)
+        self.lock.release()
+        return ret
+        
     # Send command and get return
     def __sendAndReceive (self, socketId, command):
         try:
