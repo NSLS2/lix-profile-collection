@@ -137,7 +137,7 @@ class LIXPilatusCam(_PilatusDetectorCam):
 class LIXPilatus(PilatusDetector):
     cam = ADComponent(LIXPilatusCam, 'cam1:')
     hdf = Cpt(LIXhdfPlugin, suffix="HDF1:",
-              write_path_template="", root='/nsls2/data/lix/legacy/')
+              write_path_template="", root='/')
 
     cbf_file_path = ADComponent(EpicsSignalWithRBV, 'cam1:FilePath', string=True)
     cbf_file_name = ADComponent(EpicsSignalWithRBV, 'cam1:FileName', string=True)

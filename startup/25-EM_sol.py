@@ -482,7 +482,7 @@ class SolutionScatteringExperimentalModule():
 
         pil.set_trigger_mode(PilatusTriggerMode.ext)
         pil.exp_time(exp)
-        pil.number_reset(True)
+        #pil.number_reset(True)
         pil.set_num_images(repeats, rep=1)
         em1.averaging_time.put(0.25)
         em2.averaging_time.put(0.25)

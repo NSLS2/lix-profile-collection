@@ -10,8 +10,8 @@ class data_file_path(Enum):
     ramdisk = '/exp_path'
 
 current_cycle = '2022-2'
-pilatus_data_dir = data_file_path.lustre_legacy.value
-#pilatus_data_dir = f"{data_file_path.ramdisk.value}/hdf"
+#pilatus_data_dir = data_file_path.lustre_legacy.value
+pilatus_data_dir = f"{data_file_path.ramdisk.value}/hdf"
 data_destination = data_file_path.lustre_legacy.value  # this is where all IOC data files should eventually go
 #proc_destination = data_file_path.lustre_proposals.value
 #proc_destination = data_file_path.gpfs_experiments.value
