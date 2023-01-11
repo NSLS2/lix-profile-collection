@@ -64,7 +64,7 @@ nslsii.configure_base(get_ipython().user_ns, 'lix', bec=True, pbar=False, publis
 
 def reload_macros(file='~/.ipython/profile_collection/startup/99-macros.py'):
     ipy = get_ipython()
-    ipy.magic('run -i '+file)
+    ipy.run_line_magic('run','-i '+file)
 
 
 def is_ipython():

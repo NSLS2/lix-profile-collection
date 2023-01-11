@@ -199,7 +199,7 @@ import socket
 packing_queue_sock_port = 9999
 
 # process locally
-def send_to_packing_queue(uid, data_type, froot=data_file_path.gpfs, move_first=False):
+def send_to_packing_queue(uid, data_type): #, froot=data_file_path.gpfs, move_first=False):
     """ data_type must be one of ["scan", "flyscan", "HPLC", "sol", "multi", "mscan"]
         single uid only for "scan", "flyscan", "HPLC"
         uids must be concatenated using '|' for "multi" and "sol"

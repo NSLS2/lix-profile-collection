@@ -85,17 +85,37 @@ class XPSController():
                 self.motors[obj] = {}
                 self.motors[obj]['group'] = tl[0] 
                 self.motors[obj]['index'] = self.groups[tl[0]].index(obj)  
+    
+    def get_motor_status(self, mot):
+        self.lock.acquire()
+        err,ret = self.xps.GroupMotionStatusGet(self.sID, mot, 1)
+        if err!='0' or len(ret)==0:
+            print(f"trouble getting group status for {mot}...: ", err,ret)
+        self.lock.release()
+        return err,ret        
                 
     def get_group_status(self, grp):
+        self.lock.acquire()
         err,ret = self.xps.GroupMotionStatusGet(self.sID, grp,len(self.groups[grp]))
         if err!='0' or len(ret)==0:
             print(f"trouble getting group status for {grp}...: ", err,ret)
+        self.lock.release()
         return err,ret
         
+    def get_motor_position(self, mot):
+        self.lock.acquire()
+        err,ret = self.xps.GroupPositionCurrentGet(self.sID, mot, 1)
+        if err!='0' or len(ret)==0:
+            print(f"trouble getting group position for {grp} ...: ", err,ret)
+        self.lock.release()
+        return err,ret
+
     def get_group_position(self, grp):
+        self.lock.acquire()
         err,ret = self.xps.GroupPositionCurrentGet(self.sID, grp,len(self.groups[grp]))
         if err!='0' or len(ret)==0:
             print(f"trouble getting group position for {grp} ...: ", err,ret)
+        self.lock.release()
         return err,ret
         
     def def_motor(self, motorName, OphydName, egu="mm", direction=1): 
@@ -114,6 +134,8 @@ class XPSController():
         
         
 class XPSmotor(PositionerBase):
+    debug = False
+    
     def __init__(self, controller, motorName, OphydName, egu, direction=1, settle_time=0):
         self.controller = controller
         self.motorName = motorName
@@ -130,6 +152,8 @@ class XPSmotor(PositionerBase):
         return self._dir
     
     def wait_for_stop(self, poll_time=0.1):
+        if self.debug:
+            print(f"{self.name}: waiting for stop ...")
         while self.moving:
             pos = self.position
             time.sleep(poll_time)
@@ -138,6 +162,8 @@ class XPSmotor(PositionerBase):
         self._done_moving(success=True, timestamp=time.time())
     
     def move(self, position, wait=True, **kwargs): #moved_cb=None, timeout=None, 
+        if self.debug:
+            print(f"{self.name}: moving to {position} ...")
         self._started_moving = False
         self.set_point = position*self._dir
         self._status = super().move(self.set_point, **kwargs)
@@ -155,33 +181,45 @@ class XPSmotor(PositionerBase):
         
     @property
     def position(self):
-        grp = self.controller.motors[self.motorName]['group']
-        success = False
-        while not success:
-            try:
-                err,ret = self.controller.get_group_position(grp)
-                self._position = float(ret.split(',')[self.controller.motors[self.motorName]['index']])
-                success = True
-                break
+        if self.debug:
+            print(f"{self.name}: checking position ...")
+
+        err,ret = self.controller.get_motor_position(self.motorName)
+        if int(err):
+            print(f"issue getting position from {self.motorName}, err = {err}")
+            print(self.controller.xps.errorcodes[err])
+        else:
+            try:  # ret may not contain the correct info 
+                self._position = float(ret)
             except:
-                print(f"issue getting position from {ret}, err = {err}")
+                print("error geting position from '{ret}'")
+                pass 
+
+        if self.debug:
+            print(f"done, returning {self._position*self._dir}")
 
         return self._position*self._dir
         
     @property
     def moving(self):
-        grp = self.controller.motors[self.motorName]['group']
-        success = False
-        while not success:
-            try:
-                err,ret = self.controller.get_group_status(grp)
-                self._moving = bool(int(ret.split(',')[self.controller.motors[self.motorName]['index']]))
-                success = True
-                break
-            except:
-                print(f"issue getting status from {ret}, err = {err}")
-                return True   # assuming True if 
+        if self.debug:
+            print(f"{self.name}: checking move status ...")
+
+        err,ret = self.controller.get_motor_status(self.motorName)
+        if int(err):
+            print(f"issue getting status from {self.motorName}, err = {err}")
+            print(self.controller.xps.errorcodes[err])
+            return True
         
+        try:  # ret may not contain the correct info 
+            self._moving = bool(int(ret))
+        except:
+            print("error geting status from '{ret}'")
+            pass 
+        
+        if self.debug:
+            print(f"done, returning {self._moving}")
+
         return self._moving
     
     @property
@@ -189,6 +227,9 @@ class XPSmotor(PositionerBase):
         return self._egu
         
     def stop(self, *, success: bool = False):
+        if self.debug:
+            print(f"{self.name}: stop requested ...")
+
         err,ret = self.controller.xps.GroupMoveAbort(self.controller.sID, motorName)
         self._done_moving()
         
@@ -376,8 +417,8 @@ class XPStraj(Device):
         fn0 = "/tmp/data.log"
         fn = pil.active_detectors[0].cam.full_file_name.get().rsplit("_", maxsplit=1)[0]+".log"
         os.system(f"scp det@{pil.active_detectors[0].hostname}:{fn} {fn0}")
-        #with open(fn.replace('ramdisk', 'exp_path')) as fh:
-        with open(fn0) as fh:
+        with open(fn.replace('ramdisk', 'exp_path')) as fh:
+        #with open(fn0) as fh:
             lns = fh.read().split('\n')[1:-2]
 
         timestamps = [datetime.fromisoformat(l.split()[0]).timestamp() for l in lns]

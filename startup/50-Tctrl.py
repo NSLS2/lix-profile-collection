@@ -161,6 +161,8 @@ class tctrl_FTC100D(serial_port):
         04  read process value (current T)
         05  write register
     """
+    Tm = 70.0
+
     def __init__(self, sock_addr):
         super().__init__(sock_addr)
 
@@ -192,9 +194,9 @@ class tctrl_FTC100D(serial_port):
         return v
 
     def setT(self, v):
-        if v>70:
+        if v>self.Tm:
             raise Exception(f"the set point {v} is higher than the allowed limit.")
-        v = np.int(v*10+0.5)
+        v = int(v*10+0.5)
         v1 = v/256
         v2 = v%256
         ret = self.comm([0x01,0x06,0x00,0x00,v1,v2]) #, 6)

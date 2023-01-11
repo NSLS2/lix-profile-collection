@@ -1,9 +1,8 @@
 from py4xs.hdf import h5exp
 import time,sys,random,openpyxl
 
-froot=data_file_path.gpfs
-
-sol = SolutionScatteringExperimentalModule(camName="camES1")
+reload_macros("/nsls2/data/lix/shared/config/SolutionScattering/config.py")
+#sol = SolutionScatteringExperimentalModule(camName="camES1")
 
 def showd2s(d2, logScale=True, showMask=False, clim=(0.1,14000), showRef=True, cmap=None):
     plt.figure()
@@ -31,7 +30,7 @@ def gettimestamp():
 
 def pack_ref_h5(run_id, **kwargs):
     uids = list_scans(run_id=run_id, holderName="reference", **kwargs)
-    send_to_packing_queue('|'.join(uids), "multi",froot=data_file_path.gpfs)    
+    send_to_packing_queue('|'.join(uids), "multi")    
     # consider adding the ref intensity to the h5 file, need to know when the file is ready
     
 def plot_ref_h5():
@@ -537,10 +536,10 @@ def measure_mailin_spreadsheets(sh_list, sample_locs=None, check_QR_only=False):
             print(f"{sh} does not contain holder UIDs.")
             continue
 
-        login("bot", prop_id, saf_id)
+        login("bot", f"{prop_id}", f"{saf_id}")
         hdict = parseSpreadsheet(sh, "UIDs", ["holderName"])
         hlist = list(hdict['holderName'].values())
-        ulist = list(hdict['UIDs'].values())
+        ulist = list(hdict['UID'].values())
         holders = {}
         for hn,uid in zip(hlist,ulist):
             if not uid in storage_uids:
@@ -552,7 +551,7 @@ def measure_mailin_spreadsheets(sh_list, sample_locs=None, check_QR_only=False):
         logoff(quiet=True)
 
 
-def HT_pack_h5(spreadSheet=None, holderName=None, froot=data_file_path.gpfs, 
+def HT_pack_h5(spreadSheet=None, holderName=None, 
                run_id=None, samples=None, uids=None, **kwargs):
     """ this is useful for packing h5 after the experiment
         it will not perform buffer subtraction
@@ -567,116 +566,47 @@ def HT_pack_h5(spreadSheet=None, holderName=None, froot=data_file_path.gpfs,
         if 'bufferName' in samples[s].keys():
             sb_dict[s] = [samples[s]['bufferName']]
     uids.append(json.dumps(sb_dict))
-    send_to_packing_queue('|'.join(uids), "sol", froot)
+    send_to_packing_queue('|'.join(uids), "sol")
     
             
-def createShimadzuBatchFile(spreadsheet_fn, batchID, sheet_name='Samples', 
-                            check_sname=True, shutdown=False,
-                            strFields=['Method File', 'Sample Name'], numFields=['Inj. Volume'],
-                            HPLCdir="/nsls2/data/lix/legacy/HPLC", win_HPLCdir="Y:\\lix\\legecy\\HPLC"):   
-    """ spreadsheet requiredColumns: sampleName, columnID, flowrate, runTime, collectionTime
-        columnID: should be from a dropdown list to avoid problems
-        ??collectionTime: the part of the HPLC run when data are actually collected
-        HPLCdir used to be "/nsls2/xf16id1/Windows/HPLC"
-        changed to "/nsls2/data/lix/legacy/HPLC" in Mar 2022
+def CreateAgilentSeqFile(spreadsheet_fn, batchID, seq_file, sheet_name="Samples"):
+    """Required columns for sequence runs are in the strFields argument. Currently detectors are set for collection Time, but this can change
+    now that we can start and stop using I/O pins.  Exported UV data can now be stored in proposal/saf instead of writing to same file each run. 
     """
-    template_batch_file = f"{HPLCdir}/template/batch_template.txt"
-    template_method_file = f"{HPLCdir}/template/method_template.lcm"
-    sections = readShimadzuDatafile(template_batch_file, return_all_sections=True)
-    dd = parseSpreadsheet(spreadsheet_fn, sheet_name=sheet_name, strFields=['batchID', 'Tray Name'])
-    autofillSpreadsheet(dd, fields=['batchID', 'Tray Name'])
-    ridx = [i for i in dd['batchID'].keys() if dd['batchID'][i]==batchID] 
-    nrows = len(ridx)
-
-    for i in ridx:
-        for f in strFields:
-            if not isinstance(dd[f][i], str):
-                raise Exception(f"not a string for {f}: {dd[f][i]}")
-        for f in numFields:
-            if not (isinstance(dd[f][i], int) or isinstance(dd[f][i], float)) :
-                raise Exception(f"not a nemeric value for {f}: {dd[f][i]}")
+    strFields=["Vial", "Sample Name", "Sample Type", "Acq. method", "Proc. method", "Data file"]
+    numFields=["Volume", "Inj/Vial"]
+    dd=parseSpreadsheet(spreadsheet_fn, sheet_name=sheet_name)
+    autofillSpreadsheet(dd, fields=["batchID"])
     
     if proposal_id is None or run_id is None:
         print("need to login first ...")
         login()
-
-    default_HPLC_path = HPLCdir
-    default_data_path = f'{HPLCdir}/{current_cycle}/{proposal_id}/{run_id}/' 
-    default_win_HPLC_dir = win_HPLCdir
-    default_hplc_export_file = f'{win_HPLCdir}\\hplc_export.txt'
-    default_win_data_path = f'{win_HPLCdir}\\{current_cycle}\\{proposal_id}\\{run_id}\\'
-    # make directory, makedirs() is defined in 02-utils.py
-    makedirs(default_data_path, mode=0o777)
-
-    # some contents of the sample info need to be generated automatically
-    dd['Sample ID'] = {}
-    dd['Data File'] = {}
+    
+    ridx=[i for i in dd['batchID'].keys() if dd['batchID'][i]==batchID]
+    
     samples = {}
+    dfile = f"{current_cycle}/{proposal_id}/{run_id}/<S>" 
+    dd["Data File"] = {}
+    dd["Sample Type"] = {}
+        
     for i in ridx:
+        for f in numFields:
+            if not (isinstance(dd[f][i], int or isintance(dd[f][i], float))):
+                raise Exception(f"not a numeric value for {f}: {dd[f][i].values()}, replace with number")
         sn = dd['Sample Name'][i]
-        acq_time = float(dd['Run Time'][i])
-        cid = int(dd['Column#'][i])
-        cl_type = dd['Column Type'][i]
-        inj_vol = float(dd['Inj. Volume'][i])
-        #flowrates = [float(dd['Flow Rate A'][i]), float(dd['Flow Rate B'][i])]
-        flowrate = float(dd['Flow Rate B'][i])
-
-        dd['Sample ID'][i] = sn
-        dd['Data File'][i] = default_win_data_path+sn+'.lcd'
-        samples[sn] = {"acq time": acq_time, 
-                       "Column ID": cid, 
-                       #"flowrates": flowrates, 
-                       "md": {"Column Type": cl_type,
-                              "Injection Volumn (ul)": inj_vol,
-                              "Flow Rate (ml_min)": flowrate}
+        samples[sn] = {"acq time": dd['Run Time'][i], 
+                       "md": {"Column type": dd['Column type'][i],
+                              "Injection Volumn (ul)": dd['Volume'][i],
+                              "Flow Rate (ml_min)": dd['Flow Rate'][i]}
                       }
+        dd["Data File"][i] = dfile
+        dd["Sample Type"][i] = "Sample"
     
-    # make sure there are no repeating sample names
-    slist = list(samples.keys())
-    for sn in slist:
-        if slist.count(sn)>1:
-            raise Exception('duplicate sample name in the spreadsheet: %s' % sn)
-        if not check_sample_name(sn, check_for_duplicate=check_sname, check_dir=True):
-            # assuming that the data will be written into a directory named after the sample
-            raise Exception()
-    
-    sections['[ASCII Convert]'][1] = default_hplc_export_file
-    sections['[ASCII Convert]'][2] = 'Auto-Increment\t0'
-    # create the batch table
-    batch_table = []
-    batch_table.append('# of Row\t%d' % nrows)
-    batch_table.append(sections['[Batch Table]'][1])
-    batch_para_name = sections['[Batch Table]'][1].split('\t')
-    batch_para_value = sections['[Batch Table]'][2].split('\t')
+    df=pd.DataFrame.from_dict(dd, orient='columns')
+    df[df['batchID']==batchID].to_csv(seq_file, index=False, encoding="ASCII",
+                    columns=["Vial", "Sample Name", "Sample Type", "Volume", "Inj/Vial", "Acq. method", "Proc. method", "Data File" ])
 
-    default_batch_values = {'Report Format File': 'VG_Report_Format.lsr'
-                           }
-    
-    # copy all valid columns from the spreadsheet to the batch file
-    # use default values (from the template file) for all missing columns
-    for i in ridx:
-        entry = []
-        for j in range(len(batch_para_name)):
-            if batch_para_name[j] in dd.keys():
-                entry.append(str(dd[batch_para_name[j]][i]))
-            elif batch_para_name[j] in default_batch_values.keys():
-                entry.append(str(default_batch_values[batch_para_name[j]]))
-            else:
-                entry.append(str(batch_para_value[j]))
-        batch_table.append('\t'.join(entry))
-
-    sections['[Batch Table]'] = batch_table
-    
-    if shutdown:
-        sections['[Shutdown]'] = ['Mode\t1', 'Use Method File\t1',
-                                  'File\tC:\\LabSolutions\\Data\\Project1\\JB_PUMP_SHUTOFF.lcm',
-                                  'Cool Down Time\t0', 'ELSD Valve\t0', 'MS Settings\t1031', 'MS Settings2\t0']
-    
-    batch_file_name = sheet_name+'_batch.txt'
-    writeShimadzuDatafile(default_HPLC_path+batch_file_name, sections)
-    
-    return batch_file_name,default_win_data_path,samples
-
+    return samples  
 
     
 def collect_hplc(sample_name, exp, nframes, md=None):
@@ -712,12 +642,10 @@ def collect_hplc(sample_name, exp, nframes, md=None):
      
 
 def run_hplc_from_spreadsheet(spreadsheet_fn, batchID, sheet_name='Samples', exp=1, shutdown=False):
-    batch_fn,winDataPath,samples = createShimadzuBatchFile(spreadsheet_fn, batchID=batchID,
-                                                           sheet_name=sheet_name, 
-                                                           check_sname=True,
-                                                           shutdown=shutdown)
-    print("HPLC batch file has been created in %s: %s" % (winDataPath,batch_fn))
-    input("please start batch data collection from the Shimadzu software, then hit enter:")
+    batch_fn = '/nsls2/data/lix/legacy/HPLC/Agilent/sequence_table.csv'
+    samples = CreateAgilentSeqFile(spreadsheet_fn, batchID, batch_fn, sheet_name=sheet_name)
+    print(f"HPLC sequence file has been created: {batch_fn}")
+    input("please start batch data collection from the Agilent software, then hit enter:")
     for sn in samples.keys():
         print(f"collecting data for {sn} ...")
         # for hardware multiple trigger, the interval between triggers is slightly longer
@@ -725,14 +653,9 @@ def run_hplc_from_spreadsheet(spreadsheet_fn, batchID, sheet_name='Samples', exp
         #    it in the caulcation of nframes
         collect_hplc(sn, exp=exp, nframes=int(samples[sn]["acq time"]*60/exp), md={'HPLC': samples[sn]['md']})   
         uid=db[-1].start['uid']
-        send_to_packing_queue(uid, "HPLC", froot=data_file_path.gpfs)
+        send_to_packing_queue(uid, "HPLC")
     pil.use_sub_directory()    
-    print('batch collection collected for %s from %s' % (sheet_name,spreadsheet_fn))
-
-    ## copy the exported data file for backup
-    # check time stamp to make sure it has been updated recently (e.g. within a minute)?? 
-    wdir = "/nsls2/xf16id1/Windows/"
-    os.system(f"cp {wdir}hplc_export.txt {wdir}HPLC/{proposal_id}/{run_id}/export-{batchID}.txt")
+    print('batch collection collected for %s from %s' % (batchID,spreadsheet_fn))
 
 
 try:
@@ -747,6 +670,4 @@ except:
 
 
 sol.ready_for_hplc.set(0)
-
-reload_macros("/nsls2/data/lix/shared/config/SolutionScattering/config.py")
 

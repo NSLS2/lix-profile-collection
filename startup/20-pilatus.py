@@ -440,7 +440,7 @@ try:
     pil = LiXDetectors("XF:16IDC-DT")   
     pil.activate(["pil1M", "pilW2"])
     pil.set_trigger_mode(PilatusTriggerMode.ext_multi)
-    pil.set_thresh()
+    #pil.set_thresh()
 except:
     print("Unable to initialize the Pilatus detectors ...")
 

@@ -84,12 +84,14 @@ def login(uname = None, pID = None, rID = None, debug=True, test_only=False):
     data_path = f"{data_destination}/%s/{current_cycle}/{proposal_id}/{run_id}/"
     RE.md['data_path'] = data_path   # different IOCs will be writing into subdirectories
 
-    proc_path = f"{proc_destination}/{current_cycle}/{procdir_prefix}{proposal_id}/"
+    dgrp = f"{procdir_prefix}{proposal_id}"
+    proc_path = f"{proc_destination}/{current_cycle}/{dgrp}/"
     check_access(proc_path)
     proc_path += f"{run_id}/"
     RE.md['proc_path'] = proc_path
     if not os.path.isdir(proc_path):
         makedirs(proc_path, mode=0o2755)
+        run_cmd(["setfacl", "-R", "-m", f"g:{dgrp}:rwX,d:g:{dgrp}:rwX", proc_path])
         makedirs(proc_path+"processed/")
   
     # if exp.h5 does not exist in proc_path, copy it from somewhere else

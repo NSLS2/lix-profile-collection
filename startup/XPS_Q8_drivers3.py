@@ -24,6 +24,7 @@ class XPS:
     # Initialization Function
     def __init__ (self):
         XPS.__nbSockets = 0
+        self.errorcodes = {}
         self.lock = threading.Lock()
         for socketId in range(self.MAX_NB_SOCKETS):
             XPS.__usedSockets[socketId] = 0
@@ -78,6 +79,15 @@ class XPS:
         except socket.error:
             return -1
 
+        err, ret = self.ErrorListGet(socketId)
+        self.errorcodes = {}
+        for cline in ret.split(';'):
+            if ':' in cline:
+                ecode, message = cline.split(':', 1)
+                ecode = ecode.replace('Error', '').strip()
+                message = message.strip()
+                self.errorcodes[ecode] = message
+        
         return socketId
 
     # TCP_SetTimeout
