@@ -1,23 +1,13 @@
 from py4xs.hdf import h5exp
 import time,sys,random,openpyxl
 
-reload_macros("/nsls2/data/lix/shared/config/SolutionScattering/config.py")
-#sol = SolutionScatteringExperimentalModule(camName="camES1")
 
-def showd2s(d2, logScale=True, showMask=False, clim=(0.1,14000), showRef=True, cmap=None):
-    plt.figure()
-    ax = plt.gca()
-    pax = Axes2dPlot(ax, d2.data, exp=d2.exp)
-    pax.plot(log=logScale)
-    if cmap is not None:
-        pax.set_color_scale(plt.get_cmap(cmap)) 
-    if showMask:
-        pax.plot(log=logScale, mask=d2.exp.mask)
-    pax.img.set_clim(*clim)
-    pax.coordinate_translation="xy2qphi"
-    if showRef:
-        pax.mark_standard("AgBH", "r:")
-    plt.show() 
+ss = PositioningStack()
+ss.x = xps.def_motor("scan.X", "ss_x", direction=-1)
+ss.y = xps.def_motor("scan.Y", "ss_y")
+
+reload_macros("/nsls2/data/lix/shared/config/SolutionScattering/config.py")
+sol.ready_for_hplc.set(0)
 
 import pandas
 import numpy as np
@@ -669,5 +659,6 @@ except:
     print("cannot connect to sample storage temperature controller")
 
 
-sol.ready_for_hplc.set(0)
+
+
 

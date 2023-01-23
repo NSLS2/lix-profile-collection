@@ -16,14 +16,10 @@ class SolutionScatteringControlUnit(Device):
     water_pump_spd = Cpt(EpicsSignal, "water_pump_spd")
     sv_sel = Cpt(EpicsSignal, "sv_sel")
     sv_N2 = Cpt(EpicsSignal, "sv_N2")
-    sv_N2_box = Cpt(EpicsSignal, "sv_N2_box")
     sv_drain1 = Cpt(EpicsSignal, "sv_drain1")
     sv_drain2 = Cpt(EpicsSignal, "sv_drain2")
-    sv_door_upper = Cpt(EpicsSignal, "sv_door_upper")
-    sv_door_lower = Cpt(EpicsSignal, "sv_door_lower")
     sv_pcr_tubes = Cpt(EpicsSignal, "sv_pcr_tubes")
-    sv_fan = Cpt(EpicsSignal, "sv_fan")
-    fan_power = Cpt(EpicsSignal, "fan_power")
+    sv_solenoid = Cpt(EpicsSignal, "sv_solenoid")
     sampleT = Cpt(EpicsSignal, "sample_temp")
     sampleTs = Cpt(EpicsSignal, "sample_temp_SP")
     sampleTCsts = Cpt(EpicsSignal, "sample_TCsts")
@@ -38,6 +34,7 @@ class SolutionScatteringControlUnit(Device):
         self.sv_N2.put('off')
         self.sv_drain1.put('off')
         self.sv_drain2.put('off')
+        self.sv_solenoid.put('off')
         
     def reset(self):
         self.reset_pump.put(1)
@@ -87,11 +84,8 @@ class SolutionScatteringExperimentalModule():
     pcr_holder_down = EpicsSignal("XF:16IDC-ES:Sol{ctrl}HolderDown")
     EMready = EpicsSignal("XF:16IDC-ES:Sol{ctrl}EMSolReady")
     HolderPresent = EpicsSignal("XF:16IDC-ES:Sol{ctrl}HolderPresent")
-    DoorOpen = EpicsSignal("XF:16IDC-ES:Sol{ctrl}DoorOpen")
     
-    sample_y = EpicsMotor('XF:16IDC-ES:Sol{Enc-Ax:Yu}Mtr', name='sol_sample_y')
     holder_x = EpicsMotor('XF:16IDC-ES:Sol{Enc-Ax:Xl}Mtr', name='sol_holder_x')
-    xc = EpicsMotor('XF:16IDC-ES:Scan{Ax:XC}Mtr', name='ss_xc')
 
     ready_for_hplc = EpicsSignal('XF:16IDC-ES:Sol{ctrl}HPLCout')
     hplc_injected = EpicsSignalRO('XF:16IDC-ES:Sol{ctrl}HPLCin1')
@@ -107,12 +101,13 @@ class SolutionScatteringExperimentalModule():
     # the addtional positions are for the standard sample, a empty space for checking scattering background,
     #    and for the scintillator for check the beam shape
     # this information should be verified every time we setup for solution scattering
-    flowcell_pos = {'bottom': [4.48 ,0], 
-                    'middle': [0, 0],
-                    'top':    [-4.5, 0],
-                    'std':    [-12., 0],
-                    'empty':  [-15., 0],
-                    'scint':  [-17., 0]}  
+    # the positions are ss.xc, ss.x, ss.y
+    flowcell_pos = {'bottom': [-15.9, 0, 9.0], 
+                    'top':    [-15.9, 0, 0.0],
+                    'middle': [ 32.0, 0, 4.5],     # HPLC
+                    'std':    [ -50., 0, 9.0],
+                    'empty':  [ -50., 0, 4.5],
+                    'scint':  [ -50., 0, -2.0]}  
     
     # this is the 4-port valve piosition necessary for the wash the needle
     p4_needle_to_wash = {'upstream': 1, 'downstream': 0}
@@ -125,12 +120,15 @@ class SolutionScatteringExperimentalModule():
     # need to home holder_x position to 0; use home_holder()
     # tube postion 1 is on the inboard side
     drain_pos = 0.
-    park_pos = 33.0
+    park_pos = 0. # no need to move
+    xc_park_pos = 0
     
     disable_flow_cell_move = False
     
     # selection valve in the syringe pump box, see sol_devices.py
+    # need the water path to be closed by default to prevent leaks
     sel_valve = {'water': 1, 'N2': 0}
+    
     # time needed to pump enough water to fill the drain well
     # assume that tube is empty
     wash_duration = 1.
@@ -151,8 +149,10 @@ class SolutionScatteringExperimentalModule():
     delay_before_release = 0.5
     
     Ntube = 18
-    tube1_pos=-18.83   #4/10/20 sc[new sensor]    #12/20/17 by JB
-    tube_spc = -5.8417     # these are mechanically determined and should not change
+    # these are mechanically determined and should not change
+    tube1_pos = -18.72
+    #tube1_pos = -18.83     #4/10/20 sc[new sensor]    #12/20/17 by JB
+    tube_spc = -5.84     
 
     default_dry_time = 20
     default_wash_repeats = 5
@@ -177,8 +177,10 @@ class SolutionScatteringExperimentalModule():
         self.cam = setup_cam(camName)
 
     def set_xc_limits(self):
-        self.xc.set_current_position(0)
-        self.xc.set_limits(-1,1)
+        raise Exception("You should not be here ...")
+        #ss.xc.set_current_position(0)
+        # depends on the flowcell_pos definitions
+        #ss.xc.set_limits(-1,1)
 
     def enable_ctrlc(self):
         if threading.current_thread() is threading.main_thread():
@@ -204,31 +206,24 @@ class SolutionScatteringExperimentalModule():
         else: # odd tube number
             return("downstream")
 
-    def move_door(self, state):
-        """ state = 'open'/'close'
-        """
-        if state not in ['open', 'close']:
-            raise Exception("the door state should be either open or close.")
-            
-        if state=='open':
-            setSignal(sol.ctrl.sv_door_lower, 1, sol.DoorOpen)
-        else: 
-            setSignal(sol.ctrl.sv_door_lower, 0, sol.DoorOpen)
-            
     def home_holder(self):
         mot = sol.holder_x
-    
-        self.move_door('open')
+
+        print("homing sol.holder_x ...")
         mot.velocity.put(25)
-        caput(mot.prefix+".HLM", mot.position+160)
-        # move holder_x to hard limit toward the door
+        mot.set_lim(0,0)
+        #caput(mot.prefix+".HLM", mot.position+160)
+        # move holder_x to hard limit, needles toward the washing wells
         mot.move(mot.position+155)
         while mot.moving:
             sleep(0.5)
-            
+        
         # washing well position will be set to zero later
         # the value of the park position is also the distance between "park" and "wash"
-        mot.move(mot.position-self.park_pos+0.5)
+        #mot.move(mot.position-self.park_pos+0.5)
+        # 2023-1, new sample handler, park at washing position
+        # distance between limit and wash position is ~4mm
+        mot.move(mot.position-4)
 
         pv = 'XF:16IDC-ES:Sol{ctrl}SampleAligned'
 
@@ -236,7 +231,7 @@ class SolutionScatteringExperimentalModule():
             mot.move(mot.position-0.1)
         p1 = mot.position
 
-        mot.move(p1-1)
+        mot.move(p1-1.5)
         while caget(pv)==0:                      
             mot.move(mot.position+0.1)
         p2 = mot.position
@@ -247,9 +242,6 @@ class SolutionScatteringExperimentalModule():
         mot.set_current_position(0)
         caput(mot.prefix+".HLM", self.park_pos+0.5)
         caput(mot.prefix+".LLM", self.tube1_pos+self.tube_spc*(self.Ntube-1)-0.5)
-
-        self.move_door('close')
-
         
     def save_config(self):
         pass
@@ -264,9 +256,10 @@ class SolutionScatteringExperimentalModule():
             #self.sample_y.home('forward')
             offset = [r_range*(random.random()-0.5), r_range*(random.random()-0.5)]
             print('move to flow cell %s ...' % cn)
-            self.xc.move(self.flowcell_pos[cn][1] + offset[1])
-            self.sample_y.move(self.flowcell_pos[cn][0] + offset[0])
-    
+            ss.xc.move(self.flowcell_pos[cn][0])
+            ss.x.move(self.flowcell_pos[cn][1] + offset[0])
+            ss.y.move(self.flowcell_pos[cn][2] + offset[1])
+            
     def select_tube_pos(self, tn):
         ''' 1 argument accepted: 
             position 1 to 18 from, 1 on the inboard side
@@ -283,8 +276,7 @@ class SolutionScatteringExperimentalModule():
 
         self.tube_pos = tn
         if tn=='park':
-            self.move_door('open')
-            self.xc.move(0) # so that the robot doesn't have to change trajectory
+            ss.xc.move(self.xc_park_pos)        # so that the robot doesn't have to change trajectory
             self.holder_x.move(self.park_pos)
             print('move to PCR tube holder park position ...')        
         else:
@@ -297,11 +289,8 @@ class SolutionScatteringExperimentalModule():
         while self.holder_x.moving:
             sleep(0.5)
         print('motion completed.')
-        if tn=='park':
+        if tn in [0, 'park']:
             setSignal(self.EMready, 1)
-        elif self.DoorOpen.get()==1:
-            self.move_door('close')
-         
             
     def move_tube_holder(self, pos, retry=5):
         '''1 argument accepted:
