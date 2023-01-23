@@ -85,7 +85,11 @@ def login(uname = None, pID = None, rID = None, debug=True, test_only=False):
     RE.md['data_path'] = data_path   # different IOCs will be writing into subdirectories
 
     dgrp = f"{procdir_prefix}{proposal_id}"
-    proc_path = f"{proc_destination}/{current_cycle}/{dgrp}/"
+    if test_only:
+        proc_path = f"{proc_destination}/commissioning/{dgrp}/"
+    else:
+        proc_path = f"{proc_destination}/{current_cycle}/{dgrp}/"
+
     check_access(proc_path)
     proc_path += f"{run_id}/"
     RE.md['proc_path'] = proc_path
