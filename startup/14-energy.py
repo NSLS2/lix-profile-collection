@@ -12,7 +12,7 @@ class EpicsGapMotor(EpicsMotor):
         
     def move(self, *args, **kwargs):
         if self.brake.get()==0:
-            set_and_wait(self.brake, 1)
+            self.brake.set(1).wait()
         return super().move(*args, **kwargs)
 
 class MonoDCM(Device):

@@ -80,7 +80,7 @@ class LiXXspress(XspressTrigger, Xspress3Detector):
 
         status = super().stage()
         if self.ext_trig:
-            set_and_wait(self._acquisition_signal, 1) 
+            self._acquisition_signal.set(1).wait()
 
         return status
 

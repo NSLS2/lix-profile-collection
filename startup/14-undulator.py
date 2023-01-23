@@ -14,7 +14,7 @@ from ophyd.status import wait as status_wait
    
 """
 
-from ophyd import EpicsMotor,set_and_wait
+from ophyd import EpicsMotor
 from ophyd.signal import (EpicsSignal, EpicsSignalRO)
 from ophyd.utils.epics_pvs import (raise_if_disconnected, AlarmSeverity)
 from ophyd.device import (Device, Component as Cpt)
@@ -32,7 +32,7 @@ class EpicsGapMotor(EpicsMotor):
         
     def move(self, *args, **kwargs):
         if self.brake.get()==0:
-            set_and_wait(self.brake, 1)
+            self.brake.set(1).wait()
         return super().move(*args, **kwargs)
 
 IVUgapBrake = EpicsSignal("SR:C16-ID:G1{IVU:1}BrakesDisengaged-Sts", write_pv="SR:C16-ID:G1{IVU:1}BrakesDisengaged-SP")
