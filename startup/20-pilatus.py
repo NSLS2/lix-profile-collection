@@ -4,9 +4,8 @@ from ophyd import ( Component as Cpt, ADComponent, Signal,
                     SingleTrigger, PilatusDetector, Device)
 
 from ophyd.areadetector.filestore_mixins import FileStoreHDF5, FileStoreIterativeWrite
-from ophyd.areadetector.plugins import HDF5Plugin
+from ophyd.areadetector.plugins import HDF5Plugin,register_plugin,PluginBase
 
-from ophyd.utils import set_and_wait
 from databroker.assets.handlers_base import HandlerBase
 from ophyd.device import Staged
 from pathlib import Path
@@ -37,13 +36,13 @@ class LiXFileStorePluginBase(FileStoreIterativeWrite):
 
         # Ensure we do not have an old file open.
         if self.file_write_mode != 'Single':
-            set_and_wait(self.capture, 0)
+            self.capture.set(0).wait()
         # These must be set before parent is staged (specifically
         # before capture mode is turned on. They will not be reset
         # on 'unstage' anyway.
         self.file_path.set(write_path).wait()
-        set_and_wait(self.file_name, filename)
-        #set_and_wait(self.file_number, 0)     # only reason to redefine the pluginbase
+        self.file_name.set(filename).wait()
+        #self.file_number.set(0).wait()     # only reason to redefine the pluginbase
         super().stage()
 
         # AD does this same templating in C, but we can't access it
@@ -114,7 +113,7 @@ class LIXhdfPlugin(HDF5Plugin, LiXFileStoreHDF5):
     #    """
     #    super().stage()
     #    if not self.parent.parent.reset_file_number:
-    #        set_and_wait(self.file_number, self.fnbr+1)
+    #        self.file_number.set(self.fnbr+1).wait()
     #        filename, read_path, write_path = self.make_filename()
     #        self._fn = self.file_template.get() % (read_path, filename, self.fnbr)
     #        set_and_wait(self.full_file_name, self._fn)
@@ -133,12 +132,25 @@ from ophyd.areadetector.cam import PilatusDetectorCam as _PilatusDetectorCam
 class LIXPilatusCam(_PilatusDetectorCam):
     full_file_name = ADComponent(EpicsSignalRO, 'FullFileName_RBV', string=True)
     
+@register_plugin
+class CodecPlugin(PluginBase):
+    _default_suffix = "Codec1:"
+    _suffix_re = r"Codec\d:"
+    _plugin_type = "NDPluginCodec" 
+
+@register_plugin
+class PvaPlugin(PluginBase):
+    _default_suffix = "Pva1:"
+    _suffix_re = r"Pva\d:"
+    _plugin_type = "NDPluginPva"
 
 class LIXPilatus(PilatusDetector):
     cam = ADComponent(LIXPilatusCam, 'cam1:')
     hdf = Cpt(LIXhdfPlugin, suffix="HDF1:",
               write_path_template="", root='/')
-
+    #pva = Cpt(PvaPlugin, "Pva1:")
+    codec1 = Cpt(CodecPlugin, "Codec1:")
+    
     cbf_file_path = ADComponent(EpicsSignalWithRBV, 'cam1:FilePath', string=True)
     cbf_file_name = ADComponent(EpicsSignalWithRBV, 'cam1:FileName', string=True)
     cbf_file_number = ADComponent(EpicsSignalWithRBV, 'cam1:FileNumber')
@@ -267,7 +279,7 @@ class LIXPilatus(PilatusDetector):
 
 
 class LiXDetectors(Device):
-    pil1M = Cpt(LIXPilatus, '{Det:SAXS}', name="pil1M", detector_id="SAXS", hostname="xf16idc-pilatus1m.nsls2.bnl.local")
+    #pil1M = Cpt(LIXPilatus, '{Det:SAXS}', name="pil1M", detector_id="SAXS", hostname="xf16idc-pilatus1m.nsls2.bnl.local")
     #pilW1 = Cpt(LIXPilatus, '{Det:WAXS1}', name="pilW1", detector_id="WAXS1", hostname="xf16idc-pilatus300k1.nsls2.bnl.local")
     pilW2 = Cpt(LIXPilatus, '{Det:WAXS2}', name="pilW2", detector_id="WAXS2", hostname="xf16idc-pilatus900k.nsls2.bnl.local")
     trigger_lock = None
@@ -282,7 +294,8 @@ class LiXDetectors(Device):
 
     def __init__(self, prefix):
         super().__init__(prefix=prefix, name="pil")
-        self.dets = {"pil1M": self.pil1M,  "pilW2": self.pilW2} # "pilW1": self.pilW1,
+        #self.dets = {"pil1M": self.pil1M,  "pilW2": self.pilW2} # "pilW1": self.pilW1,
+        self.dets = {"pilW2": self.pilW2}
         if self.trigger_lock is None:
             self.trigger_lock = threading.Lock()
         for dname,det in self.dets.items():
@@ -438,7 +451,7 @@ class LiXDetectors(Device):
                                     
 try:
     pil = LiXDetectors("XF:16IDC-DT")   
-    pil.activate(["pil1M", "pilW2"])
+    pil.activate(["pilW2"])    #["pil1M", "pilW2"])
     pil.set_trigger_mode(PilatusTriggerMode.ext_multi)
     #pil.set_thresh()
 except:
