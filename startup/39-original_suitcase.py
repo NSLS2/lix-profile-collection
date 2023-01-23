@@ -61,12 +61,15 @@ def locate_h5_resource(res, replace_res_path, debug=False):
         os.remove(fn_orig)
     
     hf5 = h5py.File(fn, "r")
-    return hf5, hf5["/entry/data/data"]
+    timestamps = np.array(hf5["entry/instrument/NDAttributes/NDArrayEpicsTSSec"], dtype=float)
+    timestamps += 1e-9*np.array(hf5["entry/instrument/NDAttributes/NDArrayEpicsTSnSec"], dtype=float)
+    
+    return hf5,hf5["/entry/data/data"],timestamps
 
 
 def hdf5_export(headers, filename, debug=False,
            stream_name=None, fields=None, bulk_h5_res=True,
-           timestamps=True, use_uid=True, db=None, replace_res_path={}):
+           save_timestamps=True, use_uid=True, db=None, replace_res_path={}):
     """
     Create hdf5 file to preserve the structure of databroker.
 
@@ -84,7 +87,7 @@ def hdf5_export(headers, filename, debug=False,
         whitelist of names of interest; if None, all are returned;
         This is consistent with name convension in databroker.
         The default is None.
-    timestamps : Bool, optional
+    save_timestamps : Bool, optional
         save timestamps or not
     use_uid : Bool, optional
         Create group name at hdf file based on uid if this value is set as True.
@@ -170,7 +173,7 @@ def hdf5_export(headers, filename, debug=False,
                 desc_group.create_dataset('time', data=event_times,
                                           compression='gzip', fletcher32=True)
                 data_group = desc_group.create_group('data')
-                if timestamps:
+                if save_timestamps:
                     ts_group = desc_group.create_group('timestamps')
 
                 for key, value in data_keys.items():
@@ -180,11 +183,8 @@ def hdf5_export(headers, filename, debug=False,
                             print("   skipping ...")
                             continue
                     print(f"creating dataset for {key} ...")
-                    if timestamps:
+                    if save_timestamps:
                         timestamps = [e['timestamps'][key] for e in events]
-                        ts_group.create_dataset(key, data=timestamps,
-                                                compression='gzip',
-                                                fletcher32=True)
 
                     if key in list(res_dict.keys()):
                         res = res_docs[res_dict[key][0]]
@@ -199,19 +199,21 @@ def hdf5_export(headers, filename, debug=False,
                             N = len(res_dict[key])
                             print(f"copying data from source h5 file(s) directly, N={N} ...")
                             if N==1:
-                                hf5, data = locate_h5_resource(res_docs[res_dict[key][0]], replace_res_path=rp, debug=debug)
+                                hf5,data,timestamps = locate_h5_resource(res_docs[res_dict[key][0]], replace_res_path=rp, debug=debug)
                                 data_group.copy(data, key)
                                 hf5.close()
                                 dataset = data_group[key]
                             else: # ideally this should never happen, only 1 hdf5 file/resource per scan
                                 for i in range(N):
-                                    hf5, data = locate_h5_resource(res_docs[res_dict[key][i]])
+                                    hf5,data,ts = locate_h5_resource(res_docs[res_dict[key][i]])
                                     if i==0:
                                         dataset = data_group.create_dataset(
                                                 key, shape=(N, *data.shape), 
                                                 compression=data.compression,
                                                 chunks=(1, *data.chunks))
+                                        timestamps = np.zeros(shape=(N, ts.shape))
                                     dataset[i,:] = data
+                                    timestamps[i,:] = ts
                                     hf5.close()
                         else:
                             print(f"getting resource data using handlers ...")
@@ -221,6 +223,11 @@ def hdf5_export(headers, filename, debug=False,
                         print(f"compiling resource data from individual events ...")
                         rawdata = [e['data'][key] for e in events]
 
+                    if save_timestamps:
+                        ts_group.create_dataset(key, data=timestamps,
+                                                compression='gzip',
+                                                fletcher32=True)
+                        
                     if rawdata is not None:
                         data = np.array(rawdata)
 
@@ -270,7 +277,7 @@ def hdf5_export(headers, filename, debug=False,
                             #    print("failed to convert data: ")
                             #    print(np.array(conv_to_list(rawdata)))
                             #    continue
-
+                    
                     # Put contents of this data key (source, etc.)
                     # into an attribute on the associated data set.
                     _safe_attrs_assignment(dataset, dict(value))
