@@ -20,6 +20,7 @@ import threading
 class PositioningStack():
     # coarse x, Misumi
     xc = EpicsMotor('XF:16IDC-ES:Scan{Ax:XC}Mtr', name='ss_xc')
+    
     # Newport pusher
     z = EpicsMotor('XF:16IDC-ES:Scan{Ax:Z}Mtr', name='ss_z')
 
@@ -414,17 +415,22 @@ class XPStraj(Device):
         
         # bandage solution for getting timestamps
         # need to have ssh key on the data collection workstation
-        fn0 = "/tmp/data.log"
-        fn = pil.active_detectors[0].cam.full_file_name.get().rsplit("_", maxsplit=1)[0]+".log"
-        os.system(f"scp det@{pil.active_detectors[0].hostname}:{fn} {fn0}")
-        with open(fn.replace('ramdisk', 'exp_path')) as fh:
+        #fn0 = "/tmp/data.log"
+        #fn = pil.active_detectors[0].cam.full_file_name.get().rsplit("_", maxsplit=1)[0]+".log"
+        #os.system(f"scp det@{pil.active_detectors[0].hostname}:{fn} {fn0}")
+        ##with open(fn.replace('ramdisk', 'exp_path')) as fh:
         #with open(fn0) as fh:
-            lns = fh.read().split('\n')[1:-2]
+        #    lns = fh.read().split('\n')[1:-2]
+        #timestamps = [datetime.fromisoformat(l.split()[0]).timestamp() for l in lns]
 
-        timestamps = [datetime.fromisoformat(l.split()[0]).timestamp() for l in lns]
-
+        # the hdf file produced by areDetector contains the time stamp:
+        # entry/instrument/NDAttributes/NDArrayEpicsTSSec
+        # entry/instrument/NDAttributes/NDArrayEpicsTSnSec
+        # TSec + 1e-9*TnSec
+        # for now just save the time stamp from the readback
+        
         data[self.traj_par['fast_axis']] = self.read_back['fast_axis']
-        ts[self.traj_par['fast_axis']] = timestamps    # self.read_back['timestamp']
+        ts[self.traj_par['fast_axis']] = self.read_back['timestamp']  # timestamps
         if self.motor2 is not None:
             data[self.traj_par['slow_axis']] = self.read_back['slow_axis']
             ts[self.traj_par['slow_axis']] = self.read_back['timestamp2']
@@ -692,5 +698,119 @@ class XPStraj(Device):
             self.read_back['slow_axis'].append(self.motor2.position)
             self.read_back['timestamp2'].append(time.time())
 
+def rel_raster(exp_time, fast_axis, f_start, f_end, Nfast,
+               slow_axis=None, s_start=0, s_end=0, Nslow=1, debug=False, md=None):
+
+    fm0 = fast_axis.position
+    sm0 = slow_axis.position
+    yield from raster(exp_time, fast_axis, fm0+f_start, fm0+f_end, Nfast,
+                      slow_axis=slow_axis, s_start=sm0+s_start, s_end=sm0+s_end, Nslow=Nslow, 
+                      debug=debug, md=md)
+    
+def raster(exp_time, fast_axis, f_start, f_end, Nfast,
+           slow_axis=None, s_start=0, s_end=0, Nslow=1, debug=False, md=None):
+    """ raster scan in fly mode using detectors with exposure time of exp_time
+        detectors must be a member of pilatus_detectors_ext
+        fly on the fast_axis, step on the slow_axis, both specified as Ophyd motors
+        the fast_axis must be one of member of xps_trj.motors, for now this is hard-coded
+        the specified positions are relative to the current position
+        for the fast_axis are the average positions during detector exposure 
+        
+        use it within the run engine: RE(raster(...))
+        update 2020aug: always use the re-defined pilatus detector group
+        
+    """
+    #if not set(detectors).issubset(pilatus_detectors_ext):
+    #    raise Exception("only pilatus_detectors_ext can be used in this raster scan.")
+    pil.set_trigger_mode(PilatusTriggerMode.ext_multi)
+    detectors = [pil]
+
+    step_size = np.fabs((f_end-f_start)/(Nfast-1))
+    dt = exp_time + 0.005    # exposure_period is 5ms longer than exposure_time, as defined in Pilatus
+    xps.traj.define_traj(fast_axis, Nfast-1, step_size, dt, motor2=slow_axis)
+    p0_fast = fast_axis.position
+    
+    motor_pos_sign = fast_axis.user_offset_dir()
+    run_forward_first = ((motor_pos_sign>0 and f_start<f_end) or (motor_pos_sign<0 and f_start>f_end))
+    # forward/back trajectory = fast axis motor postion increasing/decreasing
+    # rampup_distance and step_size are both positive
+    # ready positions are dial positions
+    ready_pos_FW = np.min(np.array([f_start, f_end])*motor_pos_sign)-(xps.traj.traj_par['rampup_distance']+step_size/2)
+    ready_pos_BK = np.max(np.array([f_start, f_end])*motor_pos_sign)+(xps.traj.traj_par['rampup_distance']+step_size/2)
+    xps.traj.traj_par['ready_pos'] = [ready_pos_FW, ready_pos_BK]
+    
+    xps.traj.clear_readback()
+    
+    if debug:
+        print('## trajectory parameters:')
+        print(xps.traj.traj_par)
+        print(f'## step_size = {step_size}')
+
+    if slow_axis is not None:
+        p0_slow = slow_axis.position
+        pos_s = np.linspace(s_start, s_end, Nslow)
+        motor_names = [slow_axis.name, fast_axis.name]
+    else:
+        if Nslow != 1:
+            raise Exception(f"invlaid input, did not pass slow_axis, but passed Nslow != 1 ({Nslow})")
+        p0_slow = None
+        pos_s = [0]   # needed for the loop in inner()
+        motor_names = [fast_axis.name]
+
+    print(pos_s)
+    print(motor_names)
+    xps.traj.detectors = detectors
+    
+    pil.exp_time(exp_time)
+    #pil.number_reset(True)  # set file numbers to 0
+    #pil.number_reset(False) # but we want to auto increment
+    pil.set_num_images(Nfast*Nslow)
+    print('setting up to collect %d exposures of %.2f sec ...' % (Nfast*Nslow, exp_time))
+    
+    scan_shape = [Nslow, Nfast]
+    _md = {'shape': tuple(scan_shape),
+           'plan_args': {'detectors': list(map(repr, detectors))},
+           'plan_name': 'raster',
+           'plan_pattern': 'outer_product',
+           'motors': tuple(motor_names),
+           'hints': {},
+           }
+    _md.update(md or {})
+    _md['hints'].setdefault('dimensions', [(('time',), 'primary')])        
+   
+    def line():
+        print("in line()")
+        yield from bps.kickoff(xps.traj, wait=True)
+        yield from bps.complete(xps.traj, wait=True)
+        print("leaving line()")
+
+    @bpp.stage_decorator(detectors)
+    @bpp.stage_decorator([xps.traj])
+    @bpp.run_decorator(md=_md)
+    @fast_shutter_decorator()
+    def inner(detectors, fast_axis, slow_axis, Nslow, pos_s):
+        running_forward = run_forward_first
+        
+        print("in inner()")
+        for sp in pos_s:
+            print("start of the loop")
+            if slow_axis is not None:
+                print(f"moving {slow_axis.name} to {sp}")
+                yield from mv(slow_axis, sp)
+
+            print("starting trajectory ...")
+            xps.traj.select_forward_traj(running_forward)
+            yield from line()
+            print("Done")
+            running_forward = not running_forward
+
+        yield from bps.collect(xps.traj)
+        print("leaving inner()")
+
+    yield from inner(detectors, fast_axis, slow_axis, Nslow, pos_s)
+    yield from sleeplan(1.0)  # give time for the current em timeseries to finish
+         
+xps = XPSController("xf16idc-mc-xps-rl4.nsls2.bnl.local", "XPS-RL4")
+xps.init_traj("scan")
             
     
