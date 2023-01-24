@@ -66,6 +66,10 @@ class XPSController():
         self.motors = {}
         self.update()
         self.lock = threading.Lock()
+        self.ts = time.time()
+        self.status = {}
+        self.positions = {}
+        self.check_status_interval = 0.05
 
     def update(self):
         self.groups = {}
@@ -88,12 +92,12 @@ class XPSController():
                 self.motors[obj]['index'] = self.groups[tl[0]].index(obj)  
     
     def get_motor_status(self, mot):
-        self.lock.acquire()
-        err,ret = self.xps.GroupMotionStatusGet(self.sID, mot, 1)
-        if err!='0' or len(ret)==0:
-            print(f"trouble getting group status for {mot}...: ", err,ret)
-        self.lock.release()
-        return err,ret        
+        grp = self.motors[mot]['group']
+        ts = time.time()
+        if ts-self.ts>self.check_status_interval or mot not in self.status.keys():
+            self.get_group_status(grp)
+        self.ts = ts
+        return self.status[mot]
                 
     def get_group_status(self, grp):
         self.lock.acquire()
@@ -101,15 +105,18 @@ class XPSController():
         if err!='0' or len(ret)==0:
             print(f"trouble getting group status for {grp}...: ", err,ret)
         self.lock.release()
+        status = ret.split(',')
+        for mot in self.groups[grp]:
+            self.status[mot] = (err,status[self.motors[mot]['index']])
         return err,ret
         
     def get_motor_position(self, mot):
-        self.lock.acquire()
-        err,ret = self.xps.GroupPositionCurrentGet(self.sID, mot, 1)
-        if err!='0' or len(ret)==0:
-            print(f"trouble getting group position for {grp} ...: ", err,ret)
-        self.lock.release()
-        return err,ret
+        grp = self.motors[mot]['group']
+        ts = time.time()
+        if ts-self.ts>self.check_status_interval or mot not in self.positions.keys():
+            self.get_group_position(grp)
+        self.ts = ts
+        return self.positions[mot]
 
     def get_group_position(self, grp):
         self.lock.acquire()
@@ -117,6 +124,9 @@ class XPSController():
         if err!='0' or len(ret)==0:
             print(f"trouble getting group position for {grp} ...: ", err,ret)
         self.lock.release()
+        pos = ret.split(',')
+        for mot in self.groups[grp]:
+            self.positions[mot] = (err,pos[self.motors[mot]['index']])
         return err,ret
         
     def def_motor(self, motorName, OphydName, egu="mm", direction=1): 
