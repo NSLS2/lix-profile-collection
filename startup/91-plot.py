@@ -1,3 +1,5 @@
+print(f"Loading {__file__}...")
+
 import numpy as np
 import matplotlib.pyplot as plt
 from itertools import cycle

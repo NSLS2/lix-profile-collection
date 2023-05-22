@@ -1,3 +1,5 @@
+print(f"Loading {__file__}...")
+
 from ophyd.areadetector.detectors import ProsilicaDetector
 from ophyd.areadetector.plugins import ImagePlugin_V34 as ImagePlugin
 from ophyd.areadetector.plugins import TIFFPlugin_V34 as TIFFPlugin

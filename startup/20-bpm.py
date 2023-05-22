@@ -1,3 +1,5 @@
+print(f"Loading {__file__}...")
+
 from ophyd import Device, EpicsSignal, Signal, EpicsSignalWithRBV, Component as Cpt
 from ophyd.areadetector import (ADComponent as ADCpt, StatsPlugin)
 from ophyd.quadem import NSLS_EM,TetrAMM,QuadEM,QuadEMPort
@@ -66,24 +68,71 @@ class LiX_EM(QuadEM):
             "values_per_read",
         ]
 
+class LiXTetrAMM(QuadEM):
+    conf = Cpt(QuadEMPort, port_name="TetrAMM", kind="omitted")
+    ts = ADCpt(TimeSeries, "TS:")
 
-"""
-class TetrAMM(QuadEM):
-    port_name = Cpt(Signal, value='TetrAMM')
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.stage_sigs.update([(self.acquire_mode, "Single")])  # single mode
+        self.configuration_attrs = [
+            "integration_time",
+            "averaging_time",
+            "em_range",
+            "num_averaged",
+            "values_per_read",
+            "trigger_mode",
+        ]
+    
+class LiXTetrAMMext(QuadEM):
+    conf = Cpt(QuadEMPort, port_name="TetrAMM", kind="omitted")
+    ts = ADCpt(TimeSeries, "TS:")
+    npoints = Signal(name="num_points", value=20)
+    avg_time = Signal(name="avg_time", value=0.05)
 
-class NSLS_EM1(NSLS_EM):
-    _default_read_attrs = []
-    _default_configuration_attrs = []
- 
-"""
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.stage_sigs.update([('acquire_mode', 0), # continuous 
+                                ('trigger_mode', 1), # ext trigger
+                                ('ts.acquire_mode', 1), # circular buffer
+                                ('ts.read_rate', 0), # passive
+		               ])
+        self.configuration_attrs = [
+            "integration_time",
+            "averaging_time",
+            "em_range",
+            "num_averaged",
+            "values_per_read",
+            "trigger_mode",
+        ]
+    
+    def stage(self):
+        self.stage_sigs.update([('averaging_time', self.avg_time.get()),
+                                ('ts.averaging_time', self.avg_time.get()),
+                                ('ts.num_points', self.npoints.get()),
+                               ])
+        super().stage()
+        self.ts.acquire.put(1)
+        self.acquire.put(1)
+
 
 em1 = LiX_EM('XF:16IDC-ES{NSLS_EM:1}', name='em1')
 em1.read_attrs = ['current1', 'current2', 'current3', 'current4', 'sum_all']
 em1.sum_all.mean_value.kind = 'hinted'
 
-em2 = LiX_EM('XF:16IDC-ES{NSLS_EM:2}', name='em2')
-em2.read_attrs = ['current1', 'current2', 'current3', 'current4', 'sum_all']
+# Siddons electrometer
+#em2 = LiX_EM('XF:16IDC-ES{NSLS_EM:2}', name='em2')
+#em2.read_attrs = ['current1', 'current2', 'current3', 'current4', 'sum_all']
+#em2.sum_all.mean_value.kind = 'hinted'
+
+# CaenELS TetrAMM
+em2 = LiXTetrAMM('XF:16IDC-BI{BPM:1}', name='em2')
+em2.read_attrs = ['sum_all']
 em2.sum_all.mean_value.kind = 'hinted'
+
+em2ext = LiXTetrAMMext('XF:16IDC-BI{BPM:1}', name='em2')
+em2ext.read_attrs = ['sum_all']
+em2ext.sum_all.mean_value.kind = 'hinted'
 
 em0 = LiX_EM('XF:16IDA{NSLS_EM:3}', name='em0')
 em0.read_attrs = ['x_position', 'y_position']

@@ -1,4 +1,5 @@
-# part of the ipython profile for data collection
+print(f"Loading {__file__}...")
+
 from ophyd import (EpicsSignal, EpicsMotor, Device, Component as Cpt)
 from time import sleep
 import threading,signal,random
@@ -20,9 +21,9 @@ class SolutionScatteringControlUnit(Device):
     sv_drain2 = Cpt(EpicsSignal, "sv_drain2")
     sv_pcr_tubes = Cpt(EpicsSignal, "sv_pcr_tubes")
     sv_solenoid = Cpt(EpicsSignal, "sv_solenoid")
-    sampleT = Cpt(EpicsSignal, "sample_temp")
-    sampleTs = Cpt(EpicsSignal, "sample_temp_SP")
-    sampleTCsts = Cpt(EpicsSignal, "sample_TCsts")
+    #sampleT = Cpt(EpicsSignal, "sample_temp")
+    #sampleTs = Cpt(EpicsSignal, "sample_temp_SP")
+    #sampleTCsts = Cpt(EpicsSignal, "sample_TCsts")
     vc_4port = Cpt(EpicsSignal, "vc_4port_valve")
     serial_busy = Cpt(EpicsSignal, "busy")
     ready = Cpt(EpicsSignal, "ready")
@@ -83,6 +84,8 @@ class SolutionScatteringExperimentalModule():
     pcr_v_enable = EpicsSignal("XF:16IDC-ES:Sol{ctrl}SampleAligned")    # 1 means PCR tube holder can go up 
     pcr_holder_down = EpicsSignal("XF:16IDC-ES:Sol{ctrl}HolderDown")
     EMready = EpicsSignal("XF:16IDC-ES:Sol{ctrl}EMSolReady")
+    Robot_ready = EpicsSignal("XF:16IDC-ES:EMready")
+    SetupType=EpicsSignal("XF:16IDC-ES:EMconfig")
     HolderPresent = EpicsSignal("XF:16IDC-ES:Sol{ctrl}HolderPresent")
     
     holder_x = EpicsMotor('XF:16IDC-ES:Sol{Enc-Ax:Xl}Mtr', name='sol_holder_x')
@@ -122,6 +125,7 @@ class SolutionScatteringExperimentalModule():
     drain_pos = 0.
     park_pos = 0. # no need to move
     xc_park_pos = 0
+    xc_park_fixed=100
     
     disable_flow_cell_move = False
     
@@ -133,9 +137,10 @@ class SolutionScatteringExperimentalModule():
     # assume that tube is empty
     wash_duration = 1.
     drain_duration = 2.
+    
 
     # drain valve
-    drain = {'upstream': ctrl.sv_drain1, 'downstream': ctrl.sv_drain2}
+    drain = {'upstream': ctrl.sv_drain2, 'downstream': ctrl.sv_drain1}
     
     # syringe pump 
     default_piston_pos = 150
@@ -158,6 +163,7 @@ class SolutionScatteringExperimentalModule():
     default_wash_repeats = 5
     
     cam = None 
+    tctrl = None
     
     def __init__(self, camName="camES1"):
         # important to home the stages !!!!!
@@ -175,6 +181,8 @@ class SolutionScatteringExperimentalModule():
 
         self.int_handler = signal.getsignal(signal.SIGINT)
         self.cam = setup_cam(camName)
+        setSignal(self.SetupType,0)
+        setSignal(self.Robot_ready,0)
 
     def set_xc_limits(self):
         raise Exception("You should not be here ...")
@@ -208,7 +216,6 @@ class SolutionScatteringExperimentalModule():
 
     def home_holder(self):
         mot = sol.holder_x
-
         print("homing sol.holder_x ...")
         mot.velocity.put(25)
         mot.set_lim(0,0)
@@ -267,8 +274,10 @@ class SolutionScatteringExperimentalModule():
         '''
         # any time the sample holder is moving, the solution EM is no longer ready
         setSignal(self.EMready, 0)
+        setSignal(self.Robot_ready, 0)
+        setSignal(self.SetupType,0)
 
-        if tn not in range(0,self.Ntube+1) and tn!='park':
+        if tn not in range(0,self.Ntube+1) and tn!='park' and tn!='park fixed':
             raise RuntimeError('invalid tube position %d, must be 0 (drain) or 1-18, or \'park\' !!' % tn)
         if self.pcr_holder_down.get()!=1:
             self.move_tube_holder("down")
@@ -278,7 +287,15 @@ class SolutionScatteringExperimentalModule():
         if tn=='park':
             ss.xc.move(self.xc_park_pos)        # so that the robot doesn't have to change trajectory
             self.holder_x.move(self.park_pos)
-            print('move to PCR tube holder park position ...')        
+            print('move to PCR tube holder park position ...')
+        elif tn=='park fixed':
+            pos = self.drain_pos
+            pos += (self.tube1_pos + self.tube_spc*(18-1))
+            print('move to PCR tube position 18')
+            self.holder_x.move(pos)
+            ss.xc.move(self.xc_park_fixed)  # fixed cell park position for robot
+            ss.y.move(0) # ss.y position is 0 for fixed cell.
+            print('xc moved outboard for sample holder exchange')
         else:
             pos = self.drain_pos
             if tn>0:
@@ -290,7 +307,10 @@ class SolutionScatteringExperimentalModule():
             sleep(0.5)
         print('motion completed.')
         if tn in [0, 'park']:
+            setSignal(self.SetupType,0) # configuration Solution
             setSignal(self.EMready, 1)
+            setSignal(self.Robot_ready,1)
+            
             
     def move_tube_holder(self, pos, retry=5):
         '''1 argument accepted:

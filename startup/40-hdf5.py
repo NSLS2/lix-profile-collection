@@ -1,3 +1,5 @@
+print(f"Loading {__file__}...")
+
 import h5py,json,os
 import threading
 import numpy as np
@@ -220,7 +222,8 @@ def send_to_packing_queue(uid, data_type): #, froot=data_file_path.gpfs, move_fi
             print(f"scan {uid} was not successful.")
             return 
 
-    threading.Thread(target=pack_and_process, args=(data_type,uid,proc_path,)).start()
+    pack_and_process(data_type,uid,proc_path)
+    #threading.Thread(target=pack_and_process, args=(data_type,uid,proc_path,)).start()
     #threading.Thread(target=pack_and_process, args=(data_type,uid,proc_path,move_first,)).start() 
     print("processing thread started ...")                    
         
@@ -269,12 +272,16 @@ def pack_and_process(data_type, uid, dest_dir):
             dir_name = db[uids[0]].start['holderName']
             fh5_name = dir_name+'.h5'
         fn = pack_h5_with_lock(uids, dest_dir, fn="tmp.h5")
+        #fn = pack_h5(uids, fn=fh5_name)
+        if fh5_name != "tmp.h5":  # temporary fix, for some reason other processes cannot open the packed file
+            os.system(f"cd {dest_dir} ; cp tmp.h5 {fh5_name} ; rm tmp.h5")
+        fn = fh5_name
         if fn is not None and dt_exp is not None and data_type!="mscan":
             print('processing ...')
             if data_type=="sol":    
                 dt = h5sol_HT(fn, [dt_exp.detectors, dt_exp.qgrid])
                 dt.assign_buffer(sb_dict)
-                dt.process(filter_data=True, sc_factor="auto", debug='quiet')
+                #dt.process(filter_data=True, sc_factor="auto", debug='quiet')
                 #dt.export_d1s(path=dest_dir+"/processed/")
             elif data_type=="multi":
                 dt = h5xs(fn, [dt_exp.detectors, dt_exp.qgrid], transField='em2_sum_all_mean_value')
@@ -284,13 +291,13 @@ def pack_and_process(data_type, uid, dest_dir):
                 dt.load_data(debug="quiet")
             dt.fh5.close()
             del dt,dt_exp            
-            if fh5_name != "tmp.h5":  # temporary fix, for some reason other processes cannot open the packed file
-                os.system(f"cd {dest_dir} ; cp tmp.h5 {fh5_name} ; rm tmp.h5")
-            if data_type == "sol":
-                try:
-                    gen_report(fh5_name)
-                except:
-                    pass
+            #if fh5_name != "tmp.h5":  # temporary fix, for some reason other processes cannot open the packed file
+            #    os.system(f"cd {dest_dir} ; cp tmp.h5 {fh5_name} ; rm tmp.h5")
+            #if data_type == "sol":
+            #    try:
+            #        gen_report(fh5_name)
+            #    except:
+            #        pass
     elif data_type=="HPLC":
         uids = [uid]
         fn = pack_h5_with_lock(uid, dest_dir=dest_dir, attach_uv_file=True)

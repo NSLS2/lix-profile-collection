@@ -1,3 +1,5 @@
+print(f"Loading {__file__}...")
+
 import socket
 import numpy,enum
 from time import sleep

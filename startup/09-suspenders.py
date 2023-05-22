@@ -1,3 +1,5 @@
+print(f"Loading {__file__}...")
+
 from ophyd import EpicsSignal
 from bluesky.suspenders import SuspendFloor
 from bluesky.suspenders import SuspendCeil

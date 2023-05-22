@@ -1,3 +1,5 @@
+print(f"Loading {__file__}...")
+
 from ophyd import (EpicsSignal, Device, Component as Cpt)
 
 # this might not work as intended, uncomment if needed

@@ -1,3 +1,5 @@
+print(f"Loading {__file__}...")
+
 from ophyd import (PseudoPositioner, PseudoSingle, EpicsMotor, Signal, EpicsSignalRO)
 from ophyd import (Component as Cpt)
 from ophyd.pseudopos import (pseudo_position_argument, real_position_argument)

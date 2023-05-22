@@ -1,10 +1,12 @@
 from py4xs.hdf import h5exp
 import time,sys,random,openpyxl
+import pandas as pd
 
 
 ss = PositioningStack()
 ss.x = xps.def_motor("scan.X", "ss_x", direction=-1)
 ss.y = xps.def_motor("scan.Y", "ss_y")
+xps.init_traj("scan")
 
 reload_macros("/nsls2/data/lix/shared/config/SolutionScattering/config.py")
 sol.ready_for_hplc.set(0)
@@ -73,7 +75,7 @@ def collect_reference_from_tube12():
         sol.wash_needle(nd) #, option="wash only")
         sname = f"{fcell}_blank_{ts}"
         change_sample(sname)
-        RE(ct([pil,em1,em2], num=5))
+        RE(ct([pil,em1,em2], num=5), md=md)
         sname = f"{fcell}_water_{ts}"
         sol.measure(pos, sample_name=sname, exp=1, repeats=5, md=md)
     pil.use_sub_directory()
@@ -417,7 +419,7 @@ def auto_measure_samples(spreadSheet, configName, exp_time=1, repeats=5, vol=45,
 
         sol.select_tube_pos('park')
 
-        rbt.mount()
+        rbt.mountTray()
         print('mounted tray =', p)
         holderName = holders[p]
 
@@ -433,9 +435,9 @@ def auto_measure_samples(spreadSheet, configName, exp_time=1, repeats=5, vol=45,
         sol.select_tube_pos('park')
 
         try:  # this sometimes craps out, but never twice in a row
-            rbt.unmount()
+            rbt.unmountTray()
         except:
-            rbt.unmount()
+            rbt.unmountTray()
         #rbt.unloadTray(d['holderPosition'][i])
         rbt.unloadTray(p)
         
@@ -464,7 +466,7 @@ class sock_client:
 def checkQRcodes(cs, locs):
     Flocs = []
     Fuids = []
-    camcmd = {"target": "1QR", "zoom": 400, "focus": 50, "exposure": 140}
+    camcmd = {"target": "1QR", "zoom": 400, "focus": 45, "exposure": 140}
 
     rbt.goHome()
     for loc in locs:
@@ -486,7 +488,7 @@ def measure_mailin_spreadsheets(sh_list, sample_locs=None, check_QR_only=False):
             1. the first sheet is named as proposal#_SAF#
             2. a "UIDs" tab that lists all sample holder names and UIDs
     """
-    cs = sock_client(('xf16idc-babyioc1', 9999)) # webcam on babyIOC
+    cs = sock_client(('10.66.123.29', 9999)) # webcam on merkat - xf16id-ioc2
 
     if sample_locs is None:
         sample_locs = list(range(1,21))

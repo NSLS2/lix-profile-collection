@@ -1,3 +1,5 @@
+print(f"Loading {__file__}...")
+
 import glob,re
 
 current_sample="test"

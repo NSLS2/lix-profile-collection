@@ -1,3 +1,5 @@
+print(f"Loading {__file__}...")
+
 from nslsii.detectors.xspress3 import XspressTrigger,Xspress3Detector,Xspress3Channel,Xspress3FileStore
 
 from ophyd.areadetector import (DetectorBase, CamBase,

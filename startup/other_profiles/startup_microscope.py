@@ -1,11 +1,12 @@
 print("loading configuration for microscope-EM ...")
 
-from bluesky.plan_stubs import sleep as sleeplan
-
 ss = PositioningStackMicroscope()
+caput(ss.xc.prefix+".DIR", 1)
+
 ss.x = xps.def_motor("scan.X", "ss_x", direction=-1)
 ss.y = xps.def_motor("scan.Y", "ss_y")
 #ss.ry = xps.def_motor("rot.rY", "ss_ry")
+xps.init_traj("scan")
 
 # fix dir/res of SmarAct gonio 
 caput(ss.sx.prefix+".DIR", 1)

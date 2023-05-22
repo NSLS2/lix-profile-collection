@@ -1,3 +1,5 @@
+print(f"Loading {__file__}...")
+
 import asyncio
 from traitlets import HasTraits, TraitType, Unicode, List, Float, Bool, link
 from bluesky.utils import get_history

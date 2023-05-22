@@ -1,3 +1,5 @@
+print(f"Loading {__file__}...")
+
 from ophyd import Device, Component as Cpt, EpicsMotor, EpicsSignalRO
 from epics import caget,caput, PV
 

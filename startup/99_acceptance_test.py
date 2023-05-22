@@ -1,3 +1,5 @@
+print(f"Loading {__file__}...")
+
 def run_acceptance_test():
     login(test_only=True)
 

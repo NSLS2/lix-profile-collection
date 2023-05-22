@@ -1,3 +1,5 @@
+print(f"Loading {__file__}...")
+
 from ophyd.signal import (EpicsSignal, EpicsSignalRO)
 from ophyd.utils.epics_pvs import (raise_if_disconnected, AlarmSeverity)
 from ophyd.device import (Device, Component as Cpt)

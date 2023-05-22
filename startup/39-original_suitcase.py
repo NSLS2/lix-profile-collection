@@ -1,3 +1,5 @@
+print(f"Loading {__file__}...")
+
 #-------------------------------------------------------------------------
 # Copyright (c) 2015-, Brookhaven National Laboratory
 #
@@ -61,9 +63,8 @@ def locate_h5_resource(res, replace_res_path, debug=False):
         os.remove(fn_orig)
     
     hf5 = h5py.File(fn, "r")
-    timestamps = np.array(hf5["entry/instrument/NDAttributes/NDArrayEpicsTSSec"], dtype=float)
-    timestamps += 1e-9*np.array(hf5["entry/instrument/NDAttributes/NDArrayEpicsTSnSec"], dtype=float)
-    
+    # not sure where AD gets the timestamps from, they are off by ~20 years
+    timestamps = np.array(hf5["entry/instrument/NDAttributes/NDArrayTimeStamp"], dtype=float) + 631152000.3
     return hf5,hf5["/entry/data/data"],timestamps
 
 

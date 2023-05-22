@@ -1,3 +1,5 @@
+print(f"Loading {__file__}...")
+
 ###############################################################################
 # TODO: remove this block once https://github.com/bluesky/ophyd/pull/959 is
 # merged/released.

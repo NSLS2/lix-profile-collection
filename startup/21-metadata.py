@@ -1,3 +1,5 @@
+print(f"Loading {__file__}...")
+
 def update_metadata():
     print('updating meta data ...', end='')
     RE.md['det_pos'] = ({'saxs': {'x':saxs.x.position, 'y':saxs.y.position, 'z':saxs.z.position},

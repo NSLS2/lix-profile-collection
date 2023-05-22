@@ -1,3 +1,5 @@
+print(f"Loading {__file__}...")
+
 import os
 from ophyd import (EpicsSignal, Device, Component as Cpt)
 from time import sleep

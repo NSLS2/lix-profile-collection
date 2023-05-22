@@ -1,3 +1,5 @@
+print(f"Loading {__file__}...")
+
 from ophyd import (EpicsSignal, Device, Component as Cpt, DerivedSignal)
 from nslsii.devices import TwoButtonShutter
 import time, sys 

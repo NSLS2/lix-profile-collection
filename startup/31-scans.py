@@ -1,3 +1,5 @@
+print(f"Loading {__file__}...")
+
 from collections import deque
 from ophyd.sim import motor, det
 import bluesky.plans as bp

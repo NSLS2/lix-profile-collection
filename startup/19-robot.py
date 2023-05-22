@@ -1,3 +1,4 @@
+print(f"Loading {__file__}...")
 # -*- coding: utf-8 -*-
 """
 Spyder Editor
@@ -11,32 +12,32 @@ import time
 NO_PARAMETERS = "__EMPTY__"
 
 class MethodPV(PV):
-	def execute(self,*args):        
+	def execute(self,*args):
 		if len(args)==0:
 			pars = [NO_PARAMETERS,]
 		else:
 			pars=[]
 			for arg in args:
 				pars.append(str(arg))
-        
+
 		#Python implementation does not support writing a an array if return is a single value
 		if (len(pars)>1):
-			self.put(pars,wait=True) 
+			self.put(pars,wait=True)
 			ret = self.get(use_monitor=False)[0]
 		else:
-			self.put(pars[0],wait=True)      
+			self.put(pars[0],wait=True)
 			ret = self.get(use_monitor=False)
-                
+
 		if self.severity!=0:
 			raise Exception(ret)
-		return ret  
-        
-        
+		return ret
+
+
 ################################################
 #Sincronizing Activities
 ################################################
 
-def waitReady(timeout=-1):    
+def waitReady(timeout=-1):
 	state = PV("SW:State")
 	start = time.perf_counter()
 	while True:
@@ -46,10 +47,10 @@ def waitReady(timeout=-1):
 			raise Exception("Timeout waiting ready")
 		time.sleep(0.01)
 
-def isTaskRunning(id):    
+def isTaskRunning(id):
 	pv = MethodPV("SW:isTaskRunning")
 	return pv.execute(id)
-    
+
 
 
 def getTaskReturn():
@@ -57,11 +58,11 @@ def getTaskReturn():
 	stat,exception = PV("SW:LastTaskInfo").get()[4:6]
 	if stat.startswith("ABORT"):
 		stat,exception  = stat.split(": ")
-        
+
 	if stat.startswith("Done") and stat.find("/")>=0:
 		stat,tmp = stat.split(" ")
 		smpStat  = [s=="True" for s in tmp.split("/")]
-        
+
 	if stat not in ("Done", "ABORT") and exception not in ("", "null"):
 		stat = "ABORT"
 	return stat,smpStat,exception
@@ -90,8 +91,8 @@ def runATask(cmd="Test",timeout=-1):
 	return getTaskReturn()
 
 
-class EM_Sol_Robot():
-	
+class EM_Robot():
+
 	CMD_TIMEOUT = 500000
 
 	def rebootEMBL(self):
@@ -101,9 +102,11 @@ class EM_Sol_Robot():
 		restart.execute()
 
 	def runTask(self,cmd,timeout):
-		cmdLists = ['Load', 'Mount', 'Unmount', 'Unload', 
-                'Initialize', 'PowerOff', 'Home', 'Push', 'Idle','Park',
-                'OpenStorageDoor', 'ShutStorageDoor', 'OpenGripper', 'CloseGripper']
+		cmdLists = ['LoadTray', 'MountTray', 'UnmountTray', 'UnloadTray',
+                'LoadPlate', 'MountPlate', 'UnmountPlate', 'UnloadPlate',
+                'LoadBead', 'MountBead', 'UnmountBead', 'UnloadBead',
+                'Initialize', 'PowerOff', 'Home', 'Idle','Park',
+                'OpenGripper', 'CloseGripper','TraceSample','resetSoftIO']
 		if cmd not in cmdLists:
 			raise Exception(cmd+" is not a valid Task.")
 
@@ -124,6 +127,9 @@ class EM_Sol_Robot():
 	def closeGripper(self):
 		self.runTask('CloseGripper', self.CMD_TIMEOUT)
 
+	def resetSoftIO(self):
+                self.runTask('resetSoftIO', self.CMD_TIMEOUT)
+
 	def goHome(self):
 		cmdList = ['Initialize','Home']
 		for cmd in cmdList:
@@ -138,13 +144,12 @@ class EM_Sol_Robot():
 			if (tskStat.lower()!="done"):
 				raise Exception(cmd+" "+tskStat+" with exception "+exception)
 
-	def loadTray(self,nTube):
-		if nTube<1 or nTube>20:
-			raise Exception("Tube position is out of range [0 ... 20]")
+	def __load(self,sType,n,cmdList):
+		ranges={"Tray":range(1,21), "Plate":range(1,13), "Bead":range(1,8)}
+		if n not in  ranges[sType]:
+                	raise Exception(sType+" position is out of range ["+ranges[sType][0]+" ... "+ranges[sType][-1]+"]")
 
-		setParameter("nTray", nTube)
-		cmdList = ['Initialize','Load']
-
+		setParameter("nSample", n)
 		for cmd in cmdList:
 			tskStat, sampleStat, exception = self.runTask(cmd, self.CMD_TIMEOUT)
 			if (tskStat.lower()!="done"):
@@ -153,21 +158,33 @@ class EM_Sol_Robot():
 			if len(sampleStat)==3:
 				[bMounted,bPicked,bLoaded]  = sampleStat
 
-			if cmd=="Load":
+			if cmd==cmdList[-1]:
 				if not bPicked and not bLoaded:
-					raise Exception("FATAL: Load Failed. Tray lost during loading")
+					raise Exception("FATAL: Load Failed. "+sType+" lost during loading")
 				if not bPicked and bLoaded:
-					raise Exception("Load Failed. Did not pick the tray")
-		return
+ 					raise Exception("Load Failed. Did not pick "+sType+" "+n)
+		return tskStat, sampleStat
 
 
-	def unloadTray(self,nTube):
-		if nTube<1 or nTube>20:
-			raise Exception("Tube position is out of range [0 ... 20]")
+	def loadTray(self,nTray):
+ 		cmdList = ['Initialize','LoadTray']
+ 		return self.__load("Tray",nTray,cmdList)
 
-		setParameter("nTray", nTube)
-		cmdList = ['Initialize','Unload']
+	def loadPlate(self,nPlate):
+ 		cmdList = ['Initialize','LoadPlate','TraceSample']
+ 		return self.__load("Plate",nPlate,cmdList)
 
+	def loadBead(self,nBead):
+		cmdList = ['Initialize','LoadBead','TraceSample']
+		return self.__load("Bead",nBead,cmdList)
+
+
+	def __unload(self, sType, n, cmdList):
+		ranges={"Tray":range(1,21), "Plate":range(1,13), "Bead":range(1,8)}
+		if n not in  ranges[sType]:
+			raise Exception(sType+" position is out of range ["+ranges[sType][0]+" ... "+ranges[sType][-1]+"]")
+
+		setParameter("nSample", n)
 		for cmd in cmdList:
 			tskStat, sampleStat, exception = self.runTask(cmd, self.CMD_TIMEOUT)
 			if (tskStat.lower()!="done"):
@@ -176,16 +193,54 @@ class EM_Sol_Robot():
 			if len(sampleStat)==3:
 				[bMounted,bPicked,bLoaded]  = sampleStat
 
-			if cmd=="Unload":
+			if cmd==cmdList[-1]:
 				if not bLoaded:
-					ret=self.push(nTube)
-					if ret==False:                   
-						raise Exception("FATAL: Unload Failed. Tray lost during unloading")
+					raise Exception("FATAL: Unload Failed. "+sType+" lost during unloading")
+		return tskStat, sampleStat
 
-		return
 
-	def mount(self):
-		cmdList = ['Initialize','Mount']
+	def unloadTray(self,nTray):
+		cmdList = ['Initialize','UnloadTray']
+		return self.__unload("Tray",nTray,cmdList)
+
+	def unloadPlate(self,nPlate):
+		cmdList = ['Initialize','UnloadPlate','TraceSample']
+		return self.__unload("Plate",nPlate,cmdList)
+
+	def unloadBead(self,nBead):
+		cmdList = ['Initialize','Unload','TraceSample']
+		return self.__unload("Bead",nBead,cmdList)
+
+
+	def __mount(self, sType, cmdList):
+		for cmd in cmdList:
+			tskStat, sampleStat, exception = self.runTask(cmd, self.CMD_TIMEOUT)
+			if (tskStat.lower()!="done"):
+				raise Exception(cmd+" "+tskStat+" with exception "+exception)
+
+			if len(sampleStat)==3:
+				[bMounted,bPicked,bLoaded]  = sampleStat
+
+			if cmd==cmdList[-1]:
+				if not bPicked and not bMounted:
+					raise Exception("FATAL: Mount Failed. "+sType+" lost during mounting")
+		return tskStat, sampleStat
+
+	def mountTray(self):
+		cmdList = ['Initialize','MountTray']
+		return self.__mount("Tray",cmdList)
+
+	def mountPlate(self):
+		cmdList = ['Initialize','MountPlate','TraceSample']
+		return self.__mount("Plate",cmdList)
+
+	def mountBead(self):
+		cmdList = ['Initialize','MountBead','TraceSample']
+		return self.__mount("Bead",cmdList)
+
+
+	def __unmount(self, sType, cmdList):
+		cmdList = ['Initialize','Unmount','TraceSample']
 
 		for cmd in cmdList:
 			tskStat, sampleStat, exception = self.runTask(cmd, self.CMD_TIMEOUT)
@@ -195,37 +250,26 @@ class EM_Sol_Robot():
 			if len(sampleStat)==3:
 				[bMounted,bPicked,bLoaded]  = sampleStat
 
-			if cmd=="Mount":
+			if cmd==cmdList[-1]:
 				if not bPicked and not bMounted:
-					ret=self.push(0)
-					if ret==False:
-						raise Exception("FATAL: Mount Failed. Tray lost during mounting")
-		return
-
-	def unmount(self):
-		cmdList = ['Initialize','Unmount']
-
-		for cmd in cmdList:
-			tskStat, sampleStat, exception = self.runTask(cmd, self.CMD_TIMEOUT)
-			if (tskStat.lower()!="done"):
-				raise Exception(cmd+" "+tskStat+" with exception "+exception)
-
-			if len(sampleStat)==3:
-				[bMounted,bPicked,bLoaded]  = sampleStat
-
-			if cmd=="Unmount":
-				if not bPicked and not bMounted:
-					raise Exception("FATAL: Unmount Failed. Tray lost during unmounting")
+					raise Exception("FATAL: Unmount Failed. "+sType+" lost during unmounting")
 				if not bPicked and bMounted:
-					raise Exception("Unmount Failed. Did not pick the tray")
-		return
+					raise Exception("Unmount Failed. Did not pick the "+sType+" "+n)
+		return tskStat, sampleStat
 
-	def push(self,nTube):
-		setParameter("nTray", nTube)
-		tskStat, sampleStat, exception = self.runTask("Push", self.CMD_TIMEOUT)
-		return True if tskStat.lower()=="done" else False
-                
-    
+	def unmountTray(self):
+		cmdList = ['Initialize','UnmountTray']
+		return self.__mount("Tray",cmdList)
+
+	def unmountPlate(self):
+		cmdList = ['Initialize','UnmountPlate','TraceSample']
+		return self.__mount("Plate",cmdList)
+
+	def unmountBead(self):
+		cmdList = ['Initialize','UnmountBead','TraceSample']
+		return self.__mount("Bead",cmdList)
+
+
 	def sleep(self):
 		cmdList = ['Initialize','Home','Idle']
 		for cmd in cmdList:
@@ -235,53 +279,61 @@ class EM_Sol_Robot():
 
 
 
-rbt = EM_Sol_Robot()
+rbt = EM_Robot()
 
-def testRobot(sMode='A',nbgn=1,nend=20,nloop=1):
-  if sMode not in ['A','B','C','D','E'] or nloop<1:
+def testRobot(sMode='A',nbgn=21,nend=24,nloop=1):
+  if sMode not in ['A','B','C','D','E','F'] or nloop<1:
     raise Exception("Parameter Error")
+
+  EMconfig = PV("XF:16IDC-ES:EMconfig").get()
+  types = {0:"Tray", 1:"Plate", 2:"Bead"}
+  maxSamples = {"Tray":20, "Plate":12, "Bead":7}
+  load = getattr(rbt,'load'+types[EMconfig])
+  mount= getattr(rbt,'mount'+types[EMconfig])
+  unmount= getattr(rbt,'unmount'+types[EMconfig])
+  unload = getattr(rbt,'unload'+types[EMconfig])
 
   rbt.powerOn()
 
   for n in range(1,nloop+1):
-    for nTray in range(nbgn,nend+1):
-      setParameter("nTray", nTray)
+    for nSample in range(nbgn,nend+1):
+      setParameter("nSample", nSample)
 
       if sMode=='A':
-        rbt.loadTray(nTray)
-        rbt.unloadTray(nTray)
-        
-      elif sMode=='B':
-        rbt.loadTray(nTray)
-        rbt.mount()
-        rbt.unmount()
-        rbt.unloadTray(nTray)
-         
-      elif sMode=='C':
-        rbt.loadTray(nTray)
-        if nTray==20:
-          rbt.unloadTray(1)
-        else:
-          rbt.unloadTray(nTray+1)
-        
-      elif sMode=='E':
-        rbt.loadTray(nTray)
-        rbt.mount()
-        sol.select_tube_pos(0)
-        time.sleep(2)
-        sol.select_tube_pos('park')
-        rbt.unmount()
-        rbt.unloadTray(nTray)
-        
-      else:
-        rbt.loadTray(nTray)
-        rbt.mount()
-        rbt.unmount()
-        if nTray==20:
-          rbt.unloadTray(1)
-        else:
-          rbt.unloadTray(nTray+1)
+        load(nSample)
+        unload(nSample)
 
-         
+      elif sMode=='B':
+        load(nSample)
+        mount()
+        unmount()
+        unload(nSample)
+
+      elif sMode=='C':
+        load(nSample)
+        if nSample==maxSamples[types[EMconfig]]:
+          unload(1)
+        else:
+          unload(nSample+1)
+
+      elif sMode=='E':
+        load(nSample)
+        mount()
+        move_sample(0)
+        time.sleep(2)
+        move_sample("park" if EMconfig==0 else 'park fixed')
+        unmount()
+        unload(nSample)
+
+      else:
+        load(nSample)
+        mount()
+        unmount()
+        if nSample==maxSamples[types[EMconfig]]:
+          unload(1)
+        else:
+          unload(nSample+1)
+
+
 
 

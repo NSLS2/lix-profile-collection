@@ -1,3 +1,5 @@
+print(f"Loading {__file__}...")
+
 import numpy as np
 from collections import ChainMap
 from ophyd import DeviceStatus
@@ -7,6 +9,7 @@ from ophyd.utils.epics_pvs import data_type, data_shape
 import epics
 import bluesky.preprocessors as bpp
 import bluesky.plan_stubs as bps
+from bluesky.plan_stubs import sleep as sleeplan
 from collections import OrderedDict
 
 import uuid
@@ -422,7 +425,6 @@ class XPStraj(Device):
         data = {}
         ts = {}
 
-        
         # bandage solution for getting timestamps
         # need to have ssh key on the data collection workstation
         #fn0 = "/tmp/data.log"
@@ -451,7 +453,12 @@ class XPStraj(Device):
             for k,desc in det.read().items():
                 data[k] = desc['value']
                 ts[k] = desc['timestamp']
-        
+
+        for det in [em2ext.ts.SumAll]: 
+            for k,desc in det.read().items():
+                data[k] = self.read_back['em2'] #desc['value']
+                ts[k] = self.read_back['em2ts'] #desc['timestamp']            
+                
         ret = {'time': time.time(),
                'data': data,
                'timestamps': ts,
@@ -473,6 +480,14 @@ class XPStraj(Device):
             ret[f'{det.name}_image'] = det.make_data_key()
             ret[f'{det.name}_image']['shape'] = [pil._num_images, *ret[f'{det.name}_image']['shape'][1:]]
             for k,desc in det.describe().items():
+                ret[k] = desc
+
+        for det in [em2ext.ts.SumAll]: 
+            for k,desc in det.describe().items():
+                if k==em1.ts.SumAll.name:
+                    desc['shape'] = [self.traj_par['Nem1']]
+                if k==em2ext.ts.SumAll.name:
+                    desc['shape'] = [self.traj_par['Nem2']]
                 ret[k] = desc
                 
         return {'primary': ret}
@@ -686,6 +701,8 @@ class XPStraj(Device):
         self.read_back = {}
         self.read_back['fast_axis'] = []
         self.read_back['timestamp'] = []
+        self.read_back['em2'] = []
+        self.read_back['em2ts'] = []
         if self.motor2 is not None:
             self.read_back['slow_axis'] = []
             self.read_back['timestamp2'] = []
@@ -704,6 +721,11 @@ class XPStraj(Device):
             print(pos)
         self.read_back['fast_axis'] += pos
         self.read_back['timestamp'] += list(ts)
+        caput(em2ext.ts.prefix+"TSRead", 1)
+        time.sleep(1)
+        em2d = em2ext.ts.SumAll.read()['em2_ts_SumAll']
+        self.read_back['em2'].extend(em2d['value'][:self.traj_par['Nfast']])  # data legnth is always 2048 
+        self.read_back['em2ts'].append(em2d['timestamp'])
         if self.motor2 is not None:
             self.read_back['slow_axis'].append(self.motor2.position)
             self.read_back['timestamp2'].append(time.time())
@@ -718,7 +740,8 @@ def rel_raster(exp_time, fast_axis, f_start, f_end, Nfast,
                       debug=debug, md=md)
     
 def raster(exp_time, fast_axis, f_start, f_end, Nfast,
-           slow_axis=None, s_start=0, s_end=0, Nslow=1, debug=False, md=None):
+           slow_axis=None, s_start=0, s_end=0, Nslow=1, debug=False, md=None,
+           em2_dt=0.005):
     """ raster scan in fly mode using detectors with exposure time of exp_time
         detectors must be a member of pilatus_detectors_ext
         fly on the fast_axis, step on the slow_axis, both specified as Ophyd motors
@@ -748,6 +771,9 @@ def raster(exp_time, fast_axis, f_start, f_end, Nfast,
     ready_pos_FW = np.min(np.array([f_start, f_end])*motor_pos_sign)-(xps.traj.traj_par['rampup_distance']+step_size/2)
     ready_pos_BK = np.max(np.array([f_start, f_end])*motor_pos_sign)+(xps.traj.traj_par['rampup_distance']+step_size/2)
     xps.traj.traj_par['ready_pos'] = [ready_pos_FW, ready_pos_BK]
+    #xps.traj.traj_par['Nem1'] = int(((Nfast+2)*(exp_time+0.005)+0.3)*Nslow/0.05) # estimated duration of the scan
+    xps.traj.traj_par['Nem2'] = Nfast*Nslow
+    xps.traj.traj_par['Nfast'] = Nfast
     
     xps.traj.clear_readback()
     
@@ -775,6 +801,10 @@ def raster(exp_time, fast_axis, f_start, f_end, Nfast,
     #pil.number_reset(True)  # set file numbers to 0
     #pil.number_reset(False) # but we want to auto increment
     pil.set_num_images(Nfast*Nslow)
+
+    em2ext.avg_time.put(exp_time)
+    em2ext.npoints.put(Nfast)
+
     print('setting up to collect %d exposures of %.2f sec ...' % (Nfast*Nslow, exp_time))
     
     scan_shape = [Nslow, Nfast]
@@ -794,14 +824,14 @@ def raster(exp_time, fast_axis, f_start, f_end, Nfast,
         yield from bps.complete(xps.traj, wait=True)
         print("leaving line()")
 
-    @bpp.stage_decorator(detectors)
+    @bpp.stage_decorator([pil,em2ext])
     @bpp.stage_decorator([xps.traj])
     @bpp.run_decorator(md=_md)
     @fast_shutter_decorator()
     def inner(detectors, fast_axis, slow_axis, Nslow, pos_s):
-        running_forward = run_forward_first
-        
         print("in inner()")
+
+        running_forward = run_forward_first
         for sp in pos_s:
             print("start of the loop")
             if slow_axis is not None:
@@ -818,9 +848,7 @@ def raster(exp_time, fast_axis, f_start, f_end, Nfast,
         print("leaving inner()")
 
     yield from inner(detectors, fast_axis, slow_axis, Nslow, pos_s)
-    yield from sleeplan(1.0)  # give time for the current em timeseries to finish
+    yield from sleeplan(1.0)  # give time for the current em1 timeseries monitor to finish
          
 xps = XPSController("xf16idc-mc-xps-rl4.nsls2.bnl.local", "XPS-RL4")
-xps.init_traj("scan")
-            
     

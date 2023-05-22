@@ -1,5 +1,6 @@
-from pyOlog import SimpleOlogClient
+print(f"Loading {__file__}...")
 
+from pyOlog import SimpleOlogClient
 
 # Set up the logbook. This configured bluesky's summaries of
 # data acquisition (scan type, ID, etc.). It does NOT affect the
