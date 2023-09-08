@@ -95,6 +95,9 @@ class EM_Robot():
 
 	CMD_TIMEOUT = 500000
 
+	def resetHeartBeat(self):
+		setParameter("nDummy", 882)
+
 	def rebootEMBL(self):
 		abort = MethodPV("SW:abort")
 		restart = MethodPV("SW:restart")
@@ -145,7 +148,7 @@ class EM_Robot():
 				raise Exception(cmd+" "+tskStat+" with exception "+exception)
 
 	def __load(self,sType,n,cmdList):
-		ranges={"Tray":range(1,21), "Plate":range(1,13), "Bead":range(1,8)}
+		ranges={"Tray":range(1,21), "Plate":range(1,9), "Bead":range(1,8)}
 		if n not in  ranges[sType]:
                 	raise Exception(sType+" position is out of range ["+ranges[sType][0]+" ... "+ranges[sType][-1]+"]")
 
@@ -180,7 +183,7 @@ class EM_Robot():
 
 
 	def __unload(self, sType, n, cmdList):
-		ranges={"Tray":range(1,21), "Plate":range(1,13), "Bead":range(1,8)}
+		ranges={"Tray":range(1,21), "Plate":range(1,9), "Bead":range(1,8)}
 		if n not in  ranges[sType]:
 			raise Exception(sType+" position is out of range ["+ranges[sType][0]+" ... "+ranges[sType][-1]+"]")
 
@@ -208,7 +211,7 @@ class EM_Robot():
 		return self.__unload("Plate",nPlate,cmdList)
 
 	def unloadBead(self,nBead):
-		cmdList = ['Initialize','Unload','TraceSample']
+		cmdList = ['Initialize','UnloadBead','TraceSample']
 		return self.__unload("Bead",nBead,cmdList)
 
 
@@ -240,8 +243,6 @@ class EM_Robot():
 
 
 	def __unmount(self, sType, cmdList):
-		cmdList = ['Initialize','Unmount','TraceSample']
-
 		for cmd in cmdList:
 			tskStat, sampleStat, exception = self.runTask(cmd, self.CMD_TIMEOUT)
 			if (tskStat.lower()!="done"):
@@ -287,7 +288,7 @@ def testRobot(sMode='A',nbgn=21,nend=24,nloop=1):
 
   EMconfig = PV("XF:16IDC-ES:EMconfig").get()
   types = {0:"Tray", 1:"Plate", 2:"Bead"}
-  maxSamples = {"Tray":20, "Plate":12, "Bead":7}
+  maxSamples = {"Tray":20, "Plate":8, "Bead":7}
   load = getattr(rbt,'load'+types[EMconfig])
   mount= getattr(rbt,'mount'+types[EMconfig])
   unmount= getattr(rbt,'unmount'+types[EMconfig])

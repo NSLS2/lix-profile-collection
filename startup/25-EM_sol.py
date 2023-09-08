@@ -6,6 +6,31 @@ import threading,signal,random
 from epics import PV
 import bluesky.plans as bp    
 
+class fixed_cell_format:
+    def __init__(self, cell_type, Npos, motor_position1, offset):
+        """ 
+        cell_type: the name of the holder that will be used when moving the sample later
+        Npos: number of sample positions in the holder
+        motor_position1: positions of the first sample
+            should be a dictionary: {'xc': 50, 'y': 7.6}
+        offset: position offset between neigboring samples
+            should be a dictionary: {'xc': 0, 'y': 0.2}
+        """
+        self.cell_type = cell_type
+        self.motor_position1 = motor_position1
+        self.offset = offset
+        self.Npos = Npos
+
+    def move(self, pos):
+        x0 = self.motor_position1['xc']
+        y0 = self.motor_position1['y']
+        dx = self.offset['xc']
+        dy = self.offset['y']
+
+        ss.xc.move(x0-dx*(pos-1))
+        ss.y.move(y0-dy*(pos-1))
+        ss.x.move(0)        
+
 class SolutionScatteringControlUnit(Device):
     reset_pump = Cpt(EpicsSignal, 'pp1c_reset')
     halt_pump = Cpt(EpicsSignal, 'pp1c_halt')
@@ -48,7 +73,6 @@ class SolutionScatteringControlUnit(Device):
 
     def pump_mvA(self, des):
         self.piston_pos.put(des)
-
     def pump_mvR(self, dV):
         cur = self.piston_pos.get()
         self.piston_pos.put(cur+dV)
@@ -83,9 +107,8 @@ class SolutionScatteringExperimentalModule():
     ctrl = SolutionScatteringControlUnit('XF:16IDC-ES:Sol{ctrl}', name='sol_ctrl')
     pcr_v_enable = EpicsSignal("XF:16IDC-ES:Sol{ctrl}SampleAligned")    # 1 means PCR tube holder can go up 
     pcr_holder_down = EpicsSignal("XF:16IDC-ES:Sol{ctrl}HolderDown")
-    EMready = EpicsSignal("XF:16IDC-ES:Sol{ctrl}EMSolReady")
-    Robot_ready = EpicsSignal("XF:16IDC-ES:EMready")
-    SetupType=EpicsSignal("XF:16IDC-ES:EMconfig")
+    EMready = EpicsSignal("XF:16IDC-ES:EMready")
+    EMconfig = EpicsSignal("XF:16IDC-ES:EMconfig")
     HolderPresent = EpicsSignal("XF:16IDC-ES:Sol{ctrl}HolderPresent")
     
     holder_x = EpicsMotor('XF:16IDC-ES:Sol{Enc-Ax:Xl}Mtr', name='sol_holder_x')
@@ -94,7 +117,8 @@ class SolutionScatteringExperimentalModule():
     hplc_injected = EpicsSignalRO('XF:16IDC-ES:Sol{ctrl}HPLCin1')
     hplc_done = EpicsSignalRO('XF:16IDC-ES:Sol{ctrl}HPLCin2')
     hplc_bypass = EpicsSignal('XF:16IDC-ES:Sol{ctrl}HPLC_bypass')
-    
+    saxs_sec_flow = EpicsSignalRO('XF:16IDC-HPLC:{ES-Flow_SAXS}:flow')
+    uv_sec_flow = EpicsSignalRO('XF:16IDC-HPLC:{ES-Flow_UV}:flow')
     # the needles are designated 1 (upstream) and 2
     # the flow cells are designated 1 (bottom), 2 and 3
     # needle 1 is connected to the bottom flowcell, needle 2 connected to the top, HPLC middle
@@ -105,12 +129,10 @@ class SolutionScatteringExperimentalModule():
     #    and for the scintillator for check the beam shape
     # this information should be verified every time we setup for solution scattering
     # the positions are ss.xc, ss.x, ss.y
-    flowcell_pos = {'bottom': [-15.9, 0, 9.0], 
-                    'top':    [-15.9, 0, 0.0],
-                    'middle': [ 32.0, 0, 4.5],     # HPLC
-                    'std':    [ -50., 0, 9.0],
-                    'empty':  [ -50., 0, 4.5],
-                    'scint':  [ -50., 0, -2.0]}  
+    flowcell_pos = {}   # defined in the config file
+    
+    # fixed cell format description
+    sample_format_dict = {}   # defined in the config file
     
     # this is the 4-port valve piosition necessary for the wash the needle
     p4_needle_to_wash = {'upstream': 1, 'downstream': 0}
@@ -137,7 +159,6 @@ class SolutionScatteringExperimentalModule():
     # assume that tube is empty
     wash_duration = 1.
     drain_duration = 2.
-    
 
     # drain valve
     drain = {'upstream': ctrl.sv_drain2, 'downstream': ctrl.sv_drain1}
@@ -181,8 +202,13 @@ class SolutionScatteringExperimentalModule():
 
         self.int_handler = signal.getsignal(signal.SIGINT)
         self.cam = setup_cam(camName)
-        setSignal(self.SetupType,0)
-        setSignal(self.Robot_ready,0)
+        setSignal(self.EMconfig, 0) # changed from solution to 0
+        setSignal(self.EMready, 0)
+
+    def change_config(self, config):
+        if not config in ['solution', 'multi']:
+            raise Exception("invalid EMconfig for solution scattering: ", config)
+        setSignal(self.EMconfig, config)
 
     def set_xc_limits(self):
         raise Exception("You should not be here ...")
@@ -267,6 +293,35 @@ class SolutionScatteringExperimentalModule():
             ss.x.move(self.flowcell_pos[cn][1] + offset[0])
             ss.y.move(self.flowcell_pos[cn][2] + offset[1])
             
+    def park_sample(self):
+        config = self.EMconfig.get(as_string=True)
+        if config=='solution':
+            ss.xc.move(self.xc_park_pos)        # so that the robot doesn't have to change trajectory
+            self.holder_x.move(self.park_pos)
+            print('move to PCR tube holder park position ...')
+        elif config=='multi':
+            #self.select_tube_pos(18)  # get the PCR tube holder out of the way
+            ss.x.move(0)
+            ss.y.move(0.5) # ss.y position is 0 for fixed cell.
+            ss.xc.move(self.xc_park_fixed)  # fixed cell park position for robot
+            print('xc moved outboard for sample holder exchange')
+        else:
+            raise Exception(f"don't know how to park_sample() for config={config}")
+        
+        setSignal(self.EMready, 1)
+
+    def mc_move_sample(self, n, cell_type):
+        setSignal(self.EMready, 0)
+        # should only do this during fixed cell measurements
+        config = self.EMconfig.get(as_string=True)
+        if config!='multi':
+            raise Exception(f'cannot run select_tube_pos() when config={config}')        
+        
+        if not cell_format in self.sample_format_dict.keys():
+            raise Exception(f"unkown cell format: {cell_format}")
+        pos=int(pos)
+        self.sample_format_dict[cell_format].move(pos)
+
     def select_tube_pos(self, tn):
         ''' 1 argument accepted: 
             position 1 to 18 from, 1 on the inboard side
@@ -274,8 +329,10 @@ class SolutionScatteringExperimentalModule():
         '''
         # any time the sample holder is moving, the solution EM is no longer ready
         setSignal(self.EMready, 0)
-        setSignal(self.Robot_ready, 0)
-        setSignal(self.SetupType,0)
+        # should only do this during flow cell measurements
+        config = self.EMconfig.get(as_string=True)
+        if config!='solution':
+            raise Exception(f'cannot run select_tube_pos() when config={config}')        
 
         if tn not in range(0,self.Ntube+1) and tn!='park' and tn!='park fixed':
             raise RuntimeError('invalid tube position %d, must be 0 (drain) or 1-18, or \'park\' !!' % tn)
@@ -284,32 +341,15 @@ class SolutionScatteringExperimentalModule():
             #raise RuntimeError('Cannot move holder when it is not down!!')
 
         self.tube_pos = tn
-        if tn=='park':
-            ss.xc.move(self.xc_park_pos)        # so that the robot doesn't have to change trajectory
-            self.holder_x.move(self.park_pos)
-            print('move to PCR tube holder park position ...')
-        elif tn=='park fixed':
-            pos = self.drain_pos
-            pos += (self.tube1_pos + self.tube_spc*(18-1))
-            print('move to PCR tube position 18')
-            self.holder_x.move(pos)
-            ss.xc.move(self.xc_park_fixed)  # fixed cell park position for robot
-            ss.y.move(0) # ss.y position is 0 for fixed cell.
-            print('xc moved outboard for sample holder exchange')
-        else:
-            pos = self.drain_pos
-            if tn>0:
-                pos += (self.tube1_pos + self.tube_spc*(tn-1))
-            print('move to PCR tube position %d ...' % tn)
-            self.holder_x.move(pos)
+        pos = self.drain_pos
+        if tn>0:
+            pos += (self.tube1_pos + self.tube_spc*(tn-1))
+        print('move to PCR tube position %d ...' % tn)
+        self.holder_x.move(pos)
 
         while self.holder_x.moving:
             sleep(0.5)
         print('motion completed.')
-        if tn in [0, 'park']:
-            setSignal(self.SetupType,0) # configuration Solution
-            setSignal(self.EMready, 1)
-            setSignal(self.Robot_ready,1)
             
             
     def move_tube_holder(self, pos, retry=5):
@@ -493,13 +533,16 @@ class SolutionScatteringExperimentalModule():
         pil.exp_time(exp)
         #pil.number_reset(True)
         pil.set_num_images(repeats, rep=1)
+
         em1.averaging_time.put(0.25)
         em2.averaging_time.put(0.25)
         em1.acquire.put(1)
         em2.acquire.put(1)
         sd.monitors = [em1.sum_all.mean_value, em2.sum_all.mean_value]
         # pump_spd unit is ul/min
-        self.ctrl.pump_spd.put(60.*(vol-self.vol_sample_headroom)/(repeats*exp)) # *0.85) # this was necesary when there is a delay between frames
+        #self.ctrl.pump_spd.put(60.*(vol-self.vol_sample_headroom)/(repeats*exp)) # *0.85) # this was necesary when there is a delay between frames
+        self.ctrl.pump_spd.put(60.*vol/(repeats*exp)) 
+        print('pump speed:', self.ctrl.pump_spd.get())
         
         # stage the pilatus detectors first to be sure that the detector are ready
         pil.stage()
@@ -513,8 +556,10 @@ class SolutionScatteringExperimentalModule():
         sd.monitors = []
         change_sample()
         
+        print("wait for pump to stop ...")
         self.ctrl.wait()
         self.ctrl.pump_spd.put(self.default_pump_speed)
+        print('returning from collect_data()')
     
     
     def return_sample(self):
@@ -559,14 +604,16 @@ class SolutionScatteringExperimentalModule():
         
         # move the sample to just before the flow cell
         self.select_flow_cell(self.flowcell_nd[nd])
+
         self.prepare_to_measure(nd)
         if delay>0:
             countdown("delay before exposure:",delay)
         
         print('****************')
+        caput("XF:16IDC-ES{Zeb:1}:SOFT_IN:B3",1)
         print('collecting data %s' %sample_name)
         self.collect_data(vol, exp, repeats, sample_name, check_sname=check_sname, md=md)
-        
+        caput("XF:16IDC-ES{Zeb:1}:SOFT_IN:B3",0)
         if returnSample:
             # move the sample back to the end of the injection needle
             self.prepare_to_return_sample()

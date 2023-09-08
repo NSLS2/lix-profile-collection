@@ -215,6 +215,29 @@ class tctrl_FTC100D(serial_port):
         if ret[1]>0x80:
             raise Exception("error enableing/disabling, code %d" % ret[2]) 
         self.get_enable_status()
+
+    def waitT(self, T, delay_time=60, dead_band=0.2):
+        Ts = self.get_set_point(False)
+        if Ts!=T:
+            self.setT(T)
+        set_point_reached = -1
+        while True:
+            Tr = self.getT(print_T=False)
+            if np.fabs(Tr-T)>dead_band:
+                set_point_reached = -1
+                msg = ""
+            else:
+                time_stamp = time.time()
+                if set_point_reached>0:
+                    if time_stamp-set_point_reached>delay_time:
+                        print("\n set point reached ...")
+                        return 
+                else:
+                    set_point_reached = time_stamp
+                msg = f"+{time_stamp-set_point_reached:.1f} sec" 
+            print(f"T_set = {T:.1f}, T_readback = {Tr:.1f} {msg}  \r", end="")
+            time.sleep(2)                
+
         
 
 #tctrl = tctrl_FTC100D(("xf16idc-tsvr-sena", 7002))

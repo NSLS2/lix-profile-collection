@@ -1,9 +1,13 @@
 print(f"Loading {__file__}...")
 
 import glob,re
+#from lixtools.samples import check_sample_name
+#from lixtools import samples
 
 current_sample="test"
+#samples.used_at_beamline = True
 
+""""""
 def check_sample_name(sample_name, ioc_name="pil1M", sub_dir=None, check_for_duplicate=True, check_dir=False):    
     if len(sample_name)>42:  # file name length limit for Pilatus detectors
         print("Error: the sample name is too long:", len(sample_name))
@@ -28,7 +32,8 @@ def check_sample_name(sample_name, ioc_name="pil1M", sub_dir=None, check_for_dup
             return False
 
     return True
-    
+""""""
+
 def change_sample(sample_name=None, check_sname=True, exception=True):
     """ use sample_name=None to avoid checking the sample name
         this method could be used in other functions that call change_sample(), 

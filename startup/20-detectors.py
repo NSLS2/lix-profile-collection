@@ -38,7 +38,7 @@ class StandardProsilica(ProsilicaDetector, SingleTrigger):
     over = Cpt(OverlayPlugin, 'Over1:')
     proc = Cpt(ProcessPlugin, 'Proc1:')
     roi1 = Cpt(ROIPlugin, 'ROI1:')
-    #roi2 = Cpt(ROIPlugin, 'ROI2:')
+    roi2 = Cpt(ROIPlugin, 'ROI2:')
     #roi3 = Cpt(ROIPlugin, 'ROI3:')
     #roi4 = Cpt(ROIPlugin, 'ROI4:')
     stats1 = Cpt(StatsPlugin, 'Stats1:')
@@ -54,6 +54,7 @@ class StandardProsilica(ProsilicaDetector, SingleTrigger):
         self.watch_timeouts_limit = 3
         self.watch_timeouts = 0
         self.watch_list = {}
+        self._trigger_signal = EpicsSignal('XF:16IDC-ES{Zeb:1}:SOFT_IN:B0')
         if detector_id:
             self.detector_id = detector_id
         else:
@@ -93,6 +94,7 @@ class StandardProsilica(ProsilicaDetector, SingleTrigger):
         if old_value==1 and value==0:
             self._status._finished()    
         
+    """ software trigger
     def stage(self):  
         # when using as a detector, some parameters need to be set correctly
         if data_path=="" and "tiff" in self.read_attrs:
@@ -123,9 +125,45 @@ class StandardProsilica(ProsilicaDetector, SingleTrigger):
         time.sleep(self.cam.acquire_period.get())
         #self.cam.trigger_software.put(1, wait=False)
         #threading.Timer(self.cam.acquire_period.get(), self._status._finished, ()).start()
-        self.dispatch(self._image_name, ttime.time())
+        self.generate_datum(self._image_name, ttime.time())
         return self._status
-        
+    """    
+
+    """ hardware trigger
+    """
+    def stage(self):  
+        # when using as a detector, some parameters need to be set correctly
+        if data_path=="" and "tiff" in self.read_attrs:
+            raise Exception("data_path is empty, login() first.")
+        self.stage_sigs[self.cam.image_mode] = 'Continuous'
+        self.stage_sigs[self.cam.trigger_mode] = 'Sync In 1'
+        if hasattr(self, 'tiff'):
+            self.stage_sigs[self.tiff.enable] = True
+
+        super().stage()
+        setSignal(self._acquisition_signal, 1)
+
+
+    def unstage(self):
+        if hasattr(self, 'tiff'):
+            self.tiff.enable.put(0, wait=True)
+        setSignal(self._acquisition_signal, 0)
+        super().unstage()
+ 
+    
+    def trigger(self):
+        if self._staged != Staged.yes:
+            raise RuntimeError("This detector is not ready to trigger."
+                               "Call the stage() method before triggering.")
+
+        self._status = DeviceStatus(self) # self._status_type(self)
+        self._trigger_signal.put(1, wait=True)
+        self._trigger_signal.put(0, wait=True)
+        #threading.Timer(self.trig_wait, self._status._finished, ()).start()
+        threading.Timer(0.1, self._status._finished, ()).start()
+        self.generate_datum(self._image_name, ttime.time())
+        return self._status
+
 
     # ROIs = [ROI1, ROI2, ...]
     # each ROI is defined as [startX, sizeX, startY, sizeY]
