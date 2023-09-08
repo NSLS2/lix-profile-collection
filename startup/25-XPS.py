@@ -306,12 +306,9 @@ class XPStraj(Device):
         self.time_modified = time.time()
         self.start_time = 0
         self._traj_status = None
-        self.detectors = None
-        self.datum = None
         self.flying_motor = None
     
     def stage(self):
-        self.datum = {}
         self.aborted = False
         self.clear_readback()
 
@@ -356,6 +353,7 @@ class XPStraj(Device):
         """
         run the trajectory
         """
+        print("kicking off xps traj ...")
         if self.verified==False:
             raise Exception("trajectory not defined/verified.")
         
@@ -363,6 +361,8 @@ class XPStraj(Device):
       
         th = threading.Thread(target=self.exec_traj, args=(self.traj_par['run_forward_traj'], ) )
         th.start() 
+        
+        print("xps traj kicked off ...")
         return self._traj_status
         
     def complete(self):
@@ -370,49 +370,18 @@ class XPStraj(Device):
             according to run_engine.py: Tell a flyer, 'stop collecting, whenever you are ready'.
             Return a status object tied to 'done'.
         """
+        print("compelting xps traj ...")
         if self._traj_status is None:
             raise RuntimeError("must call kickoff() before complete()")
         while not self._traj_status.done:
-            print(f"{time.asctime()}: waiting for the trajectory to finish ...   ", end='')
+            print(f"{time.asctime()}: waiting for the trajectory to finish ...   \r", end='')
             time.sleep(1)
         if self.aborted:
             raise Exception("unable to complete the scan due to hardware issues ...")
-        print("Done.")
+        print("xps traj completed ...")
              
         return self._traj_status
         
-    def collect_asset_docs(self):
-        """ when the run eigine process the "collect" message, 3 functions are called (see bluesky.bundlers)
-                collect_asset_docs(): returns resource and datum document (name, doc)
-                                      RE emit(DocumentNames(name), doc)
-                                      called once per scan? name is always "resource"?
-                describe_collect(): returns a dictionary of {stream_name: data_keys, ...}
-                                    RE emit(DocumentNames.descriptor, doc) 
-                collect(): returns a list of events [ev, ...], 
-                           RE emit(DocumentNames.event, ev) or add to bulk data for later emit() call
-            DocumentNames is defined in event_model, enum
-
-            followed HXN example
-        """
-        asset_docs_cache = []
-        
-        for det in pil.active_detectors:
-            k = f'{det.name}_image'
-            print(list(det.hdf._asset_docs_cache))
-            (name, resource), = det.hdf.collect_asset_docs()
-            assert name == 'resource'
-            # hack the resource
-            resource['resource_kwargs']['frame_per_point'] = pil._num_images
-            asset_docs_cache.append(('resource', resource))
-            resource_uid = resource['uid']
-            datum_id = '{}/{}'.format(resource_uid, 0)
-            self.datum[k] = [datum_id, ttime.time()]
-            datum = {'resource': resource_uid,
-                     'datum_id': datum_id,
-                     'datum_kwargs': {'point_number': 0}}
-            asset_docs_cache.append(('datum', datum))
-        
-        return tuple(asset_docs_cache)
         
     def collect(self):
         """
@@ -421,6 +390,7 @@ class XPStraj(Device):
         this is now recorded in self.readback, as accumulated by self.update_readback()
         also include the detector image info
         """
+        print("in traj collect ...")
         now = time.time()
         data = {}
         ts = {}
@@ -446,28 +416,17 @@ class XPStraj(Device):
         if self.motor2 is not None:
             data[self.traj_par['slow_axis']] = self.read_back['slow_axis']
             ts[self.traj_par['slow_axis']] = self.read_back['timestamp2']
-        
-        for det in pil.active_detectors:
-            k = f'{det.name}_image'
-            (data[k], ts[k]) = self.datum[k]
-            for k,desc in det.read().items():
-                data[k] = desc['value']
-                ts[k] = desc['timestamp']
-
-        for det in [em2ext.ts.SumAll]: 
-            for k,desc in det.read().items():
-                data[k] = self.read_back['em2'] #desc['value']
-                ts[k] = self.read_back['em2ts'] #desc['timestamp']            
                 
         ret = {'time': time.time(),
                'data': data,
                'timestamps': ts,
               }
-        
+        print("done collecting traj")
         yield ret
 
     def describe_collect(self):
         '''Describe details for the flyer collect() method'''
+        print("in traj describe_collect ...")
         ret = {}
         ret[self.traj_par['fast_axis']] = {'dtype': 'number',
                                            'shape': (len(self.read_back['fast_axis']),),
@@ -476,19 +435,6 @@ class XPStraj(Device):
             ret[self.traj_par['slow_axis']] = {'dtype': 'number',
                                                'shape': (len(self.read_back['slow_axis']),),
                                                'source': 'motor position readback'}
-        for det in pil.active_detectors:
-            ret[f'{det.name}_image'] = det.make_data_key()
-            ret[f'{det.name}_image']['shape'] = [pil._num_images, *ret[f'{det.name}_image']['shape'][1:]]
-            for k,desc in det.describe().items():
-                ret[k] = desc
-
-        for det in [em2ext.ts.SumAll]: 
-            for k,desc in det.describe().items():
-                if k==em1.ts.SumAll.name:
-                    desc['shape'] = [self.traj_par['Nem1']]
-                if k==em2ext.ts.SumAll.name:
-                    desc['shape'] = [self.traj_par['Nem2']]
-                ret[k] = desc
                 
         return {'primary': ret}
         
@@ -695,14 +641,13 @@ class XPStraj(Device):
         err,ret = self.xps.GatheringCurrentNumberGet(self.sID)
         ndata = int(ret.split(',')[0])
         err,ret = self.xps.GatheringDataMultipleLinesGet(self.sID, 0, ndata)
+        
         return [float(p) for p in ret.split('\n') if p!='']
     
     def clear_readback(self):
         self.read_back = {}
         self.read_back['fast_axis'] = []
         self.read_back['timestamp'] = []
-        self.read_back['em2'] = []
-        self.read_back['em2ts'] = []
         if self.motor2 is not None:
             self.read_back['slow_axis'] = []
             self.read_back['timestamp2'] = []
@@ -721,134 +666,12 @@ class XPStraj(Device):
             print(pos)
         self.read_back['fast_axis'] += pos
         self.read_back['timestamp'] += list(ts)
-        caput(em2ext.ts.prefix+"TSRead", 1)
-        time.sleep(1)
-        em2d = em2ext.ts.SumAll.read()['em2_ts_SumAll']
-        self.read_back['em2'].extend(em2d['value'][:self.traj_par['Nfast']])  # data legnth is always 2048 
-        self.read_back['em2ts'].append(em2d['timestamp'])
+
         if self.motor2 is not None:
             self.read_back['slow_axis'].append(self.motor2.position)
             self.read_back['timestamp2'].append(time.time())
 
-def rel_raster(exp_time, fast_axis, f_start, f_end, Nfast,
-               slow_axis=None, s_start=0, s_end=0, Nslow=1, debug=False, md=None):
-
-    fm0 = fast_axis.position
-    sm0 = slow_axis.position
-    yield from raster(exp_time, fast_axis, fm0+f_start, fm0+f_end, Nfast,
-                      slow_axis=slow_axis, s_start=sm0+s_start, s_end=sm0+s_end, Nslow=Nslow, 
-                      debug=debug, md=md)
-    
-def raster(exp_time, fast_axis, f_start, f_end, Nfast,
-           slow_axis=None, s_start=0, s_end=0, Nslow=1, debug=False, md=None,
-           em2_dt=0.005):
-    """ raster scan in fly mode using detectors with exposure time of exp_time
-        detectors must be a member of pilatus_detectors_ext
-        fly on the fast_axis, step on the slow_axis, both specified as Ophyd motors
-        the fast_axis must be one of member of xps_trj.motors, for now this is hard-coded
-        the specified positions are relative to the current position
-        for the fast_axis are the average positions during detector exposure 
-        
-        use it within the run engine: RE(raster(...))
-        update 2020aug: always use the re-defined pilatus detector group
-        
-    """
-    #if not set(detectors).issubset(pilatus_detectors_ext):
-    #    raise Exception("only pilatus_detectors_ext can be used in this raster scan.")
-    pil.set_trigger_mode(PilatusTriggerMode.ext_multi)
-    detectors = [pil]
-
-    step_size = np.fabs((f_end-f_start)/(Nfast-1))
-    dt = exp_time + 0.005    # exposure_period is 5ms longer than exposure_time, as defined in Pilatus
-    xps.traj.define_traj(fast_axis, Nfast-1, step_size, dt, motor2=slow_axis)
-    p0_fast = fast_axis.position
-    
-    motor_pos_sign = fast_axis.user_offset_dir()
-    run_forward_first = ((motor_pos_sign>0 and f_start<f_end) or (motor_pos_sign<0 and f_start>f_end))
-    # forward/back trajectory = fast axis motor postion increasing/decreasing
-    # rampup_distance and step_size are both positive
-    # ready positions are dial positions
-    ready_pos_FW = np.min(np.array([f_start, f_end])*motor_pos_sign)-(xps.traj.traj_par['rampup_distance']+step_size/2)
-    ready_pos_BK = np.max(np.array([f_start, f_end])*motor_pos_sign)+(xps.traj.traj_par['rampup_distance']+step_size/2)
-    xps.traj.traj_par['ready_pos'] = [ready_pos_FW, ready_pos_BK]
-    #xps.traj.traj_par['Nem1'] = int(((Nfast+2)*(exp_time+0.005)+0.3)*Nslow/0.05) # estimated duration of the scan
-    xps.traj.traj_par['Nem2'] = Nfast*Nslow
-    xps.traj.traj_par['Nfast'] = Nfast
-    
-    xps.traj.clear_readback()
-    
-    if debug:
-        print('## trajectory parameters:')
-        print(xps.traj.traj_par)
-        print(f'## step_size = {step_size}')
-
-    if slow_axis is not None:
-        p0_slow = slow_axis.position
-        pos_s = np.linspace(s_start, s_end, Nslow)
-        motor_names = [slow_axis.name, fast_axis.name]
-    else:
-        if Nslow != 1:
-            raise Exception(f"invlaid input, did not pass slow_axis, but passed Nslow != 1 ({Nslow})")
-        p0_slow = None
-        pos_s = [0]   # needed for the loop in inner()
-        motor_names = [fast_axis.name]
-
-    print(pos_s)
-    print(motor_names)
-    xps.traj.detectors = detectors
-    
-    pil.exp_time(exp_time)
-    #pil.number_reset(True)  # set file numbers to 0
-    #pil.number_reset(False) # but we want to auto increment
-    pil.set_num_images(Nfast*Nslow)
-
-    em2ext.avg_time.put(exp_time)
-    em2ext.npoints.put(Nfast)
-
-    print('setting up to collect %d exposures of %.2f sec ...' % (Nfast*Nslow, exp_time))
-    
-    scan_shape = [Nslow, Nfast]
-    _md = {'shape': tuple(scan_shape),
-           'plan_args': {'detectors': list(map(repr, detectors))},
-           'plan_name': 'raster',
-           'plan_pattern': 'outer_product',
-           'motors': tuple(motor_names),
-           'hints': {},
-           }
-    _md.update(md or {})
-    _md['hints'].setdefault('dimensions', [(('time',), 'primary')])        
-   
-    def line():
-        print("in line()")
-        yield from bps.kickoff(xps.traj, wait=True)
-        yield from bps.complete(xps.traj, wait=True)
-        print("leaving line()")
-
-    @bpp.stage_decorator([pil,em2ext])
-    @bpp.stage_decorator([xps.traj])
-    @bpp.run_decorator(md=_md)
-    @fast_shutter_decorator()
-    def inner(detectors, fast_axis, slow_axis, Nslow, pos_s):
-        print("in inner()")
-
-        running_forward = run_forward_first
-        for sp in pos_s:
-            print("start of the loop")
-            if slow_axis is not None:
-                print(f"moving {slow_axis.name} to {sp}")
-                yield from mv(slow_axis, sp)
-
-            print("starting trajectory ...")
-            xps.traj.select_forward_traj(running_forward)
-            yield from line()
-            print("Done")
-            running_forward = not running_forward
-
-        yield from bps.collect(xps.traj)
-        print("leaving inner()")
-
-    yield from inner(detectors, fast_axis, slow_axis, Nslow, pos_s)
-    yield from sleeplan(1.0)  # give time for the current em1 timeseries monitor to finish
-         
+        print("traj data updated ..")
+            
 xps = XPSController("xf16idc-mc-xps-rl4.nsls2.bnl.local", "XPS-RL4")
     

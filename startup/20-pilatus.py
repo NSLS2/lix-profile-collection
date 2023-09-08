@@ -277,7 +277,7 @@ class LIXPilatus(PilatusDetector):
         print(self.name+" trigger")
         if self.trigger_mode is PilatusTriggerMode.soft:
             self._acquisition_signal.put(1, wait=False)
-        self.dispatch(f'{self.name}_image', ttime.time())
+        self.generate_datum(f'{self.name}_image', ttime.time())
 
 
 class LiXDetectors(Device):
@@ -396,6 +396,8 @@ class LiXDetectors(Device):
             self.trig_wait = self.acq_time+0.02
         else:
             self.trig_wait = self.acq_time*self._num_images+0.02
+        
+        self.datum={}
 
     def unstage(self):
         for det in self.active_detectors:
@@ -438,9 +440,9 @@ class LiXDetectors(Device):
             self._exp_completed = 0
             self._status._finished()
 
-    def collect_asset_docs(self):
-        for det in self.active_detectors:
-            yield from det.collect_asset_docs()
+#    def collect_asset_docs(self):
+#        for det in self.active_detectors:
+#            yield from det.collect_asset_docs()
     
 #    def describe(self):
 #        """ aim to reduce the amount of information saved in the databroker
@@ -449,7 +451,70 @@ class LiXDetectors(Device):
 #        """
 #        attrs = OrderedDict([])
 #        common_attrs = self.active_detectors[0].describe()
+
+    """"""
+    def collect_asset_docs(self):
+        '''
+           when the run eigine process the "collect" message, 3 functions are called (see bluesky.bundlers)
+                collect_asset_docs(): returns resource and datum document (name, doc)
+                                      RE emit(DocumentNames(name), doc)
+                                      called once per scan? name is always "resource"?
+                describe_collect(): returns a dictionary of {stream_name: data_keys, ...}
+                                    RE emit(DocumentNames.descriptor, doc) 
+                collect(): returns a list of events [ev, ...], 
+                           RE emit(DocumentNames.event, ev) or add to bulk data for later emit() call
+            DocumentNames is defined in event_model, enum
+
+            following HXN example
+        '''
+        asset_docs_cache = []
         
+        for det in self.active_detectors:
+            k = f'{det.name}_image'
+            print(list(det.hdf._asset_docs_cache))
+            (name, resource), = det.hdf.collect_asset_docs()
+            assert name == 'resource'
+            # hack the resource
+            resource['resource_kwargs']['frame_per_point'] = self._num_images
+            asset_docs_cache.append(('resource', resource))
+            resource_uid = resource['uid']
+            datum_id = '{}/{}'.format(resource_uid, 0)
+            self.datum[k] = [datum_id, ttime.time()]
+            datum = {'resource': resource_uid,
+                     'datum_id': datum_id,
+                     'datum_kwargs': {'point_number': 0}}
+            asset_docs_cache.append(('datum', datum))
+        
+        print("+++", asset_docs_cache)
+        print("---", self.datum)
+        return tuple(asset_docs_cache)
+    """"""
+    
+    def collect(self):
+        print("in pil collect ...")
+        data = {}
+        ts = {}
+        for det in self.active_detectors:
+            for k,desc in det.read().items():
+                data[k] = desc['value']
+                ts[k] = desc['timestamp']
+        
+        ret = {'time': time.time(),
+               'data': data,
+               'timestamps': ts,
+              }
+        
+        yield ret
+
+    def describe_collect(self):
+        print("in pil describe_collect ...")
+        ret = {}
+        for det in self.active_detectors:
+            ret[f'{det.name}_image'] = det.make_data_key()
+            ret[f'{det.name}_image']['shape'] = (self._num_images, *ret[f'{det.name}_image']['shape'][1:])
+            for k,desc in det.describe().items():
+                ret[k] = desc
+        return {'primary': ret}
                                     
 try:
     pil = LiXDetectors("XF:16IDC-DT")   

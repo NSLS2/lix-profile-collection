@@ -5,7 +5,7 @@ from ophyd.areadetector import (ADComponent as ADCpt, StatsPlugin)
 from ophyd.quadem import NSLS_EM,TetrAMM,QuadEM,QuadEMPort
 from ophyd import DeviceStatus
 import numpy as np
-
+from ophyd.sim import NullStatus
 from ophyd import DynamicDeviceComponent as DDCpt
 from collections import OrderedDict
 from nslsii.ad33 import QuadEMV33
@@ -92,11 +92,13 @@ class LiXTetrAMMext(QuadEM):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self._fstatus = None
+        self.rep = 1
         self.stage_sigs.update([('acquire_mode', 0), # continuous 
                                 ('trigger_mode', 1), # ext trigger
                                 ('ts.acquire_mode', 1), # circular buffer
                                 ('ts.read_rate', 0), # passive
-		               ])
+                               ])
         self.configuration_attrs = [
             "integration_time",
             "averaging_time",
@@ -112,10 +114,54 @@ class LiXTetrAMMext(QuadEM):
                                 ('ts.num_points', self.npoints.get()),
                                ])
         super().stage()
-        self.ts.acquire.put(1)
-        self.acquire.put(1)
+        self.read_back = {'data': [], 'ts': []}
+    
+    def kickoff(self):
+        print("kicking off emext ...")
+        self._fstatus = DeviceStatus(self)
 
+        self.ts.acquire.set(1).wait()
+        time.sleep(0.1)
+        self.acquire.set(1).wait()
+       
+        print("emext kicked off ...")
+        return self._fstatus
+        #return NullStatus()
+        
+    def complete(self):
+        print("compelting emext ...")
+        if self._fstatus is None:
+            raise RuntimeError("must call kickoff() before complete()")
 
+        self.ts.acquire.set(0).wait()
+        caput(self.ts.prefix+"TSRead", 1)
+        time.sleep(0.2)
+        em2d = self.ts.SumAll.read()[f'{self.name}_ts_SumAll']
+        #self.read_back['data'].extend(em2d['value'][:self.npoints.get()])  
+        self.read_back['data'].append(np.asarray(em2d['value'][:self.npoints.get()]))  
+        self.read_back['ts'].append(em2d['timestamp'])        
+
+        self._fstatus._finished()
+        print("emext compelte done")
+        return self._fstatus
+        #return NullStatus()
+    
+    def collect(self):
+        print("in em collect ...")
+        k = self.ts.SumAll.name
+        yield  {'time': time.time(),
+                'data': {k: np.array(self.read_back['data'])},
+                'timestamps': {k: self.read_back['ts']},
+                }   
+        
+    def describe_collect(self):
+        print("in em describe_collect ...")
+        ret = self.ts.SumAll.describe()
+        for k in ret.keys():
+            ret[k]['shape'] = [self.rep, ret[k]['shape'][0]]
+
+        return {'primary': ret}
+        
 em1 = LiX_EM('XF:16IDC-ES{NSLS_EM:1}', name='em1')
 em1.read_attrs = ['current1', 'current2', 'current3', 'current4', 'sum_all']
 em1.sum_all.mean_value.kind = 'hinted'
@@ -130,6 +176,7 @@ em2 = LiXTetrAMM('XF:16IDC-BI{BPM:1}', name='em2')
 em2.read_attrs = ['sum_all']
 em2.sum_all.mean_value.kind = 'hinted'
 
+# this is used when em2 is used in fly scans
 em2ext = LiXTetrAMMext('XF:16IDC-BI{BPM:1}', name='em2')
 em2ext.read_attrs = ['sum_all']
 em2ext.sum_all.mean_value.kind = 'hinted'
@@ -139,4 +186,16 @@ em0.read_attrs = ['x_position', 'y_position']
 
 #tetramm = TetrAMM('XF:16IDC-ES{TETRAMM:1}', name='tetramm')
 bpm = Best('XF:16IDB-CT{Best}', name='bpm')
+
+def start_monitor(monitors=[em1], rate=20):
+    for em in monitors: 
+        em.acquire_mode.set(0).wait()   # continuous
+        em.trigger_mode.set(0).wait()   # free run
+        em.averaging_time.put(1./rate)  
+        em.ts.averaging_time.put(1./rate)  
+        em.ts.num_points.put(rate)  
+        em.ts.acquire_mode.put(1)       # circular buffer
+        em.ts.read_rate.put(6)          # 1 second
+        em.acquire.put(1)
+        em.ts.acquire.put(1)
 
