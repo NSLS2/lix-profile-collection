@@ -436,7 +436,8 @@ class XPStraj(Device):
                                                'shape': (len(self.read_back['slow_axis']),),
                                                'source': 'motor position readback'}
                 
-        return {'primary': ret}
+        #return {'primary': ret}
+        return {self.name: ret}
         
     def define_traj(self, motor, N, dx, dt, motor2=None, dy=0, Nr=2):
         """ the idea is to use FW/BK trjectories in a scan

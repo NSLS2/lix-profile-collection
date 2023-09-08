@@ -160,7 +160,8 @@ class LiXTetrAMMext(QuadEM):
         for k in ret.keys():
             ret[k]['shape'] = [self.rep, ret[k]['shape'][0]]
 
-        return {'primary': ret}
+        #return {'primary': ret}
+        return {self.name: ret}
         
 em1 = LiX_EM('XF:16IDC-ES{NSLS_EM:1}', name='em1')
 em1.read_attrs = ['current1', 'current2', 'current3', 'current4', 'sum_all']

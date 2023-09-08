@@ -403,6 +403,12 @@ class LiXDetectors(Device):
         for det in self.active_detectors:
             det.unstage()
 
+    def kickoff(self):
+        return NullStatus()
+
+    def complete(self):
+        return NullStatus()
+        
     def trigger(self):
         #if len(self.active_detectors)==0:
         #    return
@@ -495,9 +501,8 @@ class LiXDetectors(Device):
         data = {}
         ts = {}
         for det in self.active_detectors:
-            for k,desc in det.read().items():
-                data[k] = desc['value']
-                ts[k] = desc['timestamp']
+            k = f'{det.name}_image'
+            data[k],ts[k] = self.datum[k]
         
         ret = {'time': time.time(),
                'data': data,
@@ -514,7 +519,8 @@ class LiXDetectors(Device):
             ret[f'{det.name}_image']['shape'] = (self._num_images, *ret[f'{det.name}_image']['shape'][1:])
             for k,desc in det.describe().items():
                 ret[k] = desc
-        return {'primary': ret}
+        #return {'primary': ret}
+        return {self.name: ret}
                                     
 try:
     pil = LiXDetectors("XF:16IDC-DT")   

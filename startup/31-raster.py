@@ -40,7 +40,9 @@ def rel_raster(exp_time, fast_axis, f_start, f_end, Nfast,
     
 def raster(exp_time, fast_axis, f_start, f_end, Nfast,
            slow_axis=None, s_start=0, s_end=0, Nslow=1, debug=False, md=None,
-           em2_dt=0.005, traj_dict = {"ss_x": xps.traj, "ss_y": xps.traj}
+           em2_dt=0.005, 
+           detectors = [pil, em2ext], 
+           traj_dict = {"ss_x": xps.traj, "ss_y": xps.traj}
           ):
     """ raster scan in fly mode using detectors with exposure time of exp_time
         detectors must be a member of pilatus_detectors_ext
@@ -53,9 +55,6 @@ def raster(exp_time, fast_axis, f_start, f_end, Nfast,
         update 2020aug: always use the re-defined pilatus detector group
         
     """
-    #detectors = [pil, em2ext]
-    detectors = [em2ext]
-
     step_size = np.fabs((f_end-f_start)/(Nfast-1))
     dt = exp_time + 0.005    # exposure_period is 5ms longer than exposure_time, as defined in Pilatus
 
