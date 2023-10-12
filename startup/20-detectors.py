@@ -39,7 +39,7 @@ class StandardProsilica(ProsilicaDetector, SingleTrigger):
     proc = Cpt(ProcessPlugin, 'Proc1:')
     roi1 = Cpt(ROIPlugin, 'ROI1:')
     roi2 = Cpt(ROIPlugin, 'ROI2:')
-    #roi3 = Cpt(ROIPlugin, 'ROI3:')
+    roi3 = Cpt(ROIPlugin, 'ROI3:')
     #roi4 = Cpt(ROIPlugin, 'ROI4:')
     stats1 = Cpt(StatsPlugin, 'Stats1:')
     stats2 = Cpt(StatsPlugin, 'Stats2:')
@@ -55,6 +55,7 @@ class StandardProsilica(ProsilicaDetector, SingleTrigger):
         self.watch_timeouts = 0
         self.watch_list = {}
         self._trigger_signal = EpicsSignal('XF:16IDC-ES{Zeb:1}:SOFT_IN:B0')
+        self.ext_trig = False
         if detector_id:
             self.detector_id = detector_id
         else:
@@ -94,43 +95,6 @@ class StandardProsilica(ProsilicaDetector, SingleTrigger):
         if old_value==1 and value==0:
             self._status._finished()    
         
-    """ software trigger
-    def stage(self):  
-        # when using as a detector, some parameters need to be set correctly
-        if data_path=="" and "tiff" in self.read_attrs:
-            raise Exception("data_path is empty, login() first.")
-        self.stage_sigs[self.cam.image_mode] = 'Single'
-        self.stage_sigs[self.cam.trigger_mode] = 'Fixed Rate'
-        if hasattr(self, 'tiff'):
-            self.stage_sigs[self.tiff.enable] = True
-
-        super().stage()
-        self._acquisition_signal.subscribe(self._acquire_changed)
-
-
-    def unstage(self):
-        if hasattr(self, 'tiff'):
-            self.tiff.enable.put(0, wait=True)
-        self._acquisition_signal.clear_sub(self._acquire_changed)
-        super().unstage()
- 
-    
-    def trigger(self):
-        if self._staged != Staged.yes:
-            raise RuntimeError("This detector is not ready to trigger."
-                               "Call the stage() method before triggering.")
-
-        self._status = DeviceStatus(self) # self._status_type(self)
-        self._acquisition_signal.put(1, wait=False)
-        time.sleep(self.cam.acquire_period.get())
-        #self.cam.trigger_software.put(1, wait=False)
-        #threading.Timer(self.cam.acquire_period.get(), self._status._finished, ()).start()
-        self.generate_datum(self._image_name, ttime.time())
-        return self._status
-    """    
-
-    """ hardware trigger
-    """
     def stage(self):  
         # when using as a detector, some parameters need to be set correctly
         if data_path=="" and "tiff" in self.read_attrs:
@@ -141,13 +105,22 @@ class StandardProsilica(ProsilicaDetector, SingleTrigger):
             self.stage_sigs[self.tiff.enable] = True
 
         super().stage()
-        setSignal(self._acquisition_signal, 1)
+
+        if self.ext_trig:
+            setSignal(self._acquisition_signal, 1)
+        else:
+            self._acquisition_signal.subscribe(self._acquire_changed)
 
 
     def unstage(self):
         if hasattr(self, 'tiff'):
             self.tiff.enable.put(0, wait=True)
-        setSignal(self._acquisition_signal, 0)
+
+        if self.ext_trig:
+            setSignal(self._acquisition_signal, 0)
+        else:
+            self._acquisition_signal.clear_sub(self._acquire_changed)
+            
         super().unstage()
  
     
@@ -157,13 +130,18 @@ class StandardProsilica(ProsilicaDetector, SingleTrigger):
                                "Call the stage() method before triggering.")
 
         self._status = DeviceStatus(self) # self._status_type(self)
-        self._trigger_signal.put(1, wait=True)
-        self._trigger_signal.put(0, wait=True)
-        #threading.Timer(self.trig_wait, self._status._finished, ()).start()
-        threading.Timer(0.1, self._status._finished, ()).start()
+
+        if self.ext_trig:
+            self._trigger_signal.put(1, wait=True)
+            self._trigger_signal.put(0, wait=True)
+            #threading.Timer(self.trig_wait, self._status._finished, ()).start()
+            threading.Timer(0.1, self._status._finished, ()).start()
+        else:
+            self._acquisition_signal.put(1, wait=False)
+            time.sleep(self.cam.acquire_period.get())
+            
         self.generate_datum(self._image_name, ttime.time())
         return self._status
-
 
     # ROIs = [ROI1, ROI2, ...]
     # each ROI is defined as [startX, sizeX, startY, sizeY]
