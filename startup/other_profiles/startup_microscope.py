@@ -1,12 +1,17 @@
 print("loading configuration for microscope-EM ...")
 
 ss = PositioningStackMicroscope()
+
+## LC type encoder for sx/sz, MCS, mc22
+## GxxxS type encoder for tx/tz, MCS, mc15
+## may need to cycle power on the MCS for the SmarAct software to perform calib/homing
 caput(ss.xc.prefix+".DIR", 1)
 
 ss.x = xps.def_motor("scan.X", "ss_x", direction=-1)
 ss.y = xps.def_motor("scan.Y", "ss_y")
-#ss.ry = xps.def_motor("rot.ry", "ss_ry")
-xps.init_traj("scan")
+if "rot.ry" in xps.groups.keys():
+    ss.ry = xps.def_motor("rot.ry", "ss_ry")
+xps_traj = XPStraj(xps, "scan")
 
 # fix dir/res of SmarAct gonio 
 caput(ss.sx.prefix+".DIR", 1)

@@ -30,19 +30,19 @@ pil and em2ext need to be revised to work like a flyer
 """    
         
 def rel_raster(exp_time, fast_axis, f_start, f_end, Nfast,
-               slow_axis=None, s_start=0, s_end=0, Nslow=1, debug=False, md=None):
+               slow_axis=None, s_start=0, s_end=0, Nslow=1, debug=False, md=None, 
+               em2_dt=0.005, detectors = [pil, em2ext]
+              ):
 
     fm0 = fast_axis.position
     sm0 = slow_axis.position
     yield from raster(exp_time, fast_axis, fm0+f_start, fm0+f_end, Nfast,
                       slow_axis=slow_axis, s_start=sm0+s_start, s_end=sm0+s_end, Nslow=Nslow, 
-                      debug=debug, md=md)
+                      debug=debug, md=md, em2_dt=em2_dt, detectors=detectors)
     
 def raster(exp_time, fast_axis, f_start, f_end, Nfast,
            slow_axis=None, s_start=0, s_end=0, Nslow=1, debug=False, md=None,
-           em2_dt=0.005, 
-           detectors = [pil, em2ext], 
-           traj_dict = {"ss_x": xps.traj, "ss_y": xps.traj}
+           em2_dt=0.005, detectors = [pil, em2ext] 
           ):
     """ raster scan in fly mode using detectors with exposure time of exp_time
         detectors must be a member of pilatus_detectors_ext
@@ -58,20 +58,11 @@ def raster(exp_time, fast_axis, f_start, f_end, Nfast,
     step_size = np.fabs((f_end-f_start)/(Nfast-1))
     dt = exp_time + 0.005    # exposure_period is 5ms longer than exposure_time, as defined in Pilatus
 
-    traj = traj_dict[fast_axis.name]
-    traj.define_traj(fast_axis, Nfast-1, step_size, dt, motor2=slow_axis)
-    p0_fast = fast_axis.position
-    motor_pos_sign = fast_axis.user_offset_dir()
-    run_forward_first = ((motor_pos_sign>0 and f_start<f_end) or (motor_pos_sign<0 and f_start>f_end))
-    # forward/back trajectory = fast axis motor postion increasing/decreasing
-    # rampup_distance and step_size are both positive
-    # ready positions are dial positions
-    ready_pos_FW = np.min(np.array([f_start, f_end])*motor_pos_sign)-(traj.traj_par['rampup_distance']+step_size/2)
-    ready_pos_BK = np.max(np.array([f_start, f_end])*motor_pos_sign)+(traj.traj_par['rampup_distance']+step_size/2)
-    traj.traj_par['ready_pos'] = [ready_pos_FW, ready_pos_BK]
-    #traj.traj_par['Nem1'] = int(((Nfast+2)*(exp_time+0.005)+0.3)*Nslow/0.05) # estimated duration of the scan
-    traj.traj_par['Nem2'] = Nfast*Nslow
-    traj.traj_par['Nfast'] = Nfast
+    if not hasattr(fast_axis, "traj"):
+        raise exception(f"don't know how to run atrajectory using {fast_axis} ...")
+        
+    traj = fast_axis.traj
+    traj.setup_traj(fast_axis, f_start, f_end, Nfast, step_size, dt, slow_axis, Nslow)
     traj.clear_readback()
     
     if debug:
@@ -97,6 +88,7 @@ def raster(exp_time, fast_axis, f_start, f_end, Nfast,
         pil.set_trigger_mode(PilatusTriggerMode.ext_multi)
         pil.exp_time(exp_time)
         pil.set_num_images(Nfast*Nslow)
+        pil._flying = True
     if em2ext in detectors:
         em2ext.avg_time.put(exp_time)
         em2ext.npoints.put(Nfast)
@@ -132,7 +124,7 @@ def raster(exp_time, fast_axis, f_start, f_end, Nfast,
     def inner(detectors, fast_axis, slow_axis, Nslow, pos_s):
         print("in inner()")
         
-        running_forward = run_forward_first
+        running_forward = traj.traj_par['run_forward_first']
         for sp in pos_s:
             print("start of the loop")
             if slow_axis is not None:

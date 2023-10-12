@@ -308,6 +308,7 @@ class LiXDetectors(Device):
 
         self._trigger_signal = EpicsSignal('XF:16IDC-ES{Zeb:1}:SOFT_IN:B0')
         self._exp_completed = 0
+        self._flying = False
 
         RE.md['pilatus'] = {}
         RE.md['pilatus']['ramdisk'] = pilatus_data_dir
@@ -400,6 +401,7 @@ class LiXDetectors(Device):
         self.datum={}
 
     def unstage(self):
+        self._flying = False
         for det in self.active_detectors:
             det.unstage()
 
@@ -446,10 +448,6 @@ class LiXDetectors(Device):
             self._exp_completed = 0
             self._status._finished()
 
-#    def collect_asset_docs(self):
-#        for det in self.active_detectors:
-#            yield from det.collect_asset_docs()
-    
 #    def describe(self):
 #        """ aim to reduce the amount of information saved in the databroker
 #            all detectors share the same name, path and template
@@ -458,10 +456,14 @@ class LiXDetectors(Device):
 #        attrs = OrderedDict([])
 #        common_attrs = self.active_detectors[0].describe()
 
-    """"""
+#    def collect_asset_docs(self):
+#        for det in self.active_detectors:
+#            yield from det.collect_asset_docs()
+    
     def collect_asset_docs(self):
         '''
-           when the run eigine process the "collect" message, 3 functions are called (see bluesky.bundlers)
+            need to behave differently for fly scans??
+            when the run eigine process the "collect" message, 3 functions are called (see bluesky.bundlers)
                 collect_asset_docs(): returns resource and datum document (name, doc)
                                       RE emit(DocumentNames(name), doc)
                                       called once per scan? name is always "resource"?
@@ -473,28 +475,34 @@ class LiXDetectors(Device):
 
             following HXN example
         '''
-        asset_docs_cache = []
-        
-        for det in self.active_detectors:
-            k = f'{det.name}_image'
-            print(list(det.hdf._asset_docs_cache))
-            (name, resource), = det.hdf.collect_asset_docs()
-            assert name == 'resource'
-            # hack the resource
-            resource['resource_kwargs']['frame_per_point'] = self._num_images
-            asset_docs_cache.append(('resource', resource))
-            resource_uid = resource['uid']
-            datum_id = '{}/{}'.format(resource_uid, 0)
-            self.datum[k] = [datum_id, ttime.time()]
-            datum = {'resource': resource_uid,
-                     'datum_id': datum_id,
-                     'datum_kwargs': {'point_number': 0}}
-            asset_docs_cache.append(('datum', datum))
-        
-        print("+++", asset_docs_cache)
-        print("---", self.datum)
-        return tuple(asset_docs_cache)
-    """"""
+        if self._flying:
+            asset_docs_cache = []
+
+            for det in self.active_detectors:
+                k = f'{det.name}_image'
+                print(list(det.hdf._asset_docs_cache))
+                (name, resource), = det.hdf.collect_asset_docs()
+                assert name == 'resource'
+                # hack the resource
+                resource['resource_kwargs']['frame_per_point'] = self._num_images
+                asset_docs_cache.append(('resource', resource))
+                resource_uid = resource['uid']
+                datum_id = '{}/{}'.format(resource_uid, 0)
+                #datum_id = resource_uid
+                self.datum[k] = [datum_id, ttime.time()]
+                datum = {'resource': resource_uid,
+                         'datum_id': datum_id,
+                         'datum_kwargs': {'point_number': 0}}
+                asset_docs_cache.append(('datum', datum))
+
+            print("+++", asset_docs_cache)
+            print("---", self.datum)
+            #return tuple(asset_docs_cache)
+            yield from tuple(asset_docs_cache)
+        else:
+            # this works for non fly-scan plans
+            for det in self.active_detectors:
+                yield from det.collect_asset_docs()
     
     def collect(self):
         print("in pil collect ...")

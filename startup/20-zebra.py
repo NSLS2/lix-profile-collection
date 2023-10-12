@@ -87,6 +87,13 @@ class ZebraPositionCapture(Device):
     pulse_step = Cpt(EpicsSignalWithRBV, "PC_PULSE_STEP")
     pulse_max = Cpt(EpicsSignalWithRBV, "PC_PULSE_MAX")
     pulse = Cpt(EpicsSignalRO, "PC_PULSE_OUT")
+    
+    # the PVs for these 4 are manually added to the Zebra IOC at LiX
+    enc_mot1_prefix = Cpt(EpicsSignal, "M1:PREFIX")
+    enc_mot2_prefix = Cpt(EpicsSignal, "M2:PREFIX")
+    enc_mot3_prefix = Cpt(EpicsSignal, "M3:PREFIX")
+    enc_mot4_prefix = Cpt(EpicsSignal, "M4:PREFIX")
+    
     enc_pos1_sync = Cpt(EpicsSignal, "M1:SETPOS.PROC")
     enc_pos2_sync = Cpt(EpicsSignal, "M2:SETPOS.PROC")
     enc_pos3_sync = Cpt(EpicsSignal, "M3:SETPOS.PROC")
@@ -95,6 +102,10 @@ class ZebraPositionCapture(Device):
     enc_res2 = Cpt(EpicsSignal, "M2:MRES")
     enc_res3 = Cpt(EpicsSignal, "M3:MRES")
     enc_res4 = Cpt(EpicsSignal, "M4:MRES")
+    enc_off1 = Cpt(EpicsSignal, "M1:OFF")
+    enc_off2 = Cpt(EpicsSignal, "M2:OFF")
+    enc_off3 = Cpt(EpicsSignal, "M3:OFF")
+    enc_off4 = Cpt(EpicsSignal, "M4:OFF")
     data_in_progress = Cpt(EpicsSignalRO, "ARRAY_ACQ")
     block_state_reset = Cpt(EpicsSignal, "SYS_RESET.PROC")
     data = Cpt(ZebraPositionCaptureData, "")
@@ -236,7 +247,6 @@ class Zebra(Zebra_base):
         )
 
 zebra = Zebra("XF:16IDC-ES{Zeb:1}:", name="Zebra", read_attrs=["pc.data.enc1", "pc.data.time"])
-
 
 # Pilatus triggering
 zebra.pulse1.input_addr.put(ZA.IN3_OC)
