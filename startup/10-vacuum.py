@@ -533,10 +533,11 @@ if vacuum_sample_env: # the nosecone and the microscope are connected
                            EVName=["XF:16IDC-VA{ES-EV:4}", "XF:16IDC-VA{ES-EV:SoftPump4}"], 
                            VVName=["XF:16IDC-VA{ES-VV:4}", "XF:16IDC-VA{ES-VV:SoftPump4}"],
                            downstreamGVName=None)    
-    ESVacSys.VSmap[ESVacSys.VSindex["sample"]]['EV'].close()
-    ESVacSys.VSmap[ESVacSys.VSindex["sample"]]['VV'].close() 
-    IV1.open()
-    IV2.open()   
+    # keep these valves at whatever states they are in
+    #ESVacSys.VSmap[ESVacSys.VSindex["sample"]]['EV'].close()
+    #ESVacSys.VSmap[ESVacSys.VSindex["sample"]]['VV'].close() 
+    while IV1.status==0 or IV2.status==0:
+        input("For in-vacuum ops, check sys config, open IV1 and IV2, then hit return ...")
 else:
     ESVacSys.appendManifold("EMmf", 
                             ["XF:16IDC-VA{ES-EV:3}", "XF:16IDC-VA{ES-EV:SoftPump3}"], 
