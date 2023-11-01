@@ -34,6 +34,12 @@ def update_res_path(res_path, replace_res_path={}):
             res_path = res_path.replace(rp1, rp2)  
     return res_path
 
+def read_pilatus_hdf(fh5):
+    pass
+    
+def read_xspress3_hdf(fh5):
+    pass
+
 def locate_h5_resource(res, replace_res_path, debug=False):
     """ this is intended to move h5 file created by Pilatus
         these files are originally saved on PPU RAMDISK, but should be moved to the IOC data directory
@@ -63,9 +69,28 @@ def locate_h5_resource(res, replace_res_path, debug=False):
         os.remove(fn_orig)
     
     hf5 = h5py.File(fn, "r")
-    # not sure where AD gets the timestamps from, they are off by ~20 years
-    timestamps = np.array(hf5["entry/instrument/NDAttributes/NDArrayTimeStamp"], dtype=float) + 631152000.3
-    return hf5,hf5["/entry/data/data"],timestamps
+    ## different format for pilatus and xspress3
+    # xspress3: /entry/instrument/detector/data, /entry/instrument/performance/timestamp
+    # pilatus: /entry/data/data, 
+    try:
+        if "data" in hf5["/entry"].keys():
+            data = hf5["/entry/data/data"]
+            ## not sure where AD gets the timestamps from, they are off by ~20 years
+            #timestamps = np.array(hf5["entry/instrument/NDAttributes/NDArrayTimeStamp"], dtype=float) + 631152000.3
+            # 2023-3 cycle, NDArrayTimeStamp now repeats the same value???
+            tss = np.array(hf5["entry/instrument/NDAttributes/NDArrayEpicsTSSec"], dtype=float)
+            tsns = np.array(hf5["entry/instrument/NDAttributes/NDArrayEpicsTSnSec"], dtype=float)
+            timestamps = tss+tsns*1e-9+631152000.3
+        elif "data" in hf5["/entry/instrument/detector"].keys():
+            data = hf5["/entry/instrument/detector/data"]
+            timestamps = hf5["/entry/instrument/performance/timestamp"][...].flatten()
+        else:
+            raise
+    except:
+        hf5.close() 
+        raise Exception("don't know how to read the hdf file: ", fn)
+        
+    return hf5,data,timestamps
 
 
 def hdf5_export(headers, filename, debug=False,

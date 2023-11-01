@@ -89,6 +89,10 @@ def raster(exp_time, fast_axis, f_start, f_end, Nfast,
         pil.exp_time(exp_time)
         pil.set_num_images(Nfast*Nslow)
         pil._flying = True
+    if xsp3 in detectors:
+        xsp3.exp_time(exp_time)
+        xsp3.set_num_images(Nfast*Nslow)
+        xsp3._flying = True
     if em2ext in detectors:
         em2ext.avg_time.put(exp_time)
         em2ext.npoints.put(Nfast)
@@ -136,6 +140,11 @@ def raster(exp_time, fast_axis, f_start, f_end, Nfast,
             yield from line()
             print("Done")
             running_forward = not running_forward
+
+        if pil in detectors:
+            yield from bps.complete(pil, wait=True)
+        if xsp3 in detectors:
+            yield from bps.complete(xsp3, wait=False)
 
         for flyer in [traj]+detectors:
             print(f"collecting from {flyer.name} ...")

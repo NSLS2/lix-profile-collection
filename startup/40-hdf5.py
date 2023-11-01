@@ -70,9 +70,8 @@ def compile_replace_res_path(h):
 
 def pack_h5(uids, dest_dir='', fn=None, fix_sample_name=True, stream_name=None, 
             attach_uv_file=False, delete_old_file=True, include_motor_pos=True, debug=False,
-            fields=['em2_current1_mean_value', 'em2_current2_mean_value',
-                    'em1_sum_all_mean_value', 'em2_sum_all_mean_value', 'em2_ts_SumAll', 'em1_ts_SumAll',
-                    'xsp3_spectrum_array_data', "pilatus_trigger_time",
+            fields=['em1_sum_all_mean_value', 'em2_sum_all_mean_value', 'em2_ts_SumAll', 'em1_ts_SumAll',
+                    'xsp3_spectrum_array_data', 'xsp3_image', "pilatus_trigger_time",
                     'pil1M_image', 'pilW1_image', 'pilW2_image', 
                     'pil1M_ext_image', 'pilW1_ext_image', 'pilW2_ext_image'], replace_res_path={}):
     """ if only 1 uid is given, use the sample name as the file name
@@ -138,14 +137,17 @@ def pack_h5(uids, dest_dir='', fn=None, fix_sample_name=True, stream_name=None,
     if attach_uv_file:
         # by default the UV file should be saved in /nsls2/xf16id1/Windows/
         # ideally this should be specified, as the default file is overwritten quickly
-        h5_attach_hplc(fn, '/nsls2/xf16id1/Windows/hplc_export.txt')
+        h5_attach_hplc(fn)
     
     print(f"finished packing {fn} ...")
     return fn
 
-
+def h5_attach_hplc(fn):
+    pass
+"""
+Old shimadzu packing method
 def h5_attach_hplc(fn_h5, fn_hplc, chapter_num=-1, grp_name=None):
-    """ the hdf5 is assumed to contain a structure like this:
+   """ """ the hdf5 is assumed to contain a structure like this:
         LIX_104
         == hplc
         ==== data
@@ -153,7 +155,7 @@ def h5_attach_hplc(fn_h5, fn_hplc, chapter_num=-1, grp_name=None):
         
         attach the HPLC data to the specified group
         if the group name is not give, attach to the first group in the h5 file
-    """
+    """ """
     f = h5py.File(fn_h5, "r+")
     if grp_name == None:
         grp_name = list(f.keys())[0]
@@ -190,6 +192,7 @@ def h5_attach_hplc(fn_h5, fn_hplc, chapter_num=-1, grp_name=None):
         dset[:] = d
     
     f.close()
+"""
 
 from py4xs.detector_config import create_det_from_attrs
 from py4xs.hdf import h5xs,h5exp    
@@ -301,12 +304,12 @@ def pack_and_process(data_type, uid, dest_dir):
     elif data_type=="HPLC":
         uids = [uid]
         fn = pack_h5_with_lock(uid, dest_dir=dest_dir, attach_uv_file=True)
-        if fn is not None and dt_exp is not None:
-            print('procesing ...')
-            dt = h5sol_HPLC(fn, [dt_exp.detectors, dt_exp.qgrid])
-            dt.process(debug='quiet')
-            dt.fh5.close()
-            del dt,dt_exp
+        #if fn is not None and dt_exp is not None:
+         #   print('procesing ...')
+          #  dt = h5sol_HPLC(fn, [dt_exp.detectors, dt_exp.qgrid])
+           # dt.process(debug='quiet')
+            #dt.fh5.close()
+            #del dt,dt_exp
     elif data_type=="flyscan" or data_type=="scan":
         uids = [uid]
         fn = pack_h5_with_lock(uid, dest_dir=dest_dir)

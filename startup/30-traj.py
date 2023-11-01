@@ -51,10 +51,11 @@ class trajControl(Device):
         self.define_traj(fast_axis, Nfast-1, step_size, dt)
         
         if isinstance(fast_axis, EpicsMotor):  # trajectory is based on user/Ophyd position
-            motor_pos_sign = 1   
+            # motor_pos_sign = (-1 if fast_axis.user_offset_dir.get() else 1)
+            motor_pos_sign = 1   # Ophyd use user position   
             p0_fast = fast_axis.position
         elif isinstance(fast_axis, XPSmotor): # trajectory is based on dial/controller position
-            motor_pos_sign = (-1 if fast_axis.user_offset_dir.get() else 1)
+            motor_pos_sign = fast_axis.user_offset_dir.get()
             p0_fast = fast_axis.position
         else:
             raise Exception("unkown motor type: ", fast_axis)
@@ -413,6 +414,7 @@ class ZEBRAtraj(trajControl):
         assert isinstance(controller, Zebra)
         super().__init__(name=controller.name+"_traj", **kwargs)
         self.controller = controller
+        self.vel_scale = 2.1
 
         # need to revise Zebra IOC to get PV names for connected motors
         # self.motors provides the encoder number based on the PV name of the motor
@@ -486,7 +488,11 @@ class ZEBRAtraj(trajControl):
         dx0 = self.traj_par['rampup_distance']
         ready_pos = self.traj_par['ready_pos'][0 if forward else 1]
         vel0 = motor.velocity.get()
-        vel = self.traj_par['segment_displacement']/self.traj_par['segment_duration']
+        # not sure why, but the actual speed for SmarAct/SDC2/Delta-Tau is different for set value
+        # asked for 0.305 sec / 5 micron, the actual time between steps was 0.675sec
+        # hence the added factor of 2.2 
+        # possibily a Delta-Tau issue?
+        vel = self.traj_par['segment_displacement']/self.traj_par['segment_duration']*self.vel_scale
         # set motor speed
         motor.velocity.set(vel).wait()
         
@@ -529,5 +535,3 @@ class ZEBRAtraj(trajControl):
         print('reading back trajectory ...')  
         data = self.controller.pc.data.read()
         return data[f'Zebra_pc_data_enc{self.motors[self.flying_motor.prefix]}']['value']
-
-    

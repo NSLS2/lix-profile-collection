@@ -5,9 +5,6 @@ from ophyd import ( Component as Cpt, ADComponent, Signal,
                     ROIPlugin, StatsPlugin, ImagePlugin,
                     SingleTrigger, PilatusDetector, Device)
 
-from ophyd.areadetector.filestore_mixins import FileStoreHDF5, FileStoreIterativeWrite
-from ophyd.areadetector.plugins import HDF5Plugin,register_plugin,PluginBase
-
 from databroker.assets.handlers_base import HandlerBase
 from ophyd.device import Staged
 from pathlib import Path
@@ -21,132 +18,13 @@ class PilatusTriggerMode(Enum):
     ext = 2         # ExtTrigger in camserver
     ext_multi = 3   # ExtMTrigger in camserver
 
-class LiXFileStorePluginBase(FileStoreIterativeWrite):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.stage_sigs.update([('auto_increment', 'Yes'),
-                                ('array_counter', 0),
-                                ('auto_save', 'Yes'),
-                                ('num_capture', 0),
-                                ])
-        self._fn = None
-        self._fp = None
-
-    def stage(self):
-        # Make a filename.
-        filename, read_path, write_path = self.make_filename()
-
-        # Ensure we do not have an old file open.
-        if self.file_write_mode != 'Single':
-            self.capture.set(0).wait()
-        # These must be set before parent is staged (specifically
-        # before capture mode is turned on. They will not be reset
-        # on 'unstage' anyway.
-        self.file_path.set(write_path).wait()
-        self.file_name.set(filename).wait()
-        #self.file_number.set(0).wait()     # only reason to redefine the pluginbase
-        super().stage()
-
-        # AD does this same templating in C, but we can't access it
-        # so we do it redundantly here in Python.
-        self._fn = self.file_template.get() % (read_path,
-                                               filename,
-                                               # file_number is *next* iteration
-                                               self.file_number.get() - 1)
-        self._fp = read_path
-        if not self.file_path_exists.get():
-            raise IOError("Path %s does not exist on IOC server."
-                          "" % self.file_path.get())
-
-
-class LiXFileStoreHDF5(LiXFileStorePluginBase):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.filestore_spec = 'AD_HDF5'  # spec name stored in resource doc
-        self.stage_sigs.update([('file_template', '%s%s_%6.6d.h5'),
-                                ('file_write_mode', 'Stream'),
-                                ('capture', 1)
-                                ])
-
-    def stage(self):
-        super().stage()
-        res_kwargs = {'frame_per_point': self.get_frames_per_point()}
-        self._generate_resource(res_kwargs)
-
-
-class LIXhdfPlugin(HDF5Plugin, LiXFileStoreHDF5):
-    run_time = Cpt(EpicsSignalRO, "RunTime")
-    sub_directory = None
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fnbr = 0
-
-    def make_filename(self):
-        ''' replaces FileStorePluginBase.make_filename()
-        Returns
-        -------
-        filename : str
-            The start of the filename
-        read_path : str
-            Path that ophyd can read from
-        write_path : str
-            Path that the IOC can write to
-        '''
-        global current_sample
-
-        filename = f"{current_sample}_{self.parent.detector_id}"
-        write_path = get_IOC_datapath(self.parent.name, pilatus_data_dir) 
-        if self.sub_directory:
-            write_path += f"/{self.sub_directory}"
-        read_path = write_path # might want to handle this differently, this shows up in res/db
-        return filename, read_path, write_path
-    
-    def describe(self):
-        ret = super().describe()
-        key = f'{self.parent.name}_image'
-        if key not in ret:
-            return ret
-
-
-        return ret
-    #def stage(self):
-    #    """ need to set the number of images to collect and file path
-    #    """
-    #    super().stage()
-    #    if not self.parent.parent.reset_file_number:
-    #        self.file_number.set(self.fnbr+1).wait()
-    #        filename, read_path, write_path = self.make_filename()
-    #        self._fn = self.file_template.get() % (read_path, filename, self.fnbr)
-    #        set_and_wait(self.full_file_name, self._fn)
-    #def unstage(self):
-    #    self.fnbr = self.file_number.get()
-    #    super().unstage()
-
-    def get_frames_per_point(self):
-        if self.parent.trigger_mode is PilatusTriggerMode.ext:
-            return self.parent.parent._num_images
-        else:
-            return 1
-
 from ophyd.areadetector.cam import PilatusDetectorCam as _PilatusDetectorCam
 
 class LIXPilatusCam(_PilatusDetectorCam):
     full_file_name = ADComponent(EpicsSignalRO, 'FullFileName_RBV', string=True)
     
-@register_plugin
-class CodecPlugin(PluginBase):
-    _default_suffix = "Codec1:"
-    _suffix_re = r"Codec\d:"
-    _plugin_type = "NDPluginCodec" 
-
-@register_plugin
-class PvaPlugin(PluginBase):
-    _default_suffix = "Pva1:"
-    _suffix_re = r"Pva\d:"
-    _plugin_type = "NDPluginPva"
-
 class LIXPilatus(PilatusDetector):
+    _num_captures = 0    # hdf plugin to accept infinite number of frames
     cam = ADComponent(LIXPilatusCam, 'cam1:')
     hdf = Cpt(LIXhdfPlugin, suffix="HDF1:",
               write_path_template="", root='/')
@@ -188,6 +66,9 @@ class LIXPilatus(PilatusDetector):
         self._acquisition_signal = self.cam.acquire
         self._counter_signal = self.cam.array_counter
         self.set_cbf_file_default(f"/ramdisk/{self.name}/", "current")
+        self.hdf.data_dir = pilatus_data_dir
+        self._num_repeats = 1
+        self._num_images = 1
         self.ts = []
 
         if self.hdf.run_time.get()==0: # first time using the plugin
@@ -222,10 +103,10 @@ class LIXPilatus(PilatusDetector):
 
         self.trigger_mode = trigger_mode
         if trigger_mode is PilatusTriggerMode.ext:
-            self.cam.num_images.put(self.parent._num_images*self.parent._num_repeats,
+            self.cam.num_images.put(self._num_images*self._num_repeats,
                                     wait=True)
         else:
-            self.cam.num_images.put(self.parent._num_images, wait=True)
+            self.cam.num_images.put(self._num_images, wait=True)
         print(self.name, f" staging for {trigger_mode}")
         self.cam.trigger_mode.put(trigger_mode.value, wait=True)
         super().stage()
@@ -390,6 +271,8 @@ class LiXDetectors(Device):
             det.cbf_file_number.put(fno+1)
 
         for det in self.active_detectors:
+            det._num_images = self._num_images
+            det._num_repeats = self._num_repeats
             det.stage(self.trigger_mode)
 
         if self.trigger_mode == PilatusTriggerMode.ext_multi:
@@ -456,13 +339,14 @@ class LiXDetectors(Device):
 #        attrs = OrderedDict([])
 #        common_attrs = self.active_detectors[0].describe()
 
-#    def collect_asset_docs(self):
-#        for det in self.active_detectors:
-#            yield from det.collect_asset_docs()
-    
     def collect_asset_docs(self):
-        '''
-            need to behave differently for fly scans??
+        print(f"in {self.name} collect_asset_docs")
+        for det in self.active_detectors:
+            yield from det.collect_asset_docs()
+
+    def complete(self):
+        ''' prepare asset_docs_cache() to be collected
+        
             when the run eigine process the "collect" message, 3 functions are called (see bluesky.bundlers)
                 collect_asset_docs(): returns resource and datum document (name, doc)
                                       RE emit(DocumentNames(name), doc)
@@ -475,37 +359,31 @@ class LiXDetectors(Device):
 
             following HXN example
         '''
-        if self._flying:
-            asset_docs_cache = []
+        print(f"in {self.name} complete ...")
 
-            for det in self.active_detectors:
-                k = f'{det.name}_image'
-                print(list(det.hdf._asset_docs_cache))
-                (name, resource), = det.hdf.collect_asset_docs()
-                assert name == 'resource'
-                # hack the resource
-                resource['resource_kwargs']['frame_per_point'] = self._num_images
-                asset_docs_cache.append(('resource', resource))
-                resource_uid = resource['uid']
-                datum_id = '{}/{}'.format(resource_uid, 0)
-                #datum_id = resource_uid
-                self.datum[k] = [datum_id, ttime.time()]
-                datum = {'resource': resource_uid,
-                         'datum_id': datum_id,
-                         'datum_kwargs': {'point_number': 0}}
-                asset_docs_cache.append(('datum', datum))
+        for det in self.active_detectors:
+            k = f'{det.name}_image'
+            print(list(det.hdf._asset_docs_cache))
+            (name, resource), = det.hdf.collect_asset_docs()
+            assert name == 'resource'
+            # hack the resource
+            resource['resource_kwargs']['frame_per_point'] = self._num_images
+            det.hdf._asset_docs_cache.append(('resource', resource))
+            resource_uid = resource['uid']
+            datum_id = '{}/{}'.format(resource_uid, 0)
+            #datum_id = resource_uid
+            self.datum[k] = [datum_id, ttime.time()]
+            datum = {'resource': resource_uid,
+                     'datum_id': datum_id,
+                     'datum_kwargs': {'point_number': 0}}
+            det.hdf._asset_docs_cache.append(('datum', datum))     # the scattering patterns go to the hdf plugin asset_docs_cache
 
-            print("+++", asset_docs_cache)
-            print("---", self.datum)
-            #return tuple(asset_docs_cache)
-            yield from tuple(asset_docs_cache)
-        else:
-            # this works for non fly-scan plans
-            for det in self.active_detectors:
-                yield from det.collect_asset_docs()
-    
+        print("+++", det.hdf._asset_docs_cache)
+        print("---", self.datum)   
+        return NullStatus()
+
     def collect(self):
-        print("in pil collect ...")
+        print(f"in {self.name} collect ...")
         data = {}
         ts = {}
         for det in self.active_detectors:
@@ -520,7 +398,7 @@ class LiXDetectors(Device):
         yield ret
 
     def describe_collect(self):
-        print("in pil describe_collect ...")
+        print(f"in {self.name} describe_collect ...")
         ret = {}
         for det in self.active_detectors:
             ret[f'{det.name}_image'] = det.make_data_key()
