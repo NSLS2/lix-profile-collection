@@ -14,6 +14,7 @@ class data_file_path(Enum):
 current_cycle = '2023-3'
 #pilatus_data_dir = data_file_path.lustre_legacy.value
 pilatus_data_dir = f"{data_file_path.ramdisk.value}/hdf"
+xspress3_data_dir = pilatus_data_dir # "/home/xspress3/lix"  # 
 data_destination = data_file_path.lustre_legacy.value  # this is where all IOC data files should eventually go
 #proc_destination = data_file_path.lustre_proposals.value
 proc_destination = data_file_path.lustre_legacy.value

@@ -193,7 +193,7 @@ class StandardProsilica(ProsilicaDetector, SingleTrigger):
 
         # show ROIs
         if ROIs is None: 
-            return
+            return img
         # ROI definition: [MinX, SizeX, MinY, SizeY]
         n = len(ROIs)
         data = []

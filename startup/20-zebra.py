@@ -246,7 +246,7 @@ class Zebra(Zebra_base):
             **kwargs,
         )
 
-zebra = Zebra("XF:16IDC-ES{Zeb:1}:", name="Zebra", read_attrs=["pc.data.enc1", "pc.data.time"])
+zebra = Zebra("XF:16IDC-ES{Zeb:1}:", name="Zebra", read_attrs=["pc.data.enc1", "pc.data.enc2", "pc.data.time"])
 
 # Pilatus triggering
 zebra.pulse1.input_addr.put(ZA.IN3_OC)
