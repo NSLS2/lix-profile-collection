@@ -70,6 +70,7 @@ def setPV(pv_name, value, readback_pv_name=None, poll_time=0.25, time_out=5, ret
         print(f"failed to set {pv_name} to {value}, retry # {i+1}")
     raise Exception(f'setPV(), giving up after {retry} tries.')
 
+"""
 def setSignal(signal, value, readback_signal=None, poll_time=0.25, time_out=5, retry=5):
     if readback_signal is None:
         readback_signal = signal
@@ -82,5 +83,8 @@ def setSignal(signal, value, readback_signal=None, poll_time=0.25, time_out=5, r
             time.sleep(poll_time)
         print(f"failed to set {signal} to {value}, retry # {i+1}")
     raise Exception(f'setSignal(), giving up after {retry} tries.')
-    
+"""
+
+def setSignal(signal, value):
+    signal.set(value).wait()
     
