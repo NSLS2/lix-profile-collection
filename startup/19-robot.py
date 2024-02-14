@@ -108,7 +108,7 @@ class EM_Robot():
 		cmdLists = ['LoadTray', 'MountTray', 'UnmountTray', 'UnloadTray',
                 'LoadPlate', 'MountPlate', 'UnmountPlate', 'UnloadPlate',
                 'LoadBead', 'MountBead', 'UnmountBead', 'UnloadBead',
-                'Initialize', 'PowerOff', 'Home', 'Idle','Park',
+                'Initialize', 'PowerOff', 'Home', 'Idle','Park','Recover',
                 'OpenGripper', 'CloseGripper','TraceSample','resetSoftIO']
 		if cmd not in cmdLists:
 			raise Exception(cmd+" is not a valid Task.")
@@ -132,6 +132,9 @@ class EM_Robot():
 
 	def resetSoftIO(self):
                 self.runTask('resetSoftIO', self.CMD_TIMEOUT)
+
+	def recover(self):
+		self.runTask('Recover',self.CMD_TIMEOUT)
 
 	def goHome(self):
 		cmdList = ['Initialize','Home']
