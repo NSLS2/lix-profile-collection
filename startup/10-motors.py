@@ -4,6 +4,7 @@ from ophyd import Device, Component as Cpt, EpicsMotor, EpicsSignalRO
 from ophyd.pseudopos import (pseudo_position_argument, real_position_argument)
 from ophyd import (PseudoPositioner, PseudoSingle)
 from epics import caget
+import time
 
 class XYMotor(Device):
     x = Cpt(EpicsMotor, '-Ax:X}Mtr')
@@ -20,9 +21,6 @@ class XYPitchMotor(XYMotor):
 class ApertureDev(Device):
     dx = Cpt(EpicsMotor, '-Ax:dX}Mtr')
     dy = Cpt(EpicsMotor, '-Ax:dY}Mtr')
-
-
-
 
 class KBMirrorHorizontal(PseudoPositioner):
     x1 = Cpt(EpicsMotor, '-Ax:XU}Mtr')
@@ -289,3 +287,28 @@ def home_motor(mot, forward=True, ref_position=0, travel_range=-1, safety=0.2):
             hl = ref_position+travel_range-safety
     mot.set_lim(ll,hl)
 
+def ready_for_robot(motors, positions, init=False):
+    #print(motors, positions)
+    def cb(*args, obj, sub_type, **kwargs):
+        print(f"clearing motor motion watch, triggered by {obj.name}")
+        ready_for_robot.EMready.set(0).wait()
+        for mot in ready_for_robot.motors:
+            #mot.clear_sub(cb)
+            mot.unsubscribe(ready_for_robot.subid[mot.name])
+            del ready_for_robot.subid[mot.name]
+        ready_for_robot.motors = []
+
+    if init:
+        ready_for_robot.motors = []    
+        ready_for_robot.subid = {}
+        ready_for_robot.EMready = EpicsSignal("XF:16IDC-ES:EMready")
+        ready_for_robot.EMready.set(0).wait()
+        return
+    
+    print("setting up motor motion watch ...")
+    for mot,pos in zip(motors, positions):
+        mot.move(pos).wait()
+        time.sleep(0.5)
+        ready_for_robot.subid[mot.name] = mot.subscribe(cb, event_type='start_moving')   # any time the motor moves
+    ready_for_robot.motors = motors
+    ready_for_robot.EMready.set(1).wait()

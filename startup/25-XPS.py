@@ -183,6 +183,8 @@ class XPSmotor(PositionerBase):
         self._started_moving = False
         self.set_point = position*self._dir
         self._status = super().move(self.set_point, **kwargs)
+        self._run_subs(sub_type=PositionerBase.SUB_START)
+        
         err,ret = self.controller.xps.GroupMoveAbsolute(self.controller.sID, self.motorName, [self.set_point])
         threading.Thread(target=self.wait_for_stop).start() 
         

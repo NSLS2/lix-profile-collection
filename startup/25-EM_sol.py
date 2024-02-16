@@ -1,6 +1,6 @@
 print(f"Loading {__file__}...")
 
-from ophyd import (EpicsSignal, EpicsMotor, Device, Component as Cpt)
+from ophyd import (EpicsSignal,EpicsSignalRO,EpicsMotor,Device, Component as Cpt)
 from time import sleep
 import threading,signal,random
 from epics import PV
@@ -107,7 +107,7 @@ class SolutionScatteringExperimentalModule():
     ctrl = SolutionScatteringControlUnit('XF:16IDC-ES:Sol{ctrl}', name='sol_ctrl')
     pcr_v_enable = EpicsSignal("XF:16IDC-ES:Sol{ctrl}SampleAligned")    # 1 means PCR tube holder can go up 
     pcr_holder_down = EpicsSignal("XF:16IDC-ES:Sol{ctrl}HolderDown")
-    EMready = EpicsSignal("XF:16IDC-ES:EMready")
+    #EMready = EpicsSignal("XF:16IDC-ES:EMready")
     EMconfig = EpicsSignal("XF:16IDC-ES:EMconfig")
     HolderPresent = EpicsSignal("XF:16IDC-ES:Sol{ctrl}HolderPresent")
     
@@ -203,7 +203,8 @@ class SolutionScatteringExperimentalModule():
         self.int_handler = signal.getsignal(signal.SIGINT)
         self.cam = setup_cam(camName)
         setSignal(self.EMconfig, 0) # changed from solution to 0
-        setSignal(self.EMready, 0)
+        #setSignal(self.EMready, 0)
+        ready_for_robot([], [], init=True)
 
     def change_config(self, config):
         if not config in ['solution', 'multi']:
@@ -296,31 +297,34 @@ class SolutionScatteringExperimentalModule():
     def park_sample(self):
         config = self.EMconfig.get(as_string=True)
         if config=='solution':
-            ss.xc.move(self.xc_park_pos)        # so that the robot doesn't have to change trajectory
-            self.holder_x.move(self.park_pos)
+            #ss.xc.move(self.xc_park_pos)        # so that the robot doesn't have to change trajectory
+            #self.holder_x.move(self.park_pos)
+            ready_for_robot(motors=[ss.xc, self.holder_x], positions=[self.xc_park_pos, self.park_pos]) 
             print('move to PCR tube holder park position ...')
         elif config=='multi':
             #self.select_tube_pos(18)  # get the PCR tube holder out of the way
-            ss.x.move(0)
-            ss.y.move(0.5) # ss.y position is 0 for fixed cell.
-            ss.xc.move(self.xc_park_fixed)  # fixed cell park position for robot
+            #ss.x.move(0)
+            #ss.y.move(0.5) # ss.y position is 0 for fixed cell.
+            #ss.xc.move(self.xc_park_fixed)  # fixed cell park position for robot
+            ready_for_robot(motors=[ss.x, ss.y, ss.xc], positions=[0, 0.5, self.xc_park_fixed]) 
             print('xc moved outboard for sample holder exchange')
         else:
             raise Exception(f"don't know how to park_sample() for config={config}")
         
-        setSignal(self.EMready, 1)
+        #setSignal(self.EMready, 1)
 
-    def mc_move_sample(self, n, cell_type):
-        setSignal(self.EMready, 0)
+    def mc_move_sample(self, pos, cell_type):
+        #setSignal(self.EMready, 0)
+        #ready_for_robot()
         # should only do this during fixed cell measurements
         config = self.EMconfig.get(as_string=True)
         if config!='multi':
             raise Exception(f'cannot run select_tube_pos() when config={config}')        
         
-        if not cell_format in self.sample_format_dict.keys():
+        if not cell_type in self.sample_format_dict.keys():
             raise Exception(f"unkown cell format: {cell_format}")
         pos=int(pos)
-        self.sample_format_dict[cell_format].move(pos)
+        self.sample_format_dict[cell_type].move(pos)
 
     def select_tube_pos(self, tn):
         ''' 1 argument accepted: 
@@ -328,7 +332,8 @@ class SolutionScatteringExperimentalModule():
             position 0 is the washing well 
         '''
         # any time the sample holder is moving, the solution EM is no longer ready
-        setSignal(self.EMready, 0)
+        #setSignal(self.EMready, 0)
+        #ready_for_robot(motors=[ss.xc, self.holder_x], positions=[self.xc_park_pos,self.park_pos])
         # should only do this during flow cell measurements
         config = self.EMconfig.get(as_string=True)
         if config!='solution':
