@@ -42,6 +42,10 @@ class Transfocator(Device):
             self.current_state[i] = self.lens_group[i].get()
             if self.current_state[i]==state_inserted and not silent:
                 print("\tgroup %d: %s" % (i+1, self.lens_group_config[i]))
+        
+        if not 'CRL' in RE.md['CRL'].keys():
+            RE.md['CRL'] = {}
+        RE.md['CRL']['state'] = self.current_state
                 
     def get_focal_length(self):
         pass
@@ -55,6 +59,7 @@ class Transfocator(Device):
             return
         self.lens_group[grp-1].put(state_inserted)
         self.wait()
+        self.get_state(silent=True)
         
     def remove_grp(self, grp):
         if grp<1 or grp>self.num_lens_group:
@@ -62,11 +67,13 @@ class Transfocator(Device):
             return
         self.lens_group[grp-1].put(state_removed)
         self.wait()  
+        self.get_state(silent=True)
         
     def restore_state(self, name="last"):
         for i in range(len(self.saved_states[name])):
             self.lens_group[i].put(self.saved_states[name][i])
             self.wait()
+        self.get_state(silent=True)
         
     def save_state(self, name="last"):
         self.get_state(silent=True)
