@@ -1,0 +1,40 @@
+experiment_types:
+  X-ray_only:
+    buffer_position: [1, 2, 3, 4, 5, 6]
+    column_position: [1, 2]
+    10_port_pos: ["A", "B"]
+
+  X-ray_UV_MALS_RID:
+    buffer_position: [1, 2, 3, 4, 5, 6]
+    column_position: [1, 2]
+    10_port_pos: ["A", "B"]
+
+  X-ray_Regen:
+    buffer_position: [1, 2, 3, 4, 5, 6]
+    column_position: [1, 2]
+    10_port_pos: ["A", "B"]
+
+  UV_MALS_RID:
+    buffer_position: [1, 2, 3, 4, 5, 6]
+    column_position: [1, 2]
+    10_port_pos: ["A", "B"]
+
+column_types:
+  Superdex 200 Increase 5/150 GL:
+    pressure_limit: [45]
+    flowrate: [0.35]
+    run_time: [12]
+  
+  Superdex 200 Increase 10/300 GL:
+    pressure_limit: [45]
+    flowrate: [0.5]
+    run_time: [50]
+  
+  Phenomenex dSEC2:
+    pressure_limit: [125]
+    flowrate: [0.35]
+    run_time: [30]
+
+
+
+ 

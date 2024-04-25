@@ -1,0 +1,12 @@
+Single_Sample_Analysis:
+  Acquisition_Methods:
+    "Superdex"
+    "Phenomenex"
+    "Method3"
+
+  Processing_Method: 
+    method: "CSV_ADF_export.pmx"
+
+  Results_Path: "C:\CDS_Projects\HPLC\Results\"
+
+  Injection_Source: "HipAls"

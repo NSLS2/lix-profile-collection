@@ -64,9 +64,9 @@ RE = CustomRunEngine()
 
 nslsii.configure_base(get_ipython().user_ns, 'lix', bec=True, pbar=False, publish_documents_with_kafka=True)
 
-def reload_macros(file):
+def reload_macros(file='~/.ipython/profile_collection/startup/99-macros.py'):
     ipy = get_ipython()
-    ipy.run_line_magic('run', f'-i {ipy.profile_dir.location}/startup/{file}')
+    ipy.run_line_magic('run','-i '+file)
 
 
 def is_ipython():

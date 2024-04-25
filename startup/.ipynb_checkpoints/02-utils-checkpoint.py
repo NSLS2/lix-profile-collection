@@ -6,10 +6,9 @@ import numpy as np
 from time import sleep
 from datetime import datetime
 
-# this is useful if startup crashes for unknown reasons
-#from IPython import get_ipython
-#ip = get_ipython()
-#ip.InteractiveTB.set_mode(mode="Verbose")
+from IPython import get_ipython
+ip = get_ipython()
+ip.InteractiveTB.set_mode(mode="Verbose")
 
 # xf16id - 5008, lix - 3009
 def makedirs(path, mode=None, owner_uid=5008, group=3009):
