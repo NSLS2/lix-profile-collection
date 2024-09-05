@@ -193,9 +193,13 @@ def define_motors():
     #bimy = EpicsMotor('XF:16IDC-BI{BPM:2-Ax:Y}Mtr', name='bimy')
 
     ## Guard Slits 1
-    sg1 = SlitsCenterAndGap('XF:16IDC-OP{Slt:G1', name='sg1')
-    ## Guard Slits 2, blade direction should be configured in EPICS
-    sg2 = Blades('XF:16IDC-OP{Slt:G2', name='sg2')
+    #sg1 = SlitsCenterAndGap('XF:16IDC-OP{Slt:G1', name='sg1')
+    
+    ## Guard Slits 2, 
+    ## SmarAct version: blade direction should be configured in EPICS
+    #sg2 = Blades('XF:16IDC-OP{Slt:G2', name='sg2')
+    ## JJ version
+    sg2 = SlitsCenterAndGap('XF:16IDC-OP{Slt:G2', name='sg2')
 
     ## Detector Positioning Stages 
     saxs = XYZMotor('XF:16IDC-ES{Stg:SAXS', name='saxs')
@@ -226,13 +230,6 @@ def home_motor(mot, forward=True, ref_position=0, travel_range=-1, safety=0.2):
     response = input("OK to preceed (n/Y)?")
     if response!="Y":
         print("Aborted.")
-        
-    if mot == "sg2":
-        sg2.top.home_forward.set(1)
-        sg2.inboard.home_reverse.set(1)
-        sg2.outboard.home_reverse.set(1)
-        #sg2.bottom.home_reverse.set(1)
-        print("Guard slit smaract motors are homed")
 
     pos0 = mot.position
     pos1 = pos0
