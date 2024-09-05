@@ -47,7 +47,7 @@ class LiXXspress(XspressTrigger, Xspress3Detector):
     spectrum = Cpt(ImagePlugin, "ARR1:", read_attrs=["array_data"])
     acq_time = Cpt(EpicsSignal, "AcquireTime")
     _trigger_signal = EpicsSignal('XF:16IDC-ES{Zeb:1}:SOFT_IN:B0')
-    _trigger_width = EpicsSignal("XF:16IDC-ES{Zeb:1}:PULSE2_WID")
+    _trigger_width = zebra.pulse1.width
     _num_captures = 1
 
     hdf = Cpt(LIXhdfPlugin, suffix="HDF5:",   # note the number, this is from the detector pool IOC
@@ -91,12 +91,16 @@ class LiXXspress(XspressTrigger, Xspress3Detector):
         return ret
 
     def stage(self):
+        # clean up first
+        self.settings.acquire.put(0)
+        self.erase.put(1)
+        
         # detector pool Xspress3 IOC cannot create directories 
         makedirs(get_IOC_datapath(self.name, self.hdf.data_dir), mode=0O777)  
         # for external triggering, set pulse width based on exposure time
         if self.ext_trig:
             self._triggerMode.put(3)
-            self._trigger_width.put(self.acq_time.get())
+            self._trigger_width.put(self.acq_time.get()-0.002)  # doesn't work if same at acq_time
         else: 
             self._triggerMode.put(1)
         self.num_frames.set(self._num_images).wait()

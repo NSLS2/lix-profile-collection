@@ -21,28 +21,28 @@ flyers need to implement the following methods:
     read_configuration(), describe_configuration()
     collect_asset_docs(),  
 
-pil and em2ext need to be revised to work like a flyer
+pil and emXext need to be revised to work like a flyer
     the fly scan should collect from the detectors too
     the detectors need to implement kickoff/complete??
-        em2ext certainly does, since the circular buffer is used for each line
+        emXext certainly does, since the circular buffer is used for each line
         pil can potentially use kickoff/compelte to pack hdf???
         xsp3 shouldn't need it, single hdf per scan
 """    
         
 def rel_raster(exp_time, fast_axis, f_start, f_end, Nfast,
                slow_axis=None, s_start=0, s_end=0, Nslow=1, debug=False, md=None, 
-               em2_dt=0.005, detectors = [pil, em2ext]
+               detectors = [pil, em1ext, em2ext]
               ):
 
     fm0 = fast_axis.position
     sm0 = slow_axis.position
     yield from raster(exp_time, fast_axis, fm0+f_start, fm0+f_end, Nfast,
                       slow_axis=slow_axis, s_start=sm0+s_start, s_end=sm0+s_end, Nslow=Nslow, 
-                      debug=debug, md=md, em2_dt=em2_dt, detectors=detectors)
+                      debug=debug, md=md, detectors=detectors)
     
 def raster(exp_time, fast_axis, f_start, f_end, Nfast,
            slow_axis=None, s_start=0, s_end=0, Nslow=1, debug=False, md=None,
-           em2_dt=0.005, detectors = [pil, em2ext] 
+           detectors = [pil, em1ext, em2ext] 
           ):
     """ raster scan in fly mode using detectors with exposure time of exp_time
         detectors must be a member of pilatus_detectors_ext
@@ -84,19 +84,23 @@ def raster(exp_time, fast_axis, f_start, f_end, Nfast,
     print(pos_s)
     print(motor_names)
     
-    if pil in detectors:
-        pil.set_trigger_mode(PilatusTriggerMode.ext_multi)
-        pil.exp_time(exp_time)
-        pil.set_num_images(Nfast*Nslow)
-        pil._flying = True
-    if xsp3 in detectors:
-        xsp3.exp_time(exp_time)
-        xsp3.set_num_images(Nfast*Nslow)
-        xsp3._flying = True
-    if em2ext in detectors:
-        em2ext.avg_time.put(exp_time)
-        em2ext.npoints.put(Nfast)
-        em2ext.rep = Nslow
+    for det in detectors:
+        if isinstance(det, LiXXspress):
+            det.set_ext_trigger(True)
+            det.exp_time(exp_time)
+            det.set_num_images(Nfast*Nslow)
+            det._flying = True
+        elif isinstance(det, LiXDetectors):
+            det.set_trigger_mode(PilatusTriggerMode.ext_multi)
+            det.exp_time(exp_time)
+            det.set_num_images(Nfast*Nslow)
+            det._flying = True
+        elif isinstance(det, LiXTetrAMMext):
+            det.avg_time.put(exp_time)
+            det.npoints.put(Nfast)
+            det.rep = Nslow
+        else:
+            raise Exception(f"{det} is not supported in a raster scan ...")
 
     print('setting up to collect %d exposures of %.2f sec ...' % (Nfast*Nslow, exp_time))
     
@@ -114,11 +118,11 @@ def raster(exp_time, fast_axis, f_start, f_end, Nfast,
     def line():
         print("in line()")
         yield from bps.kickoff(traj, wait=False)
-        if em2ext in detectors:
-            yield from bps.kickoff(em2ext, wait=False)
+        for em in set([em1ext, em2ext])&set(detectors):
+            yield from bps.kickoff(em, wait=False)
         yield from bps.complete(traj, wait=False)
-        if em2ext in detectors:
-            yield from bps.complete(em2ext, wait=False)
+        for em in set([em1ext, em2ext])&set(detectors):
+            yield from bps.complete(em, wait=False)
         print("leaving line()")
 
     @bpp.stage_decorator([traj])
@@ -141,10 +145,11 @@ def raster(exp_time, fast_axis, f_start, f_end, Nfast,
             print("Done")
             running_forward = not running_forward
 
-        if pil in detectors:
-            yield from bps.complete(pil, wait=True)
-        if xsp3 in detectors:
-            yield from bps.complete(xsp3, wait=False)
+        for det in detectors:
+            if isinstance(det, LiXDetectors): # pil
+                yield from bps.complete(det, wait=True)
+            elif isinstance(det, LiXXspress): # xsp3
+                yield from bps.complete(det, wait=False)
 
         for flyer in [traj]+detectors:
             print(f"collecting from {flyer.name} ...")
