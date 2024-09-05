@@ -6,6 +6,8 @@ from ophyd import DeviceStatus
 from ophyd import EpicsSignal, EpicsMotor, EpicsSignalRO, Device, Component 
 from ophyd.positioner import PositionerBase
 from ophyd.utils.epics_pvs import data_type, data_shape
+from ophyd.status import wait as status_wait
+
 import epics
 import bluesky.preprocessors as bpp
 import bluesky.plan_stubs as bps

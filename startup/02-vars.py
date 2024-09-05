@@ -11,7 +11,7 @@ class data_file_path(Enum):
     gpfs_experiments = '/nsls2/xf16id1/experiments'
     ramdisk = '/exp_path'
 
-current_cycle = '2024-1'
+current_cycle = '2024-3'
 #pilatus_data_dir = data_file_path.lustre_legacy.value
 pilatus_data_dir = f"{data_file_path.ramdisk.value}/hdf"
 xspress3_data_dir = pilatus_data_dir # "/home/xspress3/lix"  # 

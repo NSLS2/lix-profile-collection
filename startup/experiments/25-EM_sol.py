@@ -4,7 +4,8 @@ from ophyd import (EpicsSignal,EpicsSignalRO,EpicsMotor,Device, Component as Cpt
 from time import sleep
 import threading,signal,random
 from epics import PV
-import bluesky.plans as bp    
+import bluesky.plans as bp
+
 
 class fixed_cell_format:
     def __init__(self, cell_type, Npos, motor_position1, offset):
@@ -176,9 +177,10 @@ class SolutionScatteringExperimentalModule():
     
     Ntube = 18
     # these are mechanically determined and should not change
-    tube1_pos = -18.72
+    tube1_pos = -18.83
+    #tube1_pos = -18.72
     #tube1_pos = -18.83     #4/10/20 sc[new sensor]    #12/20/17 by JB
-    tube_spc = -5.84     
+    tube_spc = -5.84 #-5.84    
 
     default_dry_time = 20
     default_wash_repeats = 5
@@ -352,7 +354,6 @@ class SolutionScatteringExperimentalModule():
         if self.pcr_holder_down.get()!=1:
             self.move_tube_holder("down")
             #raise RuntimeError('Cannot move holder when it is not down!!')
-
         self.tube_pos = tn
         pos = self.drain_pos
         if tn>0:
@@ -372,11 +373,16 @@ class SolutionScatteringExperimentalModule():
         '''
         if pos=='down':
             print('moving PCR tube holder down ...')
+            self.ctrl.sv_pcr_tubes.put('down')
+            self.ctrl.sv_pcr_tubes.put('down')
             while retry>0:
                 self.ctrl.sv_pcr_tubes.put('down')
+                #time.sleep(3)
+                #print("checking piston status")
                 self.ctrl.wait() 
                 # wait for the pneumatic actuator to settle
                 #addtition of new position sensor for sample holder actuator 12/2017:
+                
                 if self.pcr_holder_down.get()==1:
                     break
                 sleep(0.5)
@@ -394,7 +400,10 @@ class SolutionScatteringExperimentalModule():
                 raise RuntimeError('attempting to raise PCR tubes while mis-aligned !!') 
             print('moving PCR tube holder up ...')
             self.ctrl.sv_pcr_tubes.put('up')
-            self.ctrl.wait()        
+            #time.sleep(1)
+            #print("checking piston status up")
+            self.ctrl.wait()
+            #time.sleep(5)
             self.tube_holder_pos = "up"
     
     def wash_needle(self, nd, repeats=-1, dry_duration=-1, option=None):
@@ -642,11 +651,11 @@ class SolutionScatteringExperimentalModule():
             self.select_tube_pos(tn)                
             self.return_sample()
         if washCell and not concurrentOp:  
+            # commented due to communication error with syring pump during holder motion 5/21/24
             th = threading.Thread(target=self.wash_needle, args=(nd, ) )
             th.start()        
             self.reload_syringe_pump()
             th.join()                
-
     def mov_delay(self, length):
         while self.ctrl.ready.get()==0:
             sleep(0.2)

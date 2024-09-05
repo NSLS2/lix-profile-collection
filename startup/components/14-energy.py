@@ -27,7 +27,7 @@ class MonoDCM(Device):
     ccm_fine_pitch = Cpt(EpicsMotor, '-Ax:CCM_PF}Mtr')
     pitch2_rb = Cpt(EpicsSignalRO, '-Ax:PF_RDBK}Mtr.RBV')
 
-#mono = MonoDCM("XF:16IDA-OP{Mono:DCM", name="dcm")
+mono = MonoDCM("XF:16IDA-OP{Mono:DCM", name="dcm")
 
 class XBPM(Device):
     x = Cpt(EpicsSignalRO, 'Pos:X-I')

@@ -9,6 +9,8 @@ from bluesky.preprocessors import monitor_during_wrapper
 beam_current = EpicsSignal('SR:OPS-BI{DCCT:1}I:Real-I')
 bpm_current = EpicsSignal('XF:16IDB-CT{Best}:BPM0:Int')
 PShutter = EpicsSignal('XF:16IDB-PPS{PSh}Enbl-Sts')
+PShutter_open=EpicsSignal('XF:16IDA-PPS{PSh}Cmd:Opn-Cmd')
+PShutter_close=EpicsSignal('XF:16IDA-PPS{PSh}Cmd:Cls-Cmd')
 previous_beam_on_status = True
 check_bm_period = 600
 pauseFlag = EpicsSignal('XF:16IDC-ES{Zeb:1}:SOFT_IN:B1')
@@ -193,6 +195,24 @@ def align_guardslit():
     pk =  find_plateau_start(yv)
     sg2.bottom.move(xv[pk+1])
     print('bottom moved to %f',xv[pk+1])
+    
+def detector_config(motors, positions):
+    #print(motors, positions)
+    for mot,pos in zip(motors, positions):
+        mot.move(pos).wait()
+        time.sleep(0.5)
+        #ready_for_robot.subid[mot.name] = mot.subscribe(cb, event_type='start_moving')   # any time the motor moves
+    waxs_config.motors = motors
+
+def detector_exp_move(config):
+        if config=='solution':
+            detector_config(motors=[saxs.x,saxs.y,saxs.z, waxs2.x, waxs2.y,waxs2.z], positions=[439,730,4000, 80, -105,281.5]) 
+            print('moved detectors to solution config ...')
+        elif config=='scanning':
+            detector_config(motors=[saxs.x,saxs.y,saxs.z,waxs2.x, waxs2.y,waxs2.z], positions=[444,730,4250,51, -104.5,281.5]) 
+            print('moved detectors to scanning config ...')
+        else:
+            raise Exception(f"unknown () for config={config}")
     
 def find_plateau_start(data,thresh=1.005):
     """Finds the start of the plateau in a list of numbers.

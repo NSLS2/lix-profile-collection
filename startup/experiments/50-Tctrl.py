@@ -146,7 +146,8 @@ class SMCchiller(serial_port):
 class tctrl_FTC100D(serial_port):
     """
     This works with the FTC100D temperature controller from AccuThermo
-    port setting: 38400, 8N1
+    port setting: 38400, 8N1,type socket, TCP server mode
+    Flow contrl = None
     Communication is not MODBUS, not ascii 
     The protocol is complicated
 

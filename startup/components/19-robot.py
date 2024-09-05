@@ -1,3 +1,4 @@
+
 print(f"Loading {__file__}...")
 # -*- coding: utf-8 -*-
 """
@@ -151,7 +152,7 @@ class EM_Robot():
 				raise Exception(cmd+" "+tskStat+" with exception "+exception)
 
 	def __load(self,sType,n,cmdList):
-		ranges={"Tray":range(1,21), "Plate":range(1,9), "Bead":range(1,8)}
+		ranges={"Tray":range(1,21), "Plate":range(1,17), "Bead":range(1,8)}
 		if n not in  ranges[sType]:
                 	raise Exception(sType+" position is out of range ["+ranges[sType][0]+" ... "+ranges[sType][-1]+"]")
 
@@ -186,7 +187,7 @@ class EM_Robot():
 
 
 	def __unload(self, sType, n, cmdList):
-		ranges={"Tray":range(1,21), "Plate":range(1,9), "Bead":range(1,8)}
+		ranges={"Tray":range(1,21), "Plate":range(1,17), "Bead":range(1,8)}
 		if n not in  ranges[sType]:
 			raise Exception(sType+" position is out of range ["+ranges[sType][0]+" ... "+ranges[sType][-1]+"]")
 
@@ -291,7 +292,7 @@ def testRobot(sMode='A',nbgn=21,nend=24,nloop=1):
 
   EMconfig = PV("XF:16IDC-ES:EMconfig").get()
   types = {0:"Tray", 1:"Plate", 2:"Bead"}
-  maxSamples = {"Tray":20, "Plate":8, "Bead":7}
+  maxSamples = {"Tray":20, "Plate":16, "Bead":7}
   load = getattr(rbt,'load'+types[EMconfig])
   mount= getattr(rbt,'mount'+types[EMconfig])
   unmount= getattr(rbt,'unmount'+types[EMconfig])

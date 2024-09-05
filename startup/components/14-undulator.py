@@ -17,10 +17,6 @@ from ophyd.status import wait as status_wait
 """
 
 from ophyd import EpicsMotor
-from ophyd.signal import (EpicsSignal, EpicsSignalRO)
-from ophyd.utils.epics_pvs import (raise_if_disconnected, AlarmSeverity)
-from ophyd.device import (Device, Component as Cpt)
-from ophyd.status import wait as status_wait
 
 import bluesky.plans as bp
 import bluesky.plan_stubs as bps

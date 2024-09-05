@@ -39,30 +39,97 @@ def pack_ref_h5(run_id, **kwargs):
 def plot_ref_h5():
     pass
     
-def collect_std(r_range=1.5):
-    holderName = "std"
-    md = {'holderName': holderName}
-    pil.use_sub_directory(holderName)
-    pil.set_trigger_mode(PilatusTriggerMode.soft)
-    pil.set_num_images(1)
-    pil.exp_time(0.2)
-    ts = gettimestamp()
+def collect_std(r_range=1.5,cell_type=None,pos=None):
+    if cell_type=='fixed':
+        print('using fixed cell setup')
+        sol.mc_move_sample(pos=2,cell_type='AgBH')
+        holderName = "std"
+        md = {'holderName': holderName}
+        pil.use_sub_directory(holderName)
+        pil.set_trigger_mode(PilatusTriggerMode.soft)
+        pil.set_num_images(1)
+        pil.exp_time(0.2)
+        ts = gettimestamp()
+        ###
+        uids =[]
+        j=2
+        sn_list=['dark','empty','AgBH','carbon']
+        for i in sn_list:
+            if i == 'dark':
+                sol.mc_move_sample(pos=4,cell_type='AgBH')
+                pil.exp_time(2)
+                PShutter_close.put(1)
+                change_sample(f"{i}-{ts}")
+                RE(ct([pil,em1,em2], num=1, md=md))
+                pil.exp_time(0.2)
+                PShutter_open.put(1)
+                time.sleep(5)
+                uids.append(last_scan_uid)
+            elif i == 'empty':
+                sol.mc_move_sample(pos=4,cell_type='AgBH')
+                change_sample(f"{i}-{ts}")
+                RE(ct([pil,em1,em2], num=1, md=md))
+                uids.append(last_scan_uid)
+            else:
+                sol.mc_move_sample(pos=j,cell_type='AgBH')
+                change_sample(f"{i}-{ts}")
+                RE(ct([pil,em1,em2], num=1, md=md))
+                print(j)
+                j = j-1
+                uids.append(last_scan_uid)
+        #sol.select_flow_cell('std', r_range=r_range)    
 
-    sol.select_flow_cell('std', r_range=r_range)    
 
-    change_sample(f"AgBH-{ts}")
-    RE(ct([pil,em1,em2], num=1, md=md))
-    
-    pil.use_sub_directory()
+        pil.use_sub_directory()
+        print(uids)
+        ###
+        # now pack h5 file and recalibrate
+        pack_h5(uids, fn="std.h5")
+        dexp = h5exp("exp.h5")
+        dexp.recalibrate("std.h5",energy=pseudoE.energy.readback.value/1000)
 
-    # now pack h5 file and recalibrate
-    pack_h5([last_scan_uid], fn="std.h5")
-    dexp = h5exp("exp.h5")
-    dexp.recalibrate("std.h5",energy=pseudoE.energy.readback.value/1000)
+        dexp.detectors[0].fix_scale = 0.93
+        dexp.detectors[1].fix_scale = (dexp.detectors[0].exp_para.Dd/dexp.detectors[1].exp_para.Dd)**2
+        dexp.save_detectors()
+    else:
+        holderName = "std"
+        md = {'holderName': holderName}
+        pil.use_sub_directory(holderName)
+        pil.set_trigger_mode(PilatusTriggerMode.soft)
+        pil.set_num_images(1)
+        pil.exp_time(0.2)
+        ts = gettimestamp()
+        uids = []
+        
+        sn_list=['dark','empty','carbon','AgBH']
+        for i in sn_list:
+            if i == 'dark':
+                sol.select_flow_cell('empty', r_range=r_range)
+                pil.exp_time(2)
+                PShutter_close.put(1)
+                change_sample(f"{i}-{ts}")
+                RE(ct([pil,em1,em2], num=1, md=md))
+                pil.exp_time(0.2)
+                PShutter_open.put(1)
+                time.sleep(5)
+                uids.append(last_scan_uid)
+            else:
+                sol.select_flow_cell(i, r_range=r_range)
+                change_sample(f"{i}-{ts}")
+                RE(ct([pil,em1,em2], num=1, md=md))
+        
+                uids.append(last_scan_uid)
 
-    dexp.detectors[0].fix_scale = 0.93
-    dexp.detectors[1].fix_scale = (dexp.detectors[0].exp_para.Dd/dexp.detectors[1].exp_para.Dd)**2
-    dexp.save_detectors()
+        pil.use_sub_directory()
+        print(uids)
+        # now pack h5 file and recalibrate
+        pack_h5(uids, fn="std.h5")
+        dexp = h5exp("exp.h5")
+        dexp.recalibrate("std.h5",energy=pseudoE.energy.readback.value/1000)
+
+        dexp.detectors[0].fix_scale = 0.93
+        dexp.detectors[1].fix_scale = (dexp.detectors[0].exp_para.Dd/dexp.detectors[1].exp_para.Dd)**2
+        dexp.save_detectors()
     
 def collect_reference_from_tube12():
     nd_list = ['upstream','downstream']
@@ -88,7 +155,7 @@ def collect_reference_from_tube12():
         sname = f"{fcell}_blank_{ts}"
         change_sample(sname)
         sd.monitors = []
-        RE(ct([pil,em1,em2], num=5), md=md)
+        RE(ct([pil,em1,em2], num=5, md=md))
         sname = f"{fcell}_water_{ts}"
         sol.measure(pos, sample_name=sname, exp=1, repeats=5, md=md)
     pil.use_sub_directory()
@@ -566,7 +633,7 @@ def mc_measure_sample(pos, sname='test', exp=0.5, rep=1, check_sname=True, cell_
     sol.mc_move_sample(pos, cell_form)
     RE(ct([pil,em1,em2], num=rep))
     
-def mc_measure_sample_dscanx(pos, sname='test', exp=0.5, y_points=5, yrange=4, x_points=5, xrange=0.5,offset_y=0.3,check_sname=True, cell_form=None,):
+def mc_measure_sample_dscanx(pos, sname='test', exp=0.5, y_points=5, yrange=4, x_points=5, xrange=0.5,offset_y=0,check_sname=True, cell_form=None,):
     pil.set_trigger_mode(PilatusTriggerMode.ext_multi)
     pil.exp_time(exp)
     pil.set_num_images(x_points)
@@ -576,7 +643,7 @@ def mc_measure_sample_dscanx(pos, sname='test', exp=0.5, y_points=5, yrange=4, x
     #ss.y.move(ss.y.position+offset_y)
     RE(dscan([pil,em1,em2],ss.x, -xrange/2,xrange/2,x_points))
     
-def mc_measure_sample_dscany(pos, sname='test', exp=0.5, y_points=5, yrange=4, x_points=5, xrange=0.5,offset_y=0.3,check_sname=True, cell_form=None):
+def mc_measure_sample_dscany(pos, sname='test', exp=0.5, y_points=5, yrange=4, x_points=5, xrange=0.5,offset_y=0,check_sname=True, cell_form=None):
     pil.set_trigger_mode(PilatusTriggerMode.ext_multi)
     pil.exp_time(exp)
     pil.set_num_images(y_points)
@@ -586,7 +653,7 @@ def mc_measure_sample_dscany(pos, sname='test', exp=0.5, y_points=5, yrange=4, x
     #ss.y.move(ss.y.position+offset_y)
     RE(dscan([pil,em1,em2],ss.y, -yrange/2,yrange/2,y_points))
     
-def mc_measure_sample_mesh(pos, sname='test', exp=0.5, y_points=5, yrange=4, x_points=5, xrange=0.5,offset_y=0.3,check_sname=True, cell_form=None):
+def mc_measure_sample_mesh(pos, sname='test', exp=0.5, y_points=5, yrange=4, x_points=5, xrange=0.5,offset_y=0,check_sname=True, cell_form=None):
     pil.set_trigger_mode(PilatusTriggerMode.ext_multi)
     pil.exp_time(exp)
     pil.set_num_images(y_points*x_points)
@@ -603,15 +670,17 @@ def mc_measure_sample_scany(pos, sname='test', exp=0.5,
     sol.mc_move_sample(pos, cell_type=cell_form)
     time.sleep(1)
 
-    RE(monitor_during_wrapper(rel_raster(exp, 
-                                         ss.y, -yrange/2+offset_y, yrange/2+offset_y, y_points, 
-                                         ss.x, -xrange/2, xrange/2, x_points, 
-                                         md={"experiment": "powder"}), [em1.ts.SumAll]))
+    #RE(monitor_during_wrapper(rel_raster(exp, 
+    #                                     ss.y, -yrange/2+offset_y, yrange/2+offset_y, y_points, 
+    #                                     ss.x, -xrange/2, xrange/2, x_points, 
+    #                                     md={"experiment": "powder"})))
+    
+    RE(rel_raster(exp,ss.y, -yrange/2+offset_y, yrange/2+offset_y, y_points,ss.x, -xrange/2, xrange/2, x_points, md={"experiment": "powder"}))
     
     sol.mc_move_sample(pos, cell_type=cell_form)
     
 def mc_measure_holder(spreadSheet, holderName,sheet_name='Holders', exp=1, rep=1, check_sname=True, 
-                      scan=False, y_points=10, yrange=2.5, x_points=2, xrange=0.5, offset_y=0.3, 
+                      scan=False, y_points=10, yrange=2.5, x_points=2, xrange=0.5, offset_y=0, 
                       T=None, delay_time=60, dead_band=0.5, cell_form=None):
     sol.mc_move_sample(1, cell_type=cell_form)
     if T is None:
@@ -663,15 +732,16 @@ def mc_measure_holder(spreadSheet, holderName,sheet_name='Holders', exp=1, rep=1
     #dt.load_data(debug='quiet')    
 
 def mc_auto_measure_samples(spreadSheet, configName, exp=1, rep=1, check_sname=True, 
-                      scan=False, y_points=10, yrange=2.5, x_points=2, xrange=0.5, offset_y=0.3, 
+                      scan=False, y_points=10, yrange=2, x_points=2, xrange=1, offset_y=0, 
                       T=None, delay_time=60, dead_band=0.5, cell_form=None):
     """ measure all sample holders defined in a given configuration in the spreadsheet
     """
     if data_path is None:
         raise exception("login first !")
+    """
     if sol.HolderPresent.get():
         raise Exception("A sample holder is still in the sample handler !")
-
+    """
     if isinstance(configName, str): # for on-site measurements, read configuration from spreadsheet 
         sheet_name = "Holders"
         samples = get_samples(spreadSheet, sheet_name=sheet_name, configName=configName)
@@ -694,7 +764,7 @@ def mc_auto_measure_samples(spreadSheet, configName, exp=1, rep=1, check_sname=T
 
         mc_measure_holder(spreadSheet, holderName,
                                           exp=exp, rep=rep,
-                                          y_points=y_points, yrange=yrange, x_points=x_points, xrange=xrange, offset_y=0.3, 
+                                          y_points=y_points, yrange=yrange, x_points=x_points, xrange=xrange, offset_y=0, 
                                           cell_form='flat15',scan=scan)
 
         #sol.select_tube_pos('park')
@@ -708,10 +778,9 @@ def mc_auto_measure_samples(spreadSheet, configName, exp=1, rep=1, check_sname=T
 
     rbt.park()
     
-
-
 try:
-    sol.tctrl = tctrl_FTC100D(("xf16idc-tsvr-sena", 7002))
+    #sol.tctrl = tctrl_FTC100D(("xf16idc-tsvr-sena", 7002))
+    sol.tctrl = tctrl_FTC100D(("10.66.122.77",4002))
 except:
     print("cannot connect to sample storage temperature controller")
 

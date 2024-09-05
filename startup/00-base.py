@@ -202,10 +202,15 @@ def md_validator(md):
     data_session = md.get("data_session")
     if data_session is None:
         return
+
+    print(data_session)
+    return
+
     if (not isinstance(data_session, str)) or (not PATTERN.match(data_session)):
         raise ValueError("data_session must be a string formed like 'pass-NUMBER', as in 'pass-123456'.")
     try:
-        client = httpx.Client(base_url="https://api-staging.nsls2.bnl.gov")
+        client = httpx.Client(base_url="https://api.nsls2.bnl.gov")
+        #client = httpx.Client(base_url="https://api-staging.nsls2.bnl.gov")
         response = client.get(f"/proposal/{data_session[5:]}")    
     except Exception:
         warnings.warn("Could not connect to API to verify data_session is valid.")

@@ -1,3 +1,4 @@
+print(f"Loading {__file__}...")
 import socket
 import numpy as np
 from time import sleep
@@ -35,6 +36,11 @@ class pump_SSI:
         return ret
     
     def get_status(self, cmd="CS"):
+        """
+        Format of output"
+        OK, flowrate, Upper pressure limit, lower pressure limit, pressure units, Run/Stop status, a zero (seems to be flowset point?
+        Run/Stop Status 0=pump stopped, 1 = running
+        """
         ret=self.send_cmd(cmd=cmd)
         print("Pump SSI status:" f'{ret[0]}')
     
@@ -118,23 +124,49 @@ TRP=pump_SSI()
 
 ###Commands for 10-port valve.  Setup as regeneration pump and used for co-flow (in-progress).
 
-
-
-def send_valve_cmd(cmd):
-    valve_sock=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    valve_sock.connect((TCP_IP, Valve_TCP_PORT))
-    cmd=f"{cmd}\r"
-    valve_sock.sendall(cmd.encode())
-    print("command sent, no feedback from valve expected")
-    valve_sock.close()
+class VICI_valves:
+    def __init__(self):
+        self.sock=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sock.connect((TCP_IP, Valve_TCP_PORT))
+        #self.get_status()
+        #self.get_status()
+        
+    def send_valve_cmd(self, cmd):
+        cmd=f"{cmd}\r"
+        self.sock.sendall(cmd.encode())
+        print(f"Command {cmd} has been sent")
+        time.sleep(0.2)
+        ret=self.sock.recv(1024)
+        ascii_ret=ret.decode("ascii")
+        print(ascii_ret)
+        #self.sock.close()
     
-def switch_10port_valve(pos="A"):
-    if pos=="A":
-        send_valve_cmd("GOA")
-    elif pos=="B":
-            send_valve_cmd("GOB")
-    else:
-        raise Exception(f"{pos} is not a valid command to change 10-port valve! Use 'A' or 'B'.")
+    def check_valve_pos(self):
+        cmd = f"CP\r"
+        self.sock.sendall(cmd.encode())
+        print("Getting 10-port Valve status")
+        ret = self.sock.recv(1024)
+        ascii_ret = ret.decode("ascii")
+        print(ascii_ret)
+        print(ascii_ret[-3])
+        return ascii_ret
+        
+    def switch_10port_valve(self, pos="A"):
+        cur_pos=self.check_valve_pos()  ## format is "Postion is A' \r"
+        if cur_pos[-3] == pos:
+            print(f"10-port Valve already at {pos}!")
+        
+        elif cur_pos[-3] != pos:
+            if pos=="A":
+                self.send_valve_cmd("GOA")
+            elif pos=="B":
+                self.send_valve_cmd("GOB")
+        else:
+            raise Exception(f"{pos} is not a valid command to change 10-port valve! Use 'A' or 'B'.")
+    
+VV = VICI_valves()   
+
+
        
  ####Running HPLC 
 
@@ -201,7 +233,7 @@ def run_hplc_from_spreadsheet(spreadsheet_fn, batchID, sheet_name='Samples', exp
     print("Make sure you have selected the correct valve position for column type!")
     input("Please start Sequence in Agilent software by importing sequence_table.csv (under sequence tab), click run, then come back to this machine and then hit enter:")
     for sn in samples.keys():
-        switch_10port_valve(pos=samples[sn]["md"]["Valve Position"])
+        VV.switch_10port_valve(pos=samples[sn]["md"]["Valve Position"])
         print(f"Switching valve to position {samples[sn]['md']['Valve Position']}!")
         print(f"collecting data for {sn} ...")
 
