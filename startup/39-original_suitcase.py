@@ -217,7 +217,7 @@ def hdf5_export(headers, filename, debug=False,
                         print(f"processing resource ...\n", res)
 
                         # pilatus data, change the path from ramdisk to IOC data directory
-                        if key in ["pil1M_image", "pilW2_image"]:
+                        if key in ["pil1M_image", "pilW2_image", "xsp3_image"]:
                             rp = {pilatus_data_dir: data_destination}
 
                         if res['spec'] == "AD_HDF5" and bulk_h5_res:
