@@ -197,7 +197,7 @@ def h5_attach_hplc(fn_h5, fn_hplc, chapter_num=-1, grp_name=None):
 from py4xs.detector_config import create_det_from_attrs
 from py4xs.hdf import h5xs,h5exp    
 from lixtools.hdf import h5sol_HPLC,h5sol_HT
-from lixtools.atsas import gen_report
+from lixtools.sol.atsas import gen_report
 import json
 
 import socket
