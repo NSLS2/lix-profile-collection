@@ -56,9 +56,10 @@ if BSconfig=="solution":
 elif BSconfig=="scanning":
     # EM M, run scanning startup
     reload_macros("experiments/startup_scanning.py")
+    reload_macros("experiments/def-tomo.py")
     ESVacSys = define_vac_system(vacuum_sample_env=False)
 elif BSconfig=="generic":
-    # EM G
+    # EM G, + ss.msy for muscle
     reload_macros("experiments/startup_generic.py")
     ESVacSys = define_vac_system(vacuum_sample_env=False)
 elif BSconfig=="vacuum":
