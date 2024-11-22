@@ -5,6 +5,14 @@ from ophyd import EpicsSignal
 from PIL import Image,ImageDraw,ImageChops
 from bluesky.suspenders import SuspendFloor
 from bluesky.preprocessors import monitor_during_wrapper
+import cv2
+from itertools import product
+from pyzbar.pyzbar import decode,ZBarSymbol
+from scipy.ndimage import uniform_filter1d
+from scipy.signal import find_peaks
+
+from blop import DOF, Objective, Agent
+import numpy as np
 
 beam_current = EpicsSignal('SR:OPS-BI{DCCT:1}I:Real-I')
 bpm_current = EpicsSignal('XF:16IDB-CT{Best}:BPM0:Int')
@@ -19,6 +27,47 @@ THRESH_BPM_I0 = 2.0e-7
 THRESH_EM1_I0 = 0.1e6   # optimal should be >1.5e6
 
 mon0 = "bpm_int_mean"
+
+def align_crl(rep=32, x_range=0.6, y_range=0.6):
+
+    pos_x10 = crl.x1.position
+    pos_x20 = crl.x2.position
+    pos_y10 = crl.y1.position
+    pos_y20 = crl.y2.position
+
+    dofs_x = [
+        DOF(device=crl.x1, description="transfocator upstream x", 
+            search_domain=(pos_x10-x_range/2, pos_x10+x_range/2)),
+        DOF(device=crl.x2, description="transfocator downstream x", 
+            search_domain=(pos_x20-x_range/2, pos_x20+x_range/2)),
+    ]
+
+    dofs_y = [
+        DOF(device=crl.y1, description="transfocator upstream y", 
+            search_domain=(pos_y10-y_range/2, pos_y10+y_range/2)),
+        DOF(device=crl.y2, description="transfocator downstream y", 
+            search_domain=(pos_y20-y_range/2, pos_y20+y_range/2))
+    ]
+
+    objectives = [
+        Objective(name="em1_sum_all_mean_value", description="beam intensity", target="max", trust_domain=(100000, np.inf))
+    ]
+
+    dets = [em1]
+
+    agent_x = Agent(dofs=dofs_x, objectives=objectives, detectors=dets, db=db)
+    agent_y = Agent(dofs=dofs_y, objectives=objectives, detectors=dets, db=db)
+
+    RE(fast_shutter_wrapper(agent_x.learn("qr", n=rep))) #, iterations=4))) 
+    agent_x.plot_objectives()
+    crl.x1.move(agent_x.best['crl_x1'])
+    crl.x2.move(agent_x.best['crl_x2'])
+
+    RE(fast_shutter_wrapper(agent_y.learn("qr", n=rep))) #, iterations=4))) 
+    agent_y.plot_objectives()
+    crl.y1.move(agent_y.best['crl_y1'])
+    crl.y2.move(agent_y.best['crl_y2'])
+
 
 def get_cnts():
     RE(ct([em1,em2,bpm], num=1))
@@ -70,7 +119,7 @@ def scan_for_ctr(ax, scan_range=0.3, npts=31, opposite_dir=False,
     else:
         print("done ...")
         
-def align_crl():
+def align_crl0():
     # this could be placed with the current CRL state
     #if "alignment" not in crl.saved_states.keys():
     #    crl.saved_states["alignment"] = [0, 0, 0, 0, 1, 1, 1, 1, 0]
@@ -233,3 +282,104 @@ def find_plateau_start(data,thresh=1.005):
 
     # Return the start of the plateau.
     return start_of_plateau
+
+def read_code(img, target="3QR", crop_x=1, crop_y=1, debug=True, fn="cur.jpg"):
+        h,w = img.shape[:2]
+        x1 = int(w*(1-crop_x)/2)
+        x2 = int(w*(1+crop_x)/2)
+        y1 = int(h*(1-crop_y)/2)
+        y2 = int(h*(1+crop_y)/2)
+
+        f1 = cv2.cvtColor(img[y1:y2, x1:x2], cv2.COLOR_BGR2GRAY)
+        #f2 = cv2.convertScaleAbs(f1, alpha=1.6, beta=0)
+        #f3 = cv2.medianBlur(f2, 1)
+        #f4 = cv2.adaptiveThreshold(f3, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        #                           cv2.THRESH_BINARY, 31, 5)
+
+        ret = {}
+        for th,bkg in product(range(21,35,4), range(1,9,2)):
+            f4 = cv2.adaptiveThreshold(f1, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+                                       cv2.THRESH_BINARY, th, bkg)
+            d = decode(f4, symbols=[ZBarSymbol.QRCODE])
+            for i in range(len(d)):
+                k = d[i].data.decode()
+                if not k in ret.keys():
+                    ret[k] = d[i]
+        cs = list(ret.values())
+        
+        cv2.imwrite(f"img/raw-{fn}", f1)
+        cv2.imwrite(f"img/cur0.jpg", f1)
+        cv2.imwrite(f"img/cur.jpg", f4)
+        #cv2.imwrite(f"img/{fn}", f4)
+
+        if target=="3QR": # expecting 3x QR codes 
+            cs = decode(f4, symbols=[ZBarSymbol.QRCODE]) 
+            code = {}
+            for cc in cs:
+                xi = 2-int(cc.rect.left/400) # has to so with the orientation of the camera
+                code[chr(xi+ord('a'))] = cc.data.decode("utf-8") 
+        elif target=="1QR": # 1x QR code
+            cs = decode(f4, symbols=[ZBarSymbol.QRCODE]) 
+            #print(cs)
+            if len(cs)!=1:
+                print(f"ERR: {len(cs)} code(s) were read, expecting 1")
+                code = [] 
+            else:
+                code = [cs[0].data.decode("utf-8")]
+                #print(code)
+        elif target=="1bar": # 1x code128 barcode
+            cs = decode(f4, symbols=[ZBarSymbol.CODE128]) 
+            if len(cs)!=1:
+                print(f"ERR: {len(cs)} code(s) were read, expecting 1")
+                code = []
+            else:
+                code = [cs[0].data.decode("utf-8")]
+
+        if debug:
+            print(cs)
+        return code
+
+
+def sol_cam_roi_trigger_setup(ywidth=80,xwidth=200):
+    nd_list = ['upstream','downstream']
+    for nd in nd_list:
+        print(nd)
+        sol.wash_needle(nd)
+        fcell = sol.flowcell_nd[nd]
+        sol.select_flow_cell(fcell)
+        time.sleep(5)
+        print('base value = ', sol.cam.watch_list[nd]['base_value'])
+        if nd == "upstream":
+            img = sol.cam.snapshot()
+            #img = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            f1=img.sum(axis=1)
+            f0=img.sum(axis=0)
+            f1_smooth = uniform_filter1d(f1,size=50)
+            f0_smooth = uniform_filter1d(f0,size=50)
+            peaks, it = find_peaks(f1_smooth, height=np.min(f1_smooth)*10)
+            peaks0, it0 = find_peaks(f0_smooth, height=np.min(f0_smooth)*10)
+            print(peaks)
+            print(peaks0)
+            ymin=peaks[1]-ywidth/2
+            ysize = ywidth
+            xmin = peaks0[3]-xwidth/2
+            xsize = xwidth
+            xmax = xmin + xsize
+            ymax = ymin + ysize
+            #baseline = np.sum(img[xmin:xmax,ymin:ymax])
+            #baseline=1
+            sol.cam.roi4.min_xyz.min_x.put(xmin)
+            sol.cam.roi4.min_xyz.min_y.put(ymin)
+            sol.cam.roi4.size.x.put(xwidth)
+            sol.cam.roi4.size.y.put(ywidth)
+            print('roi4 set for solution data triggering')
+            baseline = sol.cam.stats4.total.get()
+            sol.cam.watch_list[nd]['base_value']=baseline
+            thresh=baseline-baseline*0.9
+            sol.cam.watch_list[nd]['thresh']=thresh
+        else:
+            baseline = sol.cam.stats4.total.get()
+            sol.cam.watch_list[nd]['base_value']=baseline
+            thresh=baseline-baseline*0.9
+            sol.cam.watch_list[nd]['thresh']=thresh
+    print("new trigger baseline and threshold updated in current BSUI session")
