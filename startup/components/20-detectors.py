@@ -40,10 +40,11 @@ class StandardProsilica(ProsilicaDetector, SingleTrigger):
     roi1 = Cpt(ROIPlugin, 'ROI1:')
     roi2 = Cpt(ROIPlugin, 'ROI2:')
     roi3 = Cpt(ROIPlugin, 'ROI3:')
-    #roi4 = Cpt(ROIPlugin, 'ROI4:')
+    roi4 = Cpt(ROIPlugin, 'ROI4:')
     stats1 = Cpt(StatsPlugin, 'Stats1:')
     stats2 = Cpt(StatsPlugin, 'Stats2:')
     stats3 = Cpt(StatsPlugin, 'Stats3:')
+    stats4 = Cpt(StatsPlugin, 'Stats4:')
     tiff = Cpt(TIFFPluginWithFileStore,
                suffix='TIFF1:',
                write_path_template='/nsls2/xf16id1/data/',   # this is updated when the plugin is staged
@@ -212,9 +213,14 @@ class StandardProsilica(ProsilicaDetector, SingleTrigger):
         return(data)
 
     def saveImg(self, fn):
+        state = int(self.image.enable.get(as_string=False))
+        if state==0:
+            self.image.enable.set(1).wait()
         size_x,size_y = self.cam.size.get()
         d = self.snapshot(ROIs=[[0, size_x, 0, size_y]])[0]
         imageio.imwrite(fn, d)    
+        if state==0:
+            self.image.enable.set(0).wait()
 
 
     def setup_watch(self, watch_name, sig_name, threshold, base_value=None):
@@ -275,7 +281,8 @@ known_cameras = {"camMono": "XF:16IDA-BI{Cam:Mono}",
                  "camES1": "XF:16IDC-BI{Cam:es1}",
                  "camES2": "XF:16IDC-BI{Cam:es2}",
                  "camTop": "XF:16IDC-BI{Cam:sam_top}",
-                 "camScope": "XF:16IDC-BI{Cam:Stereo}", 
+                 "camScope": "XF:16IDC-BI{Cam:Stereo}",
+                 "camIR": "XF:16IDC-BI{Cam:SamUSB}"
                 }
 
 #camOAM       = setup_cam("XF:16IDA-BI{Cam:OAM}", "camOAM")
@@ -290,11 +297,12 @@ def setup_cam(name):
         cam = None
         print("%s is not accessible." % name)
 
-    cam.read_attrs = ['tiff', 'stats1', 'stats2', 'stats3', 'roi1']
+    cam.read_attrs = ['tiff', 'stats1', 'stats2', 'stats3', 'stats4','roi1']
     #cam.image.read_attrs = [] #'array_data']
     cam.stats1.read_attrs = ['total', 'centroid', 'profile_average']
     cam.stats2.read_attrs = ['total', 'centroid']
     cam.stats3.read_attrs = ['total', 'centroid']
+    cam.stats4.read_attrs = ['total', 'centroid']
     cam.stats1.centroid.read_attrs=['x','y']
     cam.stats1.profile_average.read_attrs=['x','y']
     cam.roi1.read_attrs = ['min_xyz', 'size']
