@@ -1,7 +1,8 @@
 print(f"Loading {__file__}...")
 
-from nslsii.detectors.xspress3 import XspressTrigger,Xspress3Detector,Xspress3Channel,Xspress3FileStore
-
+from ophyd.areadetector import Xspress3Detector
+from nslsii.areadetector.xspress3 import build_xspress3_class,Xspress3HDF5Plugin,Xspress3Trigger
+    
 from ophyd.areadetector import (DetectorBase, CamBase,
                                 EpicsSignalWithRBV as SignalWithRBV)
 from ophyd import (Signal, EpicsSignal, EpicsSignalRO, DerivedSignal)
@@ -14,6 +15,8 @@ from ophyd.areadetector.plugins import ImagePlugin,HDF5Plugin
 from ophyd.areadetector import ADBase
 from ophyd.device import (BlueskyInterface, Staged)
 from ophyd.status import DeviceStatus
+
+from collections import OrderedDict
 
 """
 IMPORTANT:
@@ -31,48 +34,51 @@ hdf plugin array port: originally XSP3.ROIDATA
 
 Must set the trigger pulse width to close to the exposure time, not implemented yet
 
+2024-10-17
+4-ch Xspress3 installed and worked in 2024-2 using IOC on Zbox provided by Quantum Detectors
+the ophyd device worked as is, since the data all went into the hdf
+during the shutdown the IOC was moved to xf16id-ioc2, the existing code stopped working
+revised based on TES example 
+
 """
 
-class LiXXspress(XspressTrigger, Xspress3Detector):
-    """ adapted from SRX
-    """
-    roi_data = Cpt(PluginBase, "ROIDATA:")
-    erase = Cpt(EpicsSignal, "ERASE")
-    array_counter = Cpt(EpicsSignal, "ArrayCounter_RBV")
-    num_frames = Cpt(EpicsSignal, "NumImages")
-    _triggerMode = Cpt(EpicsSignal, "TriggerMode")
-    ext_trig = True
+xspress3_class_4ch = build_xspress3_class(
+    channel_numbers=(1, 2, 3, 4),
+    mcaroi_numbers=(1, 2, 3, 4),
+    image_data_key="fluor",
+    xspress3_parent_classes=(Xspress3Detector, Xspress3Trigger),
+    extra_class_members={
+        "hdf": Component(LIXhdfPlugin, "HDF1:", name="hdf", write_path_template="")
+    }
+)
 
-    channel1 = Cpt(Xspress3Channel, "C1_", channel_num=1, read_attrs=["rois"])
-    spectrum = Cpt(ImagePlugin, "ARR1:", read_attrs=["array_data"])
-    acq_time = Cpt(EpicsSignal, "AcquireTime")
-    _trigger_signal = EpicsSignal('XF:16IDC-ES{Zeb:1}:SOFT_IN:B0')
+class LiXXspress(xspress3_class_4ch):
+    acq_time = Cpt(EpicsSignal, "det1:AcquireTime")
+    _triggerMode = Cpt(EpicsSignal, "det1:TriggerMode")
+    _trigger_signal = zebra.soft_input1
     _trigger_width = zebra.pulse1.width
-    _num_captures = 1
-
-    hdf = Cpt(LIXhdfPlugin, suffix="HDF5:",   # note the number, this is from the detector pool IOC
-              write_path_template="", root='/')
-    #codec1 = Cpt(CodecPlugin, "Codec1:")
     
     def __init__(self, prefix, *, f_key="fluor",
         configuration_attrs=None, read_attrs=None,
         **kwargs, ):
         self._f_key = f_key
+
         if configuration_attrs is None:
             configuration_attrs = [
                 "external_trig",
                 "total_points",
                 "spectra_per_point",
-                "settings",
+                "cam",
                 "rewindable",
             ]
+        
         if read_attrs is None:
             read_attrs = ["hdf"]  # "spectrum", "channel1", 
         super().__init__(prefix,
             configuration_attrs=configuration_attrs,
             read_attrs=read_attrs,
             **kwargs,)
-        self.cam = self.settings   # to be compatible with AD plugins
+        
         self._exp_time = self.acq_time.get()
         self._triggerMode.put(1)   # internal
         self.hdf.data_dir = xspress3_data_dir
@@ -86,28 +92,30 @@ class LiXXspress(XspressTrigger, Xspress3Detector):
 
     def stop(self, *, success=False):
         ret = super().stop()
-        self.settings.acquire.put(0)
+        self.cam.acquire.put(0)
         self.hdf.stop(success=success)
         return ret
 
     def stage(self):
         # clean up first
-        self.settings.acquire.put(0)
-        self.erase.put(1)
+        self.cam.acquire.put(0)
+        self.cam.erase.put(1)
         
         # detector pool Xspress3 IOC cannot create directories 
         makedirs(get_IOC_datapath(self.name, self.hdf.data_dir), mode=0O777)  
         # for external triggering, set pulse width based on exposure time
         if self.ext_trig:
             self._triggerMode.put(3)
-            self._trigger_width.put(self.acq_time.get()-0.002)  # doesn't work if same at acq_time
+            self._trigger_width.put(self.acq_time.get()-0.001)  # doesn't work if same as acq_time
         else: 
             self._triggerMode.put(1)
-        self.num_frames.set(self._num_images).wait()
+        #self.num_frames.set(self._num_images).wait()
+        self.cam.num_images.set(self._num_images).wait()
 
         status = super().stage()
         if self.ext_trig:
-            self._acquisition_signal.set(1).wait()
+            #self._acquisition_signal.set(1).wait()
+            self.cam.acquire.set(1).wait()
         self.datum={}
 
         return status
@@ -148,37 +156,6 @@ class LiXXspress(XspressTrigger, Xspress3Detector):
             threading.Timer(self.acq_time.get(), self._status._finished, ()).start()
         
         return self._status
-    
-    # complete/collect/collect_asset_docs revised from SRX code
-    # skipping channels and frames
-    """  this needs to be revised following 20-pilatus; move the code from collect_asset_docs() here
-    def complete(self, *args, **kwargs):
-        print(f'In {self.name}.complete()...')
-        self._asset_docs_cache = []
-        for resource in self.hdf._asset_docs_cache:
-            self._asset_docs_cache.append(('resource', resource[1]))
-
-        #self._datum_ids = []
-        #num_frames = self.cam.array_counter.get()
-        #for frame_num in range(num_frames):
-        #    for channel in self.iterate_channels():
-        #        datum_id = '{}/{}'.format(self.hdf._resource_uid, 0)
-        #        datum = {'resource': self.hdf._resource_uid,
-        #                 'datum_kwargs': {'frame': frame_num, 'channel': channel.channel_number},
-        #                 'datum_id': datum_id}
-        #        self._asset_docs_cache.append(('datum', datum))
-        #        self._datum_ids.append(datum_id)
-
-        datum_id = '{}/{}'.format(self.hdf._resource_uid, 0)
-        datum = {'resource': self.hdf._resource_uid,
-                 'datum_id': datum_id,
-                 'datum_kwargs': {'point_number': 0}}
-        self._asset_docs_cache.append(('datum', datum))
-        self._datum_ids.append(datum_id)
-
-        print("asset_docs_cache with datums:", self._asset_docs_cache)
-        return NullStatus()
-    """
 
     def kickoff(self):
         return NullStatus()
@@ -187,21 +164,6 @@ class LiXXspress(XspressTrigger, Xspress3Detector):
         return NullStatus()
     
     def collect(self):
-        """
-        collected_frames = self.hdf.num_captured.get()
-        for frame_num in range(collected_frames):
-            # print(f'  frame_num in "collect": {frame_num + 1} / {collected_frames}')
-
-            datum_id = self._datum_ids[frame_num]
-            ts = ttime.time()
-
-            data = {self.name: datum_id}
-            ts = float(ts)
-            yield {'data': data,
-                   'timestamps': {key: ts for key in data},
-                   'time': ts,  # TODO: use the proper timestamps from the ID/mono start and stop times
-                   'filled': {key: False for key in data}}
-        """        
         print(f"in {self.name} collect ...")
         data = {}
         ts = {}
@@ -248,9 +210,7 @@ class LiXXspress(XspressTrigger, Xspress3Detector):
 
 try:
     xsp3 = LiXXspress("XF:16IDC-ES{Xsp:1}:", name="xsp3")
-    xsp3.channel1.rois.read_attrs = ["roi{:02}".format(j) for j in [1, 2, 3, 4]]
-    caput('XF:16IDC-ES{Xsp:1}:ARR1:NDArrayPort', "XSP3")
+    #caput('XF:16IDC-ES{Xsp:1}:ARR1:NDArrayPort', "XSP3")
 except:
     print("Xspress3 is not accessible ...")
     xsp3 = None
-
