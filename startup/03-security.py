@@ -8,7 +8,7 @@ import subprocess
 import time
 
 from IPython import get_ipython
-from lixtools.atsas import run as run_cmd
+from lixtools.sol.atsas import run as run_cmd
 
 username = None
 proposal_id = None
@@ -99,6 +99,7 @@ def login(uname = None, pID = None, rID = None, debug=True, test_only=False):
         makedirs(proc_path, mode=0o2755)
         run_cmd(["setfacl", "-R", "-m", f"g:{dgrp}:rwX,d:g:{dgrp}:rwX", proc_path])
         makedirs(proc_path+"processed/")
+        makedirs(proc_path+"img/")
   
     # if exp.h5 does not exist in proc_path, copy it from somewhere else
     # either the current directory, or from the proc_path of the last scan
