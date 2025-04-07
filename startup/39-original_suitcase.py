@@ -7,7 +7,7 @@ print(f"Loading {__file__}...")
 #
 # The full license is in the file LICENSE, distributed with this software.
 #-------------------------------------------------------------------------
-from pathlib import Path
+from pathlib import Path,PurePath
 from collections.abc import Mapping
 import numpy as np
 import warnings
@@ -54,19 +54,20 @@ def locate_h5_resource(res, replace_res_path, debug=False):
     if not(os.path.exists(fn_orig) or os.path.exists(fn)):
         print(f"could not locate the resource at either {fn} or {fn_orig} ...")
         raise Exception
-    if os.path.exists(fn_orig) and os.path.exists(fn) and fn_orig!=fn:
-        print(f"both {fn} and {fn_orig} exist, resolve the conflict manually first ..." )
-        raise Exception
-    if not os.path.exists(fn):
-        fdir = os.path.dirname(fn)
-        if not os.path.exists(fdir):
-            makedirs(fdir, mode=0o2775)
-        if debug:
-            print(f"copying {fn_orig} to {fdir}")
-        tfn = fn+"_partial"
-        shutil.copy(fn_orig, tfn)
-        os.rename(tfn, fn)
-        os.remove(fn_orig)
+    if PurePath(fn_orig)!=PurePath(fn):
+        if os.path.exists(fn_orig) and os.path.exists(fn):
+            print(f"both {fn} and {fn_orig} exist, resolve the conflict manually first ..." )
+            raise Exception
+        if not os.path.exists(fn):
+            fdir = os.path.dirname(fn)
+            if not os.path.exists(fdir):
+                makedirs(fdir, mode=0o2775)
+            if debug:
+                print(f"copying {fn_orig} to {fdir}")
+            tfn = fn+"_partial"
+            shutil.copy(fn_orig, tfn)
+            os.rename(tfn, fn)
+            os.remove(fn_orig)
     
     hf5 = h5py.File(fn, "r")
     ## different format for pilatus and xspress3

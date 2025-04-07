@@ -21,7 +21,7 @@ def update_metadata():
                         })
     
     try:
-        RE.md['CRL'] = ({'state': crl.state(), 
+        RE.md['CRL'] = ({'state': crl.state(),
                          'x1': crl.x1.position,
                          'y1': crl.y1.position,
                          'x2': crl.x2.position,
