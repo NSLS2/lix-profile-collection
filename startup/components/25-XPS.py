@@ -3,16 +3,16 @@ print(f"Loading {__file__}...")
 import numpy as np
 from collections import ChainMap
 from ophyd import DeviceStatus
-from ophyd import Signal,EpicsSignal, EpicsMotor, EpicsSignalRO, Device, Component 
+from ophyd import EpicsSignal, EpicsMotor, EpicsSignalRO, Device, Component 
 from ophyd.positioner import PositionerBase
 from ophyd.utils.epics_pvs import data_type, data_shape
 from ophyd.status import wait as status_wait
+
 import epics
 import bluesky.preprocessors as bpp
 import bluesky.plan_stubs as bps
 from bluesky.plan_stubs import sleep as sleeplan
 from collections import OrderedDict
-from functools import wraps
 
 import uuid
 import time, getpass
@@ -59,7 +59,6 @@ class PositioningStackMicroscope(PositioningStack):
         rx = None
         print("ss.rx not available")
 
-        
 class XPSController():
     def __init__(self, ip_addr, name):
         self.xps = XPS()
@@ -90,8 +89,13 @@ class XPSController():
         objs = self.xps.ObjectsListGet(self.sID)[1].split(';;')[0].split(';')
         for obj in objs:
             tl = obj.split('.')
-            if len(tl)==1:
+            if len(tl)==1: # this is a group
                 err,ret = self.xps.GroupStatusGet(self.sID, tl[0])
+                if ret=='11': # ready from homing
+                    nmot = sum([1 if f'{tl[0]}.' in obj else 0 for obj in objs])
+                    err,ret = self.xps.GroupMoveRelative(self.sID, tl[0], np.zeros(nmot))
+                    time.sleep(0.5)
+                    err,ret = self.xps.GroupStatusGet(self.sID, tl[0])       
                 if ret!='12':
                     print(f"group {tl[0]} is not ready for use, err,status = {err,ret}")
                 else:
@@ -154,25 +158,6 @@ class XPSController():
     #    pass
         
         
-def with_new_socket(method):
-    """ open a new socket to avoid deadlock
-    """
-    @wraps(method)
-    def inner(ref, *args, **kwargs):
-        persistent_sID = ref.controller.sID
-        ref.controller.sID = ref.controller.xps.TCP_ConnectToServer(ref.controller.ip_addr, 5001, 0.050)
-        try:
-            ret = method(ref, *args, **kwargs)
-            ref.controller.xps.TCP_CloseSocket(ref.controller.sID)
-            ref.controller.sID = persistent_sID 
-            return ret
-        except:
-            ref.controller.xps.TCP_CloseSocket(ref.controller.sID)
-            ref.controller.sID = persistent_sID 
-            raise
-    
-    return inner
-
 class XPSmotor(PositionerBase):
     debug = False
     
@@ -199,12 +184,6 @@ class XPSmotor(PositionerBase):
         #pos = self.position
         self._done_moving(success=True, timestamp=time.time())
     
-    @with_new_socket
-    def _mov(self):
-        err,ret = self.controller.xps.GroupMoveAbsolute(self.controller.sID, self.motorName, [self.set_point])
-        self._done_moving(success=True, timestamp=time.time())
-        self._moving = False
-    
     def move(self, position, wait=True, **kwargs): #moved_cb=None, timeout=None, 
         if self.debug:
             print(f"{self.name}: moving to {position} ...")
@@ -213,39 +192,24 @@ class XPSmotor(PositionerBase):
         self._status = super().move(self.set_point, **kwargs)
         self._run_subs(sub_type=PositionerBase.SUB_START)
         
-        th = threading.Thread(target=self._mov)
-        th.start()
+        err,ret = self.controller.xps.GroupMoveAbsolute(self.controller.sID, self.motorName, [self.set_point])
+        threading.Thread(target=self.wait_for_stop).start() 
         
         try:
             if wait:
-                th.join()
-                #status_wait(self._status)
+                status_wait(self._status)
         except KeyboardInterrupt:
             self.stop()
             raise
 
         return self._status
-    
-    @with_new_socket
-    def get_position(self):
-        mot = self.motorName
-        grp = self.controller.motors[mot]['group']
-
-        err,ret = self.controller.xps.GroupPositionCurrentGet(self.controller.sID, grp,
-                                                              len(self.controller.groups[grp]))
-        if err!='0' or len(ret)==0:
-            print(f"trouble getting group position for {grp} ...: ", err,ret)
-
-        pos = ret.split(',')
-        return err,pos[self.controller.motors[mot]['index']]
-    
+        
     @property
     def position(self):
         if self.debug:
             print(f"{self.name}: checking position ...")
 
-        #err,ret = self.controller.get_motor_position(self.motorName)
-        err,ret = self.get_position()
+        err,ret = self.controller.get_motor_position(self.motorName)
         if int(err):
             print(f"issue getting position from {self.motorName}, err = {err}")
             print(self.controller.xps.errorcodes[err])
@@ -253,40 +217,20 @@ class XPSmotor(PositionerBase):
             try:  # ret may not contain the correct info 
                 self._position = float(ret)
             except:
-                print("error getting position from '{ret}'")
+                print("error geting position from '{ret}'")
                 pass 
 
         if self.debug:
             print(f"done, returning {self._position*self._dir}")
 
         return self._position*self._dir
-    
-    @with_new_socket
-    def get_status(self):
-        mot = self.motorName
-        grp = self.controller.motors[mot]['group']
-
-        err,ret = self.controller.xps.GroupMotionStatusGet(self.controller.sID, grp,
-                                                           len(self.controller.groups[grp]))
-        if err!='0' or len(ret)==0:
-            print(f"trouble getting group status for {grp} ...: ", err,ret)
-
-        pos = ret.split(',')
-        return err,pos[self.controller.motors[mot]['index']]
-    
-    
+        
     @property
     def moving(self):
         if self.debug:
             print(f"{self.name}: checking move status ...")
 
-        #print(self.controller.xps.lock.locked())
-        #if self.controller.xps.lock.locked():
-        #    self._moving=True
-        #    return self._moving 
-
-        #err,ret = self.controller.get_motor_status(self.motorName)
-        err,ret = self.get_status()
+        err,ret = self.controller.get_motor_status(self.motorName)
         if int(err):
             print(f"issue getting status from {self.motorName}, err = {err}")
             print(self.controller.xps.errorcodes[err])
@@ -295,7 +239,7 @@ class XPSmotor(PositionerBase):
         try:  # ret may not contain the correct info 
             self._moving = bool(int(ret))
         except:
-            print("error getting status from '{ret}'")
+            print("error geting status from '{ret}'")
             pass 
         
         if self.debug:
@@ -307,19 +251,16 @@ class XPSmotor(PositionerBase):
     def egu(self):
         return self._egu
 
-    @with_new_socket
     def get_velocity(self):
         err,ret = self.controller.xps.PositionerSGammaParametersGet(self.controller.sID, self.motorName)
-        return float(ret.split(',')[0])
-        
-    @with_new_socket
+        return float(ret.split(',')[0])    
+
     def set_velocity(self, v0):
         err,ret = self.controller.xps.PositionerSGammaParametersGet(self.controller.sID, self.motorName)
         pars = ret.split(',')
         pars[0] = v0
         err,ret = self.controller.xps.PositionerSGammaParametersSet(self.controller.sID, self.motorName, *pars)
-        
-    @with_new_socket
+    
     def stop(self, *, success: bool = False):
         if self.debug:
             print(f"{self.name}: stop requested ...")
