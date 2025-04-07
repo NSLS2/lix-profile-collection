@@ -26,9 +26,8 @@ class LIXPilatusCam(_PilatusDetectorCam):
 class LIXPilatus(PilatusDetector):
     _num_captures = 0    # hdf plugin to accept infinite number of frames
     cam = ADComponent(LIXPilatusCam, 'cam1:')
-    hdf = Cpt(LIXhdfPlugin, suffix="HDF1:",
-              write_path_template="", root='/')
     #pva = Cpt(PvaPlugin, "Pva1:")
+    hdf = Cpt(LIXhdfPlugin, suffix="HDF1:", write_path_template="", root='/')
     codec1 = Cpt(CodecPlugin, "Codec1:")
     
     cbf_file_path = ADComponent(EpicsSignalWithRBV, 'cam1:FilePath', string=True)
@@ -37,6 +36,7 @@ class LIXPilatus(PilatusDetector):
     HeaderString = Cpt(EpicsSignal, "cam1:HeaderString")
     ThresholdEnergy = Cpt(EpicsSignal, "cam1:ThresholdEnergy")
     armed = Cpt(EpicsSignal, "cam1:Armed")
+    detstate = Cpt(EpicsSignal,"cam1:DetectorState_RBV")
 
     def make_data_key(self):
         ret = super().make_data_key()
@@ -89,6 +89,9 @@ class LIXPilatus(PilatusDetector):
         """ set threshold
         """
         if self.cam.acquire.get()==0 and self.cam.armed.get()==0:
+        #if self.cam.detstate.get()==0 and self.cam.armed.get()==0:
+            #print(self.cam.armed.get())
+            #print(self.cam.detstate.get())
             self.ThresholdEnergy.put(ene, wait=True)
             self.cam.threshold_apply.put(1)
         else:
@@ -173,6 +176,7 @@ class LiXDetectors(Device):
     trig_wait = 1.
     acq_time = 1.
     trigger_mode = PilatusTriggerMode.soft
+    _trigger_width = 0.002
 
     def __init__(self, prefix):
         super().__init__(prefix=prefix, name="pil")
@@ -201,9 +205,9 @@ class LiXDetectors(Device):
         for det in self.active_detectors:
             det.update_cbf_name(cn)
 
-    def update_header(self, uid):
+    def update_header(self, hdr_str):
         for det in self.active_detectors:
-            det.HeaderString.put(f"uid={uid}")
+            det.HeaderString.put(hdr_str)
 
     def activate(self, det_list):
         """ e.g.
@@ -238,8 +242,8 @@ class LiXDetectors(Device):
         for det_name in self.dets.keys():
             self.dets[det_name].read_attrs = ['hdf']
             self.dets[det_name].cam.acquire_time.put(exp)
-            self.dets[det_name].cam.acquire_period.put(exp+0.005)
-        self.acq_time = exp+0.005
+            self.dets[det_name].cam.acquire_period.put(exp+self._trigger_width)
+        self.acq_time = exp+self._trigger_width
         RE.md['pilatus']['exposure_time'] = exp
 
 
@@ -263,6 +267,11 @@ class LiXDetectors(Device):
         if self._staged == Staged.yes:
             return
         change_path()
+        # sc 11/12/24
+        #for det in self.active_detectors:
+        #    det.update_cbf_name(current_sample)
+        #self.update_cbf_name(cn=current_sample)
+        # sc 11/12/24
         fno = np.max([det.cbf_file_number.get() for det in self.dets.values()])
         if self.reset_file_number:
             fno = 1
@@ -276,9 +285,9 @@ class LiXDetectors(Device):
 
         if self.trigger_mode == PilatusTriggerMode.ext_multi:
             # the name is misleading, multi_triger means one image per trigger
-            self.trig_wait = self.acq_time+0.02
+            self.trig_wait = self.acq_time   #+0.02
         else:
-            self.trig_wait = self.acq_time*self._num_images+0.02
+            self.trig_wait = self.acq_time*self._num_images*self._num_repeats   #+0.02
         
         self.datum={}
 
@@ -297,9 +306,9 @@ class LiXDetectors(Device):
         #if len(self.active_detectors)==0:
         #    return
         self._status = DeviceStatus(self)
-        if self.trigger_mode is not PilatusTriggerMode.soft:
+        if self.trigger_mode is not PilatusTriggerMode.soft and not self._flying:
             while self.trigger_lock.locked():
-                time.sleep(0.005)
+                time.sleep(self._trigger_width)
             self.trigger_time.put(time.time())
             print("generating triggering pulse ...")
             self._trigger_signal.put(1, wait=True)
@@ -312,7 +321,7 @@ class LiXDetectors(Device):
             threading.Timer(self.trig_wait, self._status._finished, ()).start()
         # should advance the file number in external trigger mode???
 
-       	return self._status
+        return self._status
 
     def repeat_ext_trigger(self, rep):
         """ this is used to produce external triggers to complete data collection by camserver
@@ -410,8 +419,9 @@ class LiXDetectors(Device):
 try:
     pil = LiXDetectors("XF:16IDC-DT")   
     pil.activate(["pil1M", "pilW2"])
-    pil.set_trigger_mode(PilatusTriggerMode.ext_multi)
-    #pil.set_thresh()
+    if pil.active_detectors[0].armed.get()==0:
+        pil.set_trigger_mode(PilatusTriggerMode.ext_multi)
+        #pil.set_thresh()
 except:
     print("Unable to initialize the Pilatus detectors ...")
 
