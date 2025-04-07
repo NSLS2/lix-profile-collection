@@ -137,6 +137,8 @@ def pack_h5(uids, dest_dir='', fn=None, fix_sample_name=True, stream_name=None,
     if attach_uv_file:
         # by default the UV file should be saved in /nsls2/xf16id1/Windows/
         # ideally this should be specified, as the default file is overwritten quickly
+        print("waiting for UV data....")
+        #time.sleep(40)
         h5_attach_hplc(fn)
     
     print(f"finished packing {fn} ...")
@@ -144,6 +146,8 @@ def pack_h5(uids, dest_dir='', fn=None, fix_sample_name=True, stream_name=None,
 
 def h5_attach_hplc(fn):
     pass
+
+
 """
 Old shimadzu packing method
 def h5_attach_hplc(fn_h5, fn_hplc, chapter_num=-1, grp_name=None):

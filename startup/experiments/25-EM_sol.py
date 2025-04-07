@@ -169,7 +169,7 @@ class SolutionScatteringExperimentalModule():
     default_pump_speed = 1500
     default_load_pump_speed = 350     
     vol_p4_to_cell = {'upstream': -120, 'downstream': -120}
-    vol_tube_to_cell = {'upstream': 95, 'downstream': 95} 
+    vol_tube_to_cell = {'upstream': 98, 'downstream': 95} 
     vol_sample_headroom = 5
     vol_flowcell_headroom = 10  
     watch_list = {'stats1.total': 0.2e7}
@@ -204,7 +204,7 @@ class SolutionScatteringExperimentalModule():
 
         self.int_handler = signal.getsignal(signal.SIGINT)
         self.cam = setup_cam(camName)
-        setSignal(self.EMconfig, 0) # changed from solution to 0
+        #setSignal(self.EMconfig, 0) # changed from solution to 0
         #setSignal(self.EMready, 0)
         ready_for_robot([], [], init=True)
 
@@ -560,7 +560,7 @@ class SolutionScatteringExperimentalModule():
         em2.averaging_time.put(0.25)
         em1.acquire.put(1)
         em2.acquire.put(1)
-        sd.monitors = [em1.sum_all.mean_value, em2.sum_all.mean_value]
+        sd.monitors = [em1.sum_all.mean_value, em2.sum_all.mean_value,sol.cam.stats4.total]
         # pump_spd unit is ul/min
         #self.ctrl.pump_spd.put(60.*(vol-self.vol_sample_headroom)/(repeats*exp)) # *0.85) # this was necesary when there is a delay between frames
         self.ctrl.pump_spd.put(60.*vol/(repeats*exp)) 
@@ -574,6 +574,7 @@ class SolutionScatteringExperimentalModule():
                                  "watch_name": nd, 
                                  "release_delay": self.delay_before_release}).start()
         self.ctrl.pump_mvR(vol+self.vol_flowcell_headroom)
+        print('data collection begins')
         RE(ct([pil], num=1, md=_md))   # number of exposures determined by pil.set_num_images()
         sd.monitors = []
         change_sample()

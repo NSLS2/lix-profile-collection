@@ -1,6 +1,7 @@
 from py4xs.hdf import h5exp
 import time,sys,random,openpyxl
 import pandas as pd
+import json
 from bluesky.preprocessors import monitor_during_wrapper
 from lixtools.samples import parseHolderSpreadsheet as get_samples
 from lixtools.samples import get_holders_under_config,autofillSpreadsheet,parseSpreadsheet
@@ -11,16 +12,20 @@ qgrid= np.hstack((np.arange(0.007, 0.0999, 0.001),
                    np.arange(0.1, 2.995, 0.005),
                    np.arange(3.0, 3.13, 0.01),
                    np.arange(3.14, 3.2, 0.02)))
+
 ss = PositioningStack()
 ss.x = xps.def_motor("scan.X", "ss_x", direction=-1)
 ss.y = xps.def_motor("scan.Y", "ss_y")
 xps_traj = XPStraj(xps, "scan")
 
-sol = SolutionScatteringExperimentalModule(camName="camES2")
+
+#sol = SolutionScatteringExperimentalModule(camName="camES2")
+sol = SolutionScatteringExperimentalModule(camName="camIR")
 
 #reload_macros("/nsls2/data/lix/shared/config/SolutionScattering/config.py")
 reload_macros("config/solution.py")
 sol.ready_for_hplc.set(0)
+ES1_cam = setup_cam('camES1')
 
 import pandas
 import numpy as np
@@ -105,6 +110,7 @@ def collect_std(r_range=1.5,cell_type=None,pos=None):
         for i in sn_list:
             if i == 'dark':
                 sol.select_flow_cell('empty', r_range=r_range)
+                time.sleep(5)
                 pil.exp_time(2)
                 PShutter_close.put(1)
                 change_sample(f"{i}-{ts}")
@@ -348,21 +354,26 @@ class sock_client:
         sock.close()
         return ret
 
-def checkQRcodes(cs, locs):
+#def checkQRcodes(cs, locs):
+def checkQRcodes(locs):
     Flocs = []
     Fuids = []
-    camcmd = {"target": "1QR", "zoom": 400, "focus": 45, "exposure": 140}
+    #camcmd = {"target": "1QR", "zoom": 400, "focus": 45, "exposure": 140}
 
     rbt.goHome()
     for loc in locs:
+        print(loc)
         sol.disable_ctrlc()
         rbt.loadTray(loc)
         for tt in range(80,150,5):
-            camcmd['exposure'] = tt
-            camcmd['slot'] = loc
-            uid = json.loads(cs.send_msg(json.dumps(camcmd)))
+            #camcmd['exposure'] = tt
+            #camcmd['slot'] = loc
+            #uid = json.loads(cs.send_msg(json.dumps(camcmd)))
+            img = camqr.snapshot()
+            uid = read_code(img=img,target='1QR')
             if len(uid)>0:
                 Flocs.append(loc)
+                #Fuids.append(uid[0])
                 Fuids.append(uid[0])
                 print(f"found {uid[0]} in pos {loc}")
                 break
@@ -376,7 +387,7 @@ def measure_mailin_spreadsheets(sh_list, sample_locs=None, check_QR_only=False):
             1. the first sheet is named as proposal#_SAF#
             2. a "UIDs" tab that lists all sample holder names and UIDs
     """
-    cs = sock_client(('10.66.123.29', 9999)) # webcam on merkat - xf16id-ioc2
+    #cs = sock_client(('10.66.123.29', 9999)) # webcam on merkat - xf16id-ioc2
 
     if sample_locs is None:
         sample_locs = list(range(1,21))
@@ -386,7 +397,8 @@ def measure_mailin_spreadsheets(sh_list, sample_locs=None, check_QR_only=False):
     Slocs = all_locs
 
     while True:
-        locs,uids = checkQRcodes(cs, Slocs)
+        #locs,uids = checkQRcodes(cs, Slocs)
+        locs,uids = checkQRcodes(Slocs)
         storage_locs += locs
         storage_uids += uids
         if len(storage_locs)==len(all_locs):
@@ -503,6 +515,10 @@ def CreateAgilentSeqFile(spreadsheet_fn, batchID, sheet_name='Samples'):
 """
     
 def collect_hplc(sample_name, exp, nframes,md=None):
+    TRP.set_flowrate(5) # to clear any bubbles
+    TRP.start_pump()
+    time.sleep(5)
+    TRP.stop_pump()
     _md = {"experiment": "HPLC"}
     _md.update(md or {})
     change_sample(sample_name)
@@ -562,16 +578,19 @@ def prime_syringe(loops=1):
     sol.ctrl.sv_drain2.put('off')
 
 def tube_load(tn=2,vol=45,option="uptocell"):
+    sol.ctrl.pump_spd.put(1300)
     row=sol.verify_needle_for_tube(tn,nd=None)
     sol.select_tube_pos(tn)
     sol.load_sample(vol)
     sol.prepare_to_measure(row)
     if option != "uptocell":
         print('flowing sample through the cell')
+        sol.ctrl.pump_spd.put(250)
         sol.ctrl.pump_mvR(vol)
     else:
         print(row)
         print('liquid stopped before the cell')
+    sol.ctrl.pump_spd.put(1300)
 
 def recalibrate_trigger(delay=5,tlist=[1,2],push=15,thresh=0.5):
     nd_list = ['upstream','downstream']
@@ -669,7 +688,8 @@ def mc_measure_sample_scany(pos, sname='test', exp=0.5,
     change_sample(sname, check_sname=check_sname)
     sol.mc_move_sample(pos, cell_type=cell_form)
     time.sleep(1)
-
+    img_name="img/{}.png".format(sname)
+    ES1_cam.saveImg(img_name)
     #RE(monitor_during_wrapper(rel_raster(exp, 
     #                                     ss.y, -yrange/2+offset_y, yrange/2+offset_y, y_points, 
     #                                     ss.x, -xrange/2, xrange/2, x_points, 
@@ -682,6 +702,8 @@ def mc_measure_sample_scany(pos, sname='test', exp=0.5,
 def mc_measure_holder(spreadSheet, holderName,sheet_name='Holders', exp=1, rep=1, check_sname=True, 
                       scan=False, y_points=10, yrange=2.5, x_points=2, xrange=0.5, offset_y=0, 
                       T=None, delay_time=60, dead_band=0.5, cell_form=None):
+    while not verify_beam_on():
+        time.sleep(check_bm_period)
     sol.mc_move_sample(1, cell_type=cell_form)
     if T is None:
         samples = get_samples(spreadSheet, holderName=holderName, sheet_name=sheet_name)
@@ -705,24 +727,22 @@ def mc_measure_holder(spreadSheet, holderName,sheet_name='Holders', exp=1, rep=1
     RE.md['holderName'] = holderName 
     for s in samples.keys():
         if scan==True:
-            mc_measure_sample_scany(samples[s]['position'], s, exp, 
+            mc_measure_sample_scany(samples[s]['position'], s, exp=samples[s]['exposure'], 
                                     y_points=y_points, yrange=yrange, 
                                     x_points=x_points, xrange=xrange, offset_y=offset_y, 
                                     check_sname=check_sname, cell_form=cell_form)
-            #sleep(60)
         elif scan == "mesh":
-            mc_measure_sample_mesh(samples[s]['position'],s,exp,y_points=y_points,yrange=yrange, 
+            mc_measure_sample_mesh(samples[s]['position'],s,exp=samples[s]['exposure'],y_points=y_points,yrange=yrange, 
                                     x_points=x_points, xrange=xrange, 
                                     check_sname=check_sname, cell_form=cell_form)
         elif scan == "dscanx":
-            mc_measure_sample_dscanx(samples[s]['position'],s,exp, x_points=x_points, xrange=xrange, 
+            mc_measure_sample_dscanx(samples[s]['position'],s,exp=samples[s]['exposure'], x_points=x_points, xrange=xrange, 
                                     check_sname=check_sname, cell_form=cell_form)
         elif scan == "dscany":
-            mc_measure_sample_dscany(samples[s]['position'],s,exp, y_points=y_points, yrange=yrange, 
+            mc_measure_sample_dscany(samples[s]['position'],s,exp=samples[s]['exposure'], y_points=y_points, yrange=yrange, 
                                     check_sname=check_sname, cell_form=cell_form)
         else:    
-            mc_measure_sample(samples[s]['position'], s, exp, rep, 
-                              check_sname=check_sname, cell_form=cell_form)
+            mc_measure_sample(samples[s]['position'], s, samples[s]['exposure'], rep, check_sname=check_sname, cell_form=cell_form)
         uids.append(db[-1].start['uid'])
     del RE.md['holderName']
     pil.use_sub_directory()
@@ -761,11 +781,19 @@ def mc_auto_measure_samples(spreadSheet, configName, exp=1, rep=1, check_sname=T
 
         print('mounted tray =', p)
         holderName = holders[p]
-
-        mc_measure_holder(spreadSheet, holderName,
+        
+        if T is None:
+            mc_measure_holder(spreadSheet, holderName,
                                           exp=exp, rep=rep,
-                                          y_points=y_points, yrange=yrange, x_points=x_points, xrange=xrange, offset_y=0, 
+                                          y_points=y_points, yrange=yrange, x_points=x_points, xrange=xrange, offset_y=offset_y, 
                                           cell_form='flat15',scan=scan)
+        else:
+            for i in T:
+                print(i)
+                mc_measure_holder(spreadSheet, holderName,
+                                          exp=exp, rep=rep,
+                                          y_points=y_points, yrange=yrange, x_points=x_points, xrange=xrange,T=i, offset_y=offset_y, 
+                                          cell_form='flat15',scan=scan,delay_time=delay_time)
 
         #sol.select_tube_pos('park')
         sol.park_sample()
@@ -778,9 +806,36 @@ def mc_auto_measure_samples(spreadSheet, configName, exp=1, rep=1, check_sname=T
 
     rbt.park()
     
+def rbt_load_sample(pos):
+    if sol.EMconfig.get() == 0:
+        rbt.loadTray(pos)
+        sol.park_sample()
+        rbt.mountTray()
+    if sol.EMconfig.get() == 1:
+        rbt.loadPlate(pos)
+        sol.park_sample()
+        rbt.mountPlate()
+    else:
+        print("invalid config state")
+    print("sample mounted")
+
+def rbt_unload_sample(pos):
+    if sol.EMconfig.get() == 0:
+        sol.park_sample()
+        rbt.unmountTray()
+        rbt.unloadTray(pos)
+    if sol.EMconfig.get() == 1:
+        sol.park_sample()
+        rbt.unmountPlate()
+        rbt.unloadPlate(pos)
+    else:
+        print("invalid config state")
+    print("sample mounted")
+    
 try:
     #sol.tctrl = tctrl_FTC100D(("xf16idc-tsvr-sena", 7002))
-    sol.tctrl = tctrl_FTC100D(("10.66.122.77",4002))
+    #sol.tctrl = tctrl_FTC100D(("10.66.122.81",4001))
+    sol.tctrl = tctrl_FTC100D(("10.66.122.159",4004))
 except:
     print("cannot connect to sample storage temperature controller")
 

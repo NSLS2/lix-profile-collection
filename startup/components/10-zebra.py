@@ -257,4 +257,5 @@ zebra.or1.input_source1.put(ZA.PULSE1)
 zebra.or1.input_source2.put(ZA.SOFT_IN1)
 zebra.or1.use1.put(1)
 zebra.or1.use2.put(1)
-zebra.output1.ttl.addr.put(ZA.OR3)
+zebra.output1.ttl.addr.put(ZA.OR1)
+

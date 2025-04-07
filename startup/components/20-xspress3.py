@@ -88,7 +88,9 @@ class LiXXspress(xspress3_class_4ch):
         self._flying = False
         
         if self.hdf.run_time.get()==0: # first time using the plugin
+            print("warm up hdf plugin ...")
             self.hdf.warmup()
+            print('done.')
 
     def stop(self, *, success=False):
         ret = super().stop()
