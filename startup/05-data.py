@@ -3,9 +3,22 @@ print(f"Loading {__file__}...")
 import time
 import pylab as plt
 from pathlib import Path
+import redis
 
 last_scan_uid = None
 last_scan_id = None
+
+
+def save_det_config_to_redis():
+    """ use the exp.h5 file in the current directory
+        it is expected to have been updated using de.recalibrate()
+    """
+    de = h5exp("exp.h5")
+    dets_attr = [det.pack_dict() for det in de.detectors]
+    with redis.Redis(host=redis_host, port=redis_port, db=0) as r:
+        r.set("det_config", json.dumps(dets_attr))
+        r.set("det_config_timestamp", time.time())
+
 
 def fetch_scan(**kwargs):
     if len(kwargs) == 0:  # Retrieve last dataset
