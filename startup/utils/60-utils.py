@@ -28,7 +28,7 @@ THRESH_EM1_I0 = 0.1e6   # optimal should be >1.5e6
 
 mon0 = "bpm_int_mean"
 
-def align_crl(rep=32, x_range=0.6, y_range=0.6):
+def align_crl(rep=32, x_range=0.6, y_range=0.6, det=em1):
 
     pos_x10 = crl.x1.position
     pos_x20 = crl.x2.position
@@ -50,10 +50,10 @@ def align_crl(rep=32, x_range=0.6, y_range=0.6):
     ]
 
     objectives = [
-        Objective(name="em1_sum_all_mean_value", description="beam intensity", target="max", trust_domain=(100000, np.inf))
+        Objective(name=f"{det.name}_sum_all_mean_value", description="beam intensity", target="max", trust_domain=(100000, np.inf))
     ]
 
-    dets = [em1]
+    dets = [det]
 
     agent_x = Agent(dofs=dofs_x, objectives=objectives, detectors=dets, db=db)
     agent_y = Agent(dofs=dofs_y, objectives=objectives, detectors=dets, db=db)
