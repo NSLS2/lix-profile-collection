@@ -79,7 +79,7 @@ def login(uname = None, pID = None, rID = None, debug=True, test_only=False):
     RE.md['data_session'] = f'pass-{proposal_id}'
     RE.md['run_id'] = run_id
     login_time = time.time()
-
+    
     #rpath = f"{proposal_id}/{run_id}/"
     #data_path = f"{data_destination}/{rpath}"
     # makedirs(data_path, mode=0o0777) this will be created by the IOC?

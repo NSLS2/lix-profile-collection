@@ -19,7 +19,7 @@ print(f"Loading {__file__}...")
 import os
 BSconfig = os.environ['BS_CONFIG']
 
-if BSconfig!="processing":
+if BSconfig in ["solution", "scanning", "generic", "vacuum"]:
     # define beamline optics
     reload_macros("components/10-motors.py")        
     reload_macros("components/10-vacuum.py")        
