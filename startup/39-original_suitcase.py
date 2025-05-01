@@ -259,7 +259,7 @@ def hdf5_export(headers, filename, debug=False,
                                                 fletcher32=True)
                         
                     if rawdata is not None:
-                        data = np.array(rawdata)
+                        data = np.array(rawdata, dtype="object")
 
                         if value['dtype'].lower() == 'string':  # 1D of string
                             data_len = len(data[0])

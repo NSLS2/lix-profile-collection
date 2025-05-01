@@ -265,7 +265,7 @@ class XPSmotor(PositionerBase):
         if self.debug:
             print(f"{self.name}: stop requested ...")
 
-        err,ret = self.controller.xps.GroupMoveAbort(self.controller.sID, motorName)
+        err,ret = self.controller.xps.GroupMoveAbort(self.controller.sID, self.motorName)
         self._done_moving()
         
     def read(self):
