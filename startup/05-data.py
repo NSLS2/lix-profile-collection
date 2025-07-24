@@ -4,10 +4,24 @@ import time
 import pylab as plt
 from pathlib import Path
 import redis
+from py4xs.utils import get_bin_ranges_from_grid
 
 last_scan_uid = None
 last_scan_id = None
 
+default_qgrid = np.hstack((np.arange(0.005, 0.0499, 0.001),
+                   np.arange(0.05, 0.0999, 0.002),
+                   np.arange(0.1, 0.4999, 0.005),
+                   np.arange(0.5, 0.9999, 0.01),
+                   np.arange(1.0, 3.2, 0.03)))
+default_phi_N = 32
+
+def save_qgrid_config_to_redis(qgrid=default_qgrid, phi_N=default_phi_N):
+    q_bins = get_bin_ranges_from_grid(qgrid)
+    qgrid_attr = {"q_bins": q_bins, "phi_N": phi_N}
+    with redis.Redis(host=redis_host, port=redis_port, db=0) as r:
+        r.set("qgrid_config", json.dumps(qgrid_attr))
+        r.set("qgrid_config_timestamp", time.time())
 
 def save_det_config_to_redis():
     """ use the exp.h5 file in the current directory
@@ -18,7 +32,6 @@ def save_det_config_to_redis():
     with redis.Redis(host=redis_host, port=redis_port, db=0) as r:
         r.set("det_config", json.dumps(dets_attr))
         r.set("det_config_timestamp", time.time())
-
 
 def fetch_scan(**kwargs):
     if len(kwargs) == 0:  # Retrieve last dataset
@@ -55,8 +68,8 @@ def x_conv(xm1, xm2, xv):
 
 # example: plot_data(data, "cam04_stats1_total", "hfm_x1", "hfm_x2")
 def plot_data(data, ys, xs1, xs2=None, thresh=0.8, take_diff=False, no_plot=False):
-    yv = data[ys]
-    xv1 = np.asarray(data[xs1])
+    yv = np.array(data[ys])
+    xv1 = np.array(data[xs1])
     if take_diff:
         yv = np.fabs(np.diff(yv))
         xv1 = (xv1[1:]+xv1[:-1])/2
@@ -87,12 +100,12 @@ def plot_data(data, ys, xs1, xs2=None, thresh=0.8, take_diff=False, no_plot=Fals
             ax2.set_xlabel(xs2)
             #xlim1 = ax1.get_xlim()
             ax2.set_xlim(xm2)
-        print("y max at %s=%f, %s=%f" % (xs1, xx, xs2, x_conv(xm1, xm2, xx)))
-        print("y center at %s=%f, %s=%f" % (xs1, xp, xs2, x_conv(xm1, xm2, xp)))
+        print(f"y max at {xs1}={xx}, {xs2}={x_conv(xm1, xm2, xx)[0]}")
+        print(f"y center at {xs1}={xp}, {xs2}={x_conv(xm1, xm2, xp)}")
         pk_ret[xs2] = x_conv(xm1, xm2, xp)
     else:
-        print("y max at %s=%f" % (xs1, xx))
-        print("y center at %s=%f" % (xs1, xp))
+        print(f"y max at {xs1}={xx}")
+        print(f"y center at {xs1}={xp}")
 
     if no_plot:
         return pk_ret
