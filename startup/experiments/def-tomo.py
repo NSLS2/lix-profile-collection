@@ -519,7 +519,7 @@ def align_sample(roi=[0, -50, 130, 450], ang_scale=1.3, lin_scale=42., keep_orie
        time.sleep(1)
        img = camES2.snapshot()
        (cx,cy),(w,h),rot = get_contour(img, roi=roi, ax=ax)
-       RE(mov(ss.tx, rot*ang_scale))  # *2 due to incorrect calibration?
+       RE(mov(ss.tx, -rot*ang_scale))  # *2 due to incorrect calibration?
        time.sleep(1)
 
     
