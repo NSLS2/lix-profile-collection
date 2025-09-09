@@ -12,7 +12,7 @@ def check_sample_name(sample_name, ioc_name="pil1M", sub_dir=None, check_for_dup
     if len(sample_name)>42:  # file name length limit for Pilatus detectors
         print("Error: the sample name is too long:", len(sample_name))
         return False
-    l1 = re.findall('[^:._A-Za-z0-9\-]', sample_name)
+    l1 = re.findall(r'[^:._A-Za-z0-9\-]', sample_name)
     if len(l1)>0:
         print("Error: the file name contain invalid characters: ", l1)
         return False

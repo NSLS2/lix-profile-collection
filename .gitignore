@@ -59,4 +59,6 @@ target/
 # history
 history.sqlite
 
-zz-dama.py
+zz-dama.py# pixi environments
+.pixi/*
+!.pixi/config.toml
