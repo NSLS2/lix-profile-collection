@@ -296,12 +296,6 @@ class LiXDetectors(Device):
         for det in self.active_detectors:
             det.unstage()
 
-    def kickoff(self):
-        return NullStatus()
-
-    def complete(self):
-        return NullStatus()
-        
     def trigger(self):
         #if len(self.active_detectors)==0:
         #    return
@@ -352,6 +346,9 @@ class LiXDetectors(Device):
         for det in self.active_detectors:
             yield from det.collect_asset_docs()
 
+    def kickoff(self):
+        return NullStatus()
+        
     def complete(self):
         ''' prepare asset_docs_cache() to be collected
         
@@ -402,7 +399,6 @@ class LiXDetectors(Device):
                'data': data,
                'timestamps': ts,
               }
-        
         yield ret
 
     def describe_collect(self):

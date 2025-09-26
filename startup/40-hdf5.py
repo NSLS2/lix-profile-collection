@@ -71,7 +71,7 @@ def compile_replace_res_path(h):
 def pack_h5(uids, dest_dir='', fn=None, fix_sample_name=True, stream_name=None, 
             attach_uv_file=False, delete_old_file=True, include_motor_pos=True, debug=False,
             fields=['em1_sum_all_mean_value', 'em2_sum_all_mean_value', 'em2_ts_SumAll', 'em1_ts_SumAll',
-                    'xsp3_spectrum_array_data', 'xsp3_image', "pilatus_trigger_time",
+                    'xsp3_spectrum_array_data', 'xsp3_image', "ktx22_image", "pilatus_trigger_time",
                     'pil1M_image', 'pilW1_image', 'pilW2_image', 
                     'pil1M_ext_image', 'pilW1_ext_image', 'pilW2_ext_image'], replace_res_path={}):
     """ if only 1 uid is given, use the sample name as the file name

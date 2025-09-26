@@ -32,6 +32,7 @@ if BSconfig in ["solution", "scanning", "generic", "vacuum"]:
     reload_macros("components/20-detectors.py")
     reload_macros("components/20-pilatus.py")
     reload_macros("components/20-xspress3.py")
+    reload_macros("components/20-kinetix.py")
     reload_macros("components/20-bpm.py")
     reload_macros("components/25-XPS.py")
     reload_macros("components/30-decorators.py")

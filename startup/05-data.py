@@ -5,7 +5,7 @@ import pylab as plt
 from pathlib import Path
 import redis
 from py4xs.utils import get_bin_ranges_from_grid
-
+from ophyd import Device
 last_scan_uid = None
 last_scan_id = None
 
@@ -193,6 +193,7 @@ class LIXhdfPlugin(HDF5Plugin, LiXFileStoreHDF5):
         The plugin has to 'see' one acquisition before it is ready to capture.
         This sets the array size, etc.
         """
+        print(f"in warmup() for {self.parent.name}")
         self.enable.set(1).wait()
         if hasattr(self.parent.cam, 'armed'):
             armed = self.parent.cam.armed
@@ -234,6 +235,8 @@ class LIXhdfPlugin(HDF5Plugin, LiXFileStoreHDF5):
             ttime.sleep(0.1)
             sig.set(val).wait()
 
+        print("end of warmup()")
+
     def make_filename(self):
         ''' replaces FileStorePluginBase.make_filename()
         Returns
@@ -263,25 +266,10 @@ class LIXhdfPlugin(HDF5Plugin, LiXFileStoreHDF5):
             return ret
 
         return ret
-    #def stage(self):
-    #    """ need to set the number of images to collect and file path
-    #    """
-    #    super().stage()
-    #    if not self.parent.parent.reset_file_number:
-    #        self.file_number.set(self.fnbr+1).wait()
-    #        filename, read_path, write_path = self.make_filename()
-    #        self._fn = self.file_template.get() % (read_path, filename, self.fnbr)
-    #        set_and_wait(self.full_file_name, self._fn)
-    #def unstage(self):
-    #    self.fnbr = self.file_number.get()
-    #    super().unstage()
-
+    
     def get_frames_per_point(self):
-        #if self.parent.trigger_mode is PilatusTriggerMode.ext:
-        #    return self.parent.parent._num_images
-        #else:
-        #    return 1
         return self.parent._num_images
+
 
 @register_plugin
 class CodecPlugin(PluginBase):

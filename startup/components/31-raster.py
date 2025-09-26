@@ -85,11 +85,10 @@ def raster(exp_time, fast_axis, f_start, f_end, Nfast,
     print(motor_names)
     
     for det in detectors:
-        if isinstance(det, LiXXspress):
+        if isinstance(det, LiXXspress) or isinstance(det, LiXKinetix) :
             det.set_ext_trigger(True)
             det.exp_time(exp_time)
             det.set_num_images(Nfast*Nslow)
-            det._flying = True
         elif isinstance(det, LiXDetectors):
             det.set_trigger_mode(PilatusTriggerMode.ext_multi)
             det.exp_time(exp_time)
@@ -146,10 +145,11 @@ def raster(exp_time, fast_axis, f_start, f_end, Nfast,
             running_forward = not running_forward
 
         for det in detectors:
-            if isinstance(det, LiXDetectors): # pil
-                yield from bps.complete(det, wait=True)
-            elif isinstance(det, LiXXspress): # xsp3
-                yield from bps.complete(det, wait=False)
+            yield from bps.complete(det, wait=True)
+            #if isinstance(det, LiXDetectors): # pil
+            #    yield from bps.complete(det, wait=True)
+            #elif isinstance(det, LiXXspress): # xsp3
+            #    yield from bps.complete(det, wait=False)
 
         for flyer in [traj]+detectors:
             print(f"collecting from {flyer.name} ...")
@@ -157,5 +157,5 @@ def raster(exp_time, fast_axis, f_start, f_end, Nfast,
         print("leaving inner()")
 
     yield from inner(detectors, fast_axis, slow_axis, Nslow, pos_s)
-    yield from sleeplan(1.0)  # give time for the current em1 timeseries monitor to finish
+    #yield from sleeplan(1.0)  # give time for the current em1 timeseries monitor to finish, not needed if not used as monitors
          
