@@ -12,6 +12,7 @@ class FastShutter(Device):
     SETTLE_TIME = 0.1  # seconds
     output = Cpt(EpicsSignal,'{shutter:1}sts', string=True, put_complete=True)
     busy = Cpt(EpicsSignal,'{shutter}busy')
+    delay = Cpt(EpicsSignal,'{shutter}delay')
     stage = None
     stage_move = 0
 
