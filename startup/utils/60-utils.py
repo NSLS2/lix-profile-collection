@@ -11,6 +11,8 @@ from pyzbar.pyzbar import decode,ZBarSymbol
 from scipy.ndimage import uniform_filter1d
 from scipy.signal import find_peaks
 
+import tiled
+
 from blop import DOF, Objective, Agent
 import numpy as np
 
@@ -27,6 +29,8 @@ THRESH_BPM_I0 = 2.0e-7
 THRESH_EM1_I0 = 0.1e6   # optimal should be >1.5e6
 
 mon0 = "bpm_int_mean"
+
+c = tiled.client.from_profile('lix')
 
 def align_crl(rep=32, x_range=0.6, y_range=0.6, det=em1):
 
@@ -71,10 +75,14 @@ def align_crl(rep=32, x_range=0.6, y_range=0.6, det=em1):
 
 def get_cnts():
     RE(ct([em1,em2,bpm], num=1))
-    d = db[-1].table()
-    return {"bpm_int_mean": d['bpm_int_mean'][1], 
-            "em1_sum_all_mean_value": d['em1_sum_all_mean_value'][1], 
-            "em2_sum_all_mean_value": d['em2_sum_all_mean_value'][1]}
+    #d = db[-1].table()
+    d = c[-1]['primary'].read()
+    #return {"bpm_int_mean": d['bpm_int_mean'][1], 
+    #        "em1_sum_all_mean_value": d['em1_sum_all_mean_value'][1], 
+    #        "em2_sum_all_mean_value": d['em2_sum_all_mean_value'][1]}
+    return {"bpm_int_mean": float(d['bpm_int_mean'][0]), 
+            "em1_sum_all_mean_value": float(d['em1_sum_all_mean_value'][0]), 
+            "em2_sum_all_mean_value": float(d['em2_sum_all_mean_value'][0])}
 
 def scan_for_ctr(ax, scan_range=0.3, npts=31, opposite_dir=False,
                  mon="em1_sum_all_mean_value", nedge=4):
@@ -119,7 +127,7 @@ def scan_for_ctr(ax, scan_range=0.3, npts=31, opposite_dir=False,
     else:
         print("done ...")
         
-def align_crl0():
+def align_crl0(mon="em2_sum_all_mean_value"):
     # this could be placed with the current CRL state
     #if "alignment" not in crl.saved_states.keys():
     #    crl.saved_states["alignment"] = [0, 0, 0, 0, 1, 1, 1, 1, 0]
@@ -130,10 +138,10 @@ def align_crl0():
         print(f"intensity on the BPM {data[mon0]} is below the threshold {THRESH_BPM_I0}, aborting ...")
         raise Exception()
 
-    scan_for_ctr("x", 0.3, 31, opposite_dir=False)
-    scan_for_ctr("x", 0.3, 21, opposite_dir=True)
-    scan_for_ctr("y", 0.3, 31, opposite_dir=False)
-    scan_for_ctr("y", 0.3, 21, opposite_dir=True)
+    scan_for_ctr("x", 0.4, 31, opposite_dir=False, mon=mon)
+    scan_for_ctr("x", 0.4, 21, opposite_dir=True, mon=mon)
+    scan_for_ctr("y", 0.4, 31, opposite_dir=False, mon=mon)
+    scan_for_ctr("y", 0.4, 21, opposite_dir=True, mon=mon)
 
 ref_beam_intensity = {"em1": 4200000, "em2": 160000}
 beam_intensity_history = {"em1": [], "em2": [], "timestamp": []}    
