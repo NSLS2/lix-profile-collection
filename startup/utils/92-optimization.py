@@ -1,5 +1,6 @@
 import pandas as pd
 import scipy as sp
+import cv2
 
 from ophyd import Device, EpicsSignal
 from ophyd import Component as Cpt
@@ -10,9 +11,9 @@ import numpy as np
 
 
 
-from blop import DOF, Objective, Agent
-from blop.utils.misc import best_image_feedback
+from blop import DOF, Objective, Agent, DOFConstraint
 
+from blop.ax import Agent as AxAgent
         
 
 def list_scan_with_delay(*args, delay=0, bimorph=bimorph, **kwargs):
@@ -299,4 +300,246 @@ import numpy as np
 import scipy as sp
 
 
+def vertical_profile_metric(image, background=None, threshold_factor=0.1,
+                           intensity_weight=1.0, uniformity_weight=1.0,
+                           edge_crop=0):
+    """
+    Metric for vertical beam uniformity optimization (for vertical focusing mirror).
+    Collapses image to 1D vertical profile and optimizes for uniformity + intensity.
+    
+    Lower values = better (minimize this metric).
+    
+    :param image: OpenCV image (BGR or grayscale)
+    :param background: Optional background image for subtraction
+    :param threshold_factor: Fraction of max intensity for beam detection (default 0.1)
+    :param intensity_weight: Weight for intensity maximization term
+    :param uniformity_weight: Weight for vertical uniformity term
+    :param edge_crop: Number of pixels to crop from the edges of the image. Default to 0.
+    :return: Tuple (metric: float, debug_image: OpenCV image, metrics_dict: dict)
+    """
+    # Convert to grayscale
+    if len(image.shape) == 3:
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    else:
+        gray = image.copy()
+    
+    debug_img = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR) if len(gray.shape) == 2 else image.copy()
 
+    # Crop edges to remove artifacts
+    if edge_crop > 0:
+        gray = gray[edge_crop:-edge_crop, edge_crop:-edge_crop]
+        if background is not None:
+            background = background[edge_crop:-edge_crop, edge_crop:-edge_crop]
+    
+    # Background subtraction
+    if background is None:
+        background = np.zeros_like(gray)
+    else:
+        if len(background.shape) == 3:
+            background = cv2.cvtColor(background, cv2.COLOR_BGR2GRAY)
+    corrected = cv2.subtract(gray, background)
+    corrected = cv2.GaussianBlur(corrected, (5, 5), 0)
+    
+    max_intensity = np.max(corrected)
+    if max_intensity == 0:
+        return float('inf'), debug_img, {}
+        
+    thresh_value = threshold_factor * max_intensity
+    _, thresh = cv2.threshold(corrected, thresh_value, 255, cv2.THRESH_BINARY)
+    
+    # ========== VERTICAL PROFILE ==========
+    # Collapse to 1D vertical profile by averaging over horizontal (x) axis
+    vertical_profile = np.mean(thresh, axis=1)  # Average over horizontal direction
+    
+    if len(vertical_profile) == 0 or np.sum(vertical_profile) == 0:
+        return float('inf'), debug_img, {}
+    
+    # ========== UNIFORMITY METRIC ==========
+    # Coefficient of variation (CV) = std / mean
+    mean_intensity = np.mean(vertical_profile)
+    std_intensity = np.std(vertical_profile)
+    cv = std_intensity / mean_intensity if mean_intensity > 0 else float('inf')
+    
+    # ========== TOTAL INTENSITY ==========
+    # Total integrated intensity (sum of profile)
+    total_intensity = np.sum(vertical_profile)
+    
+    # ========== COMBINED METRIC ==========
+    # Minimize CV (uniformity) and maximize intensity (negate for minimization)
+    metric = uniformity_weight * cv - intensity_weight * total_intensity
+    
+    # ========== DEBUG VISUALIZATION ==========
+    # Plot vertical profile to the right of the image
+    profile_width = 150
+    profile_x_start = debug_img.shape[1] - profile_width - 10
+    
+    # Normalize profile for plotting
+    if np.max(vertical_profile) > 0:
+        normalized_profile = (vertical_profile / np.max(vertical_profile)) * profile_width
+    else:
+        normalized_profile = np.zeros_like(vertical_profile)
+    
+    # Draw profile graph (rotated - grows to the right)
+    # Profile spans full image height (0 to image height)
+    for i in range(len(normalized_profile) - 1):
+        pt1 = (profile_x_start + int(normalized_profile[i]), i)
+        pt2 = (profile_x_start + int(normalized_profile[i + 1]), i + 1)
+        cv2.line(debug_img, pt1, pt2, (255, 255, 0), 2)
+    
+    # Draw baseline for profile (full height)
+    cv2.line(debug_img, (profile_x_start, 0), (profile_x_start, debug_img.shape[0]), (255, 255, 255), 1)
+    
+    # Text overlays
+    text_x = 10
+    cv2.putText(debug_img, f"CV (Uniformity): {cv:.4f}", 
+                (text_x, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+    cv2.putText(debug_img, f"Total Intensity: {total_intensity:.1f}", 
+                (text_x, 55), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+    cv2.putText(debug_img, f"Mean: {mean_intensity:.1f}", 
+                (text_x, 80), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+    cv2.putText(debug_img, f"Std Dev: {std_intensity:.1f}", 
+                (text_x, 105), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+    cv2.putText(debug_img, f"Metric: {metric:.4f}", 
+                (text_x, 130), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+    
+    metrics_dict = {
+        'cv': cv,
+        'total_intensity': total_intensity,
+        'mean_intensity': mean_intensity,
+        'std_intensity': std_intensity,
+        'metric': metric,
+        'vertical_profile': vertical_profile
+    }
+    
+    return metric, debug_img, metrics_dict
+
+
+def vertical_profile_digestion(
+    trial_index: int,
+    readings: dict[str, list[Any]],
+    threshold_factor: float = 0.1,
+    edge_crop: int = 0,
+) -> dict[str, float | tuple[float, float]]:
+    """
+    Digestion function for vertical profile optimization.
+
+    Parameters
+    ----------
+    trial_index : int
+        The index of the trial.
+    readings : dict[str, list[Any]]
+        The readings from the optimization detectors.
+    threshold_factor : float, optional
+        The factor to multiply the maximum intensity by to get the threshold for the vertical profile. Default to 0.1.
+    edge_crop : int, optional
+        The number of pixels to crop from the edges of the image. Default to 0.
+    """
+    image = readings[f"{scnSS.cam.name}_image"][trial_index]
+    _, _, metrics_dict = vertical_profile_metric(image, threshold_factor=threshold_factor, edge_crop=edge_crop)
+    return {
+        "vertical_coefficient_variation": metrics_dict["cv"],
+        "total_vertical_intensity": metrics_dict["total_intensity"],
+    }
+
+
+def _get_channel_neighbors(channel: int) -> list[Channel]:
+    """Helper function to get the neighbors of a channel in the bimorph."""
+    neighbors_indices = []
+    # Horizontal mirror channels: 0-11
+    if 0 <= channel <= 11:
+        if channel == 0:
+            neighbors_indices.append(1)
+        elif channel == 11:
+            neighbors_indices.append(10)
+        else:
+            neighbors_indices.append(channel - 1)
+            neighbors_indices.append(channel + 1)
+    
+    # Vertical mirror channels: 12-23
+    elif 12 <= channel <= 23:
+        if channel == 12:
+            neighbors_indices.append(13)
+        elif channel == 23:
+            neighbors_indices.append(22)
+        else:
+            neighbors_indices.append(channel - 1)
+            neighbors_indices.append(channel + 1)
+    
+    # Unknown channels: 24-31
+    else:
+        return []
+    
+    return [
+        getattr(bimorph.channels, f"channel{i}")
+        for i in neighbors_indices
+    ]
+
+
+def _setup_bimorph_dofs(channel_range: range, search_radius: float = 100.0, constraint: float | None = 300.0):
+    """
+    Sets up the DOFs for the bimorph given a range of channels.
+
+    Parameters
+    ----------
+    channel_range : range
+        The range of channels to setup the DOFs for. 0-11 are horizontal mirror, 12-23 are vertical mirror, 24-31 are unknown.
+    search_radius : float, optional
+        How wide the search domain should be for each DOF. Default to 100.0 V.
+    constraint : float | None, optional
+        Constrain the search space such that each channel's distance from its neighbor is within the constraint. Default is
+        300.0 V. If None, no constraint is applied. This is important for safety of the bimorph.
+
+    Returns
+    -------
+    dofs : list[DOF]
+        The degrees of freedom for the bimorph.
+    dof_constraints : list[DOFConstraint]
+        The constraints on the degrees of freedom.
+    """
+
+    dofs = []
+    dof_constraints = []
+    for channel in channel_range:
+        bimorph_channel = getattr(bimorph.channels, f"channel{channel}")
+        current_pos = bimorph_channel.readback.get()
+        dofs.append(
+            DOF(
+                movable=bimorph_channel,
+                type="continuous",
+                search_domain=(current_pos - search_radius, current_pos + search_radius),
+            )
+        )
+        if constraint is not None:
+            # Apply distance constraints between neighbor channels
+            # Blop only supports linear constraints, so for a distance constraint, we need to apply two separate constraints.
+            neighbors = _get_channel_neighbors(channel)
+            for neighbor in neighbors:
+                dof_constraints.append(
+                    DOFConstraint(f"x1 - x2 <= {constraint}", x1=bimorph_channel, x2=neighbor)
+                )
+                dof_constraints.append(
+                    DOFConstraint(f"x2 - x1 <= {constraint}", x1=bimorph_channel, x2=neighbor)
+                )
+    return dofs, dof_constraints
+
+
+vertical_mirror_dofs, vertical_mirror_dof_constraints = _setup_bimorph_dofs(
+    range(12, 24),
+    search_radius=100.0,
+    constraint=300.0,
+)
+uniform_vertical_profile_objectives = [
+    Objective(name="vertical_coefficient_variation", target="min"),
+    Objective(name="total_vertical_intensity", target="max"),
+]
+optimization_detectors = [scnSS]
+# TODO: Setup custom acquisition plan for vertical profile optimization.
+uniform_vertical_profile_agent = AxAgent(
+    readables=optimization_detectors,
+    dofs=vertical_mirror_dofs,
+    objectives=uniform_vertical_profile_objectives,
+    db=db,
+    dof_constraints=vertical_mirror_dof_constraints,
+    digestion=vertical_profile_digestion,
+    digestion_kwargs={"threshold_factor": 0.1, "edge_crop": 0},
+)
