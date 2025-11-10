@@ -19,74 +19,6 @@ from blop.ax import Agent as AxAgent
 from blop.plans import acquire
 
 
-def one_nd_bimorph_step(detectors, step, pos_cache, take_reading=None, *, bimorph_device=None, timeout=10, tolerance=1, poll_interval=0.1):
-    """
-    Per-step hook that allows for coordinated movement of the bimorph mirrors.
-    
-    The bimorph mirror system requires that the actuators be armed, then ramped to the target voltages.
-    Setting an individual channel (actuator) only sets the target voltage for that channel.
-
-    Parameters
-    ----------
-    detectors : list[Readable]
-        The detectors to take a reading from
-    step : dict[NamedMovable, Any]
-        The next position to move to for each movable device
-    pos_cache : dict[NamedMovable, Any]
-        The last position moved to for each movable device
-    take_reading : Callable[[list[Readable]], MsgGenerator] | None, optional
-        Custom plan hook to take a reading from the detectors, defaults to ``bps.trigger_and_read``
-    bimorph : Bimorph | None, optional
-        The bimorph mirror system to control, default to ``bimorph`` device defined in the namespace
-    timeout : float, optional
-        The timeout for the bimorph to arm and ramp, default to 10 seconds
-    tolerance : float, optional
-        The tolerance for each channel's residual voltage to be within, default to 1 V
-    poll_interval : float, optional
-        The interval to poll the bimorph to arm and ramp, default to 0.001 seconds
-    """
-
-    if take_reading is None:
-        take_reading = bps.trigger_and_read
-    
-    if bimorph_device is None:
-        bimorph_device = bimorph
-
-    def _armed() -> bool:
-        armed_voltages = np.array(bimorph_device.all_armed_voltages(), dtype=np.float32)
-        return np.allclose(armed_voltages, bimorph_device.all_setpoint_voltages(), atol=tolerance)
-
-    def _ramped() -> bool:
-        current_voltages = np.array(bimorph_device.all_current_voltages.get(), dtype=np.float32)
-        return np.allclose(current_voltages, bimorph_device.all_setpoint_voltages(), atol=tolerance)
-    
-    # Move to the next position (change setpoints for bimorph channels)
-    yield from bps.move_per_step(step, pos_cache)
-
-    # Wait for the bimorph mirror to be armed
-    start_time = ttime.monotonic()
-    while not _armed():
-        yield from bps.sleep(poll_interval)
-        if ttime.monotonic() - start_time > timeout:
-            raise TimeoutError(f"Failed to arm the bimorph mirrors within {timeout} seconds")
-
-    # Start ramping
-    yield from bimorph_device.start_plan()
-
-    # Wait for the bimorph mirror to be ramped
-    start_time = ttime.monotonic()
-    while not _ramped():
-        yield from bps.sleep(poll_interval)
-        if ttime.monotonic() - start_time > timeout:
-            raise TimeoutError(f"Failed to ramp the bimorph mirrors within {timeout} seconds")
-
-    # settle time after ramping
-    yield from bps.sleep(1.0)
-
-    # Take a reading from the detectors
-    yield from take_reading(list(detectors) + list(step.keys()))
-
-
 def list_scan_with_delay(*args, delay=0, bimorph=bimorph, **kwargs):
     "Accepts all the normal 'scan' parameters, plus an optional delay."
 
@@ -605,6 +537,74 @@ uniform_vertical_profile_agent = AxAgent(
     digestion=vertical_profile_digestion,
     digestion_kwargs={"threshold_factor": 0.1, "edge_crop": 0},
 )
+
+
+def one_nd_bimorph_step(detectors, step, pos_cache, take_reading=None, *, bimorph_device=None, timeout=10, tolerance=1, poll_interval=0.1):
+    """
+    Per-step hook that allows for coordinated movement of the bimorph mirrors.
+    
+    The bimorph mirror system requires that the actuators be armed, then ramped to the target voltages.
+    Setting an individual channel (actuator) only sets the target voltage for that channel.
+
+    Parameters
+    ----------
+    detectors : list[Readable]
+        The detectors to take a reading from
+    step : dict[NamedMovable, Any]
+        The next position to move to for each movable device
+    pos_cache : dict[NamedMovable, Any]
+        The last position moved to for each movable device
+    take_reading : Callable[[list[Readable]], MsgGenerator] | None, optional
+        Custom plan hook to take a reading from the detectors, defaults to ``bps.trigger_and_read``
+    bimorph : Bimorph | None, optional
+        The bimorph mirror system to control, default to ``bimorph`` device defined in the namespace
+    timeout : float, optional
+        The timeout for the bimorph to arm and ramp, default to 10 seconds
+    tolerance : float, optional
+        The tolerance for each channel's residual voltage to be within, default to 1 V
+    poll_interval : float, optional
+        The interval to poll the bimorph to arm and ramp, default to 0.001 seconds
+    """
+
+    if take_reading is None:
+        take_reading = bps.trigger_and_read
+    
+    if bimorph_device is None:
+        bimorph_device = bimorph
+
+    def _armed() -> bool:
+        armed_voltages = np.array(bimorph_device.all_armed_voltages(), dtype=np.float32)
+        return np.allclose(armed_voltages, bimorph_device.all_setpoint_voltages(), atol=tolerance)
+
+    def _ramped() -> bool:
+        current_voltages = np.array(bimorph_device.all_current_voltages.get(), dtype=np.float32)
+        return np.allclose(current_voltages, bimorph_device.all_setpoint_voltages(), atol=tolerance)
+    
+    # Move to the next position (change setpoints for bimorph channels)
+    yield from bps.move_per_step(step, pos_cache)
+
+    # Wait for the bimorph mirror to be armed
+    start_time = ttime.monotonic()
+    while not _armed():
+        yield from bps.sleep(poll_interval)
+        if ttime.monotonic() - start_time > timeout:
+            raise TimeoutError(f"Failed to arm the bimorph mirrors within {timeout} seconds")
+
+    # Start ramping
+    yield from bimorph_device.start_plan()
+
+    # Wait for the bimorph mirror to be ramped
+    start_time = ttime.monotonic()
+    while not _ramped():
+        yield from bps.sleep(poll_interval)
+        if ttime.monotonic() - start_time > timeout:
+            raise TimeoutError(f"Failed to ramp the bimorph mirrors within {timeout} seconds")
+
+    # settle time after ramping
+    yield from bps.sleep(1.0)
+
+    # Take a reading from the detectors
+    yield from take_reading(list(detectors) + list(step.keys()))
 
 
 def optimize_vertical_profile(iterations: int = 30) -> MsgGenerator[None]:
