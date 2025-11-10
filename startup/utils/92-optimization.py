@@ -596,7 +596,6 @@ uniform_vertical_profile_objectives = [
     Objective(name="total_vertical_intensity", target="max"),
 ]
 optimization_detectors = [scnSS]
-# TODO: Setup custom acquisition plan for vertical profile optimization.
 uniform_vertical_profile_agent = AxAgent(
     readables=optimization_detectors,
     dofs=vertical_mirror_dofs,
