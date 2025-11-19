@@ -340,11 +340,11 @@ def vertical_profile_metric(image, background=None, threshold_factor=0.1,
         return float('inf'), debug_img, {}
         
     thresh_value = threshold_factor * max_intensity
-    _, thresh = cv2.threshold(corrected, thresh_value, 255, cv2.THRESH_BINARY)
+    _, thresh = cv2.threshold(corrected, thresh_value, 255, cv2.THRESH_TOZERO)
     
     # ========== VERTICAL PROFILE ==========
-    # Collapse to 1D vertical profile by averaging over horizontal (x) axis
-    vertical_profile = np.mean(thresh, axis=1)  # Average over horizontal direction
+    # Collapse to 1D vertical profile by summing over horizontal (x) axis
+    vertical_profile = np.sum(thresh, axis=1)
     
     if len(vertical_profile) == 0 or np.sum(vertical_profile) == 0:
         return float('inf'), debug_img, {}
@@ -429,7 +429,7 @@ def vertical_profile_digestion(
     edge_crop : int, optional
         The number of pixels to crop from the edges of the image. Default to 0.
     """
-    image = readings[f"{scnSS.cam.name}_image"][trial_index]
+    image = readings[f"{scnSS.cam.name}_image"][0]
     _, _, metrics_dict = vertical_profile_metric(image, threshold_factor=threshold_factor, edge_crop=edge_crop)
     return {
         "vertical_coefficient_variation": metrics_dict["cv"],
@@ -619,6 +619,6 @@ def optimize_vertical_profile(iterations: int = 30) -> MsgGenerator[None]:
             trials,
             per_step=one_nd_bimorph_step,
         )
-        results = uniform_vertical_profile_agent.data_access.get(uid)
+        results = uniform_vertical_profile_agent.data_access.get_data(uid)
         data = {trial_index: uniform_vertical_profile_agent.digestion(trial_index, results, **uniform_vertical_profile_agent.digestion_kwargs) for trial_index in trials.keys()} 
-        uniform_vertical_profile_agent.complete_trials(data)
+        uniform_vertical_profile_agent.complete_trials(trials, data)
