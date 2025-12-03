@@ -2,22 +2,22 @@ experiment_types:
   X-ray_only:
     buffer_position: [1, 2, 3, 4, 5, 6]
     column_position: [1, 2]
-    valve_position: ["A", "B"]
+    10_port_pos: ["A", "B"]
 
   X-ray_UV_MALS_RID:
     buffer_position: [1, 2, 3, 4, 5, 6]
     column_position: [1, 2]
-    valve_position: ["A", "B"]
+    10_port_pos: ["A", "B"]
 
   X-ray_Regen:
     buffer_position: [1, 2, 3, 4, 5, 6]
     column_position: [1, 2]
-    valve_position: ["A", "B"]
+    10_port_pos: ["A", "B"]
 
   UV_MALS_RID:
     buffer_position: [1, 2, 3, 4, 5, 6]
     column_position: [1, 2]
-    valve_position: ["A", "B"]
+    10_port_pos: ["A", "B"]
 
 column_types:
   Superdex 200 Increase 5/150 GL:

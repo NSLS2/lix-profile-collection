@@ -1,3 +1,5 @@
+print(f"Loading file {__file__}...")
+
 # for Aurora Pro 6-port selection valve
 # should work with other models, just need to specify n_pos
 # when used with Moxa, specify the url for the corresponding serial port, e.g. 'socket://10.66.122.154:4003/'
@@ -5,17 +7,17 @@
 import sys
 import logging
 import serial
+from serial.tools import list_ports
 import struct
 import time
 import numpy as np
-
 
 logging.basicConfig(
     stream=sys.stdout,
     level=logging.DEBUG,
     format="%(asctime)s [%(levelname)-5.5s]  %(message)s",
 )
-
+'''
 def findUsbPort(vid=None, pid=None, hwid=None):
     ports = list(serial.tools.list_ports.comports())
     for p in ports:
@@ -25,6 +27,7 @@ def findUsbPort(vid=None, pid=None, hwid=None):
             return p.device     
     logging.error("ERV not found") 
     raise RuntimeError(f"232 adaptor with VID:PID={vid:04X}:{pid:04X} not found")
+'''
 
 class APV:
     pos_home = b'\xCC\x00\x45\x00\x00\xDD\xEE\x01' #move valve to home position
@@ -93,3 +96,4 @@ class APV:
         if not (position == pos): 
             logging.error('ERV movement failure')
             raise RuntimeError("ERV failed to move: {} != {}".format(position,pos))
+APV=APV(url="socket://10.66.122.159:4001")

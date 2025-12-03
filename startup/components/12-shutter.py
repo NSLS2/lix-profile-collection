@@ -44,14 +44,14 @@ class FastShutter(Device):
 class PhotonShutter(Device):
     OPEN_SHUTTER = "Open"
     CLOSE_SHUTTER = "Not Open"
-    output = Cpt(EpicsSignal, '{PSh}Pos-Sts', string=True, put_complete=True)
+    output = Cpt(EpicsSignal, 'Enbl-Sts', string=True, put_complete=True)
     
     def open(self):
-        self.output.set(Scintillator.OPEN_SHUTTER)
+        self.output.set(self.OPEN_SHUTTER).wait()
         
     def close(self):
-        self.output.set(Scintillator.CLOSE_SHUTTER)
+        self.output.set(self.CLOSE_SHUTTER).wait()
           
 fast_shutter = FastShutter('XF:16IDB-BI', name='fast_shutter')
 fast_shutter.stage = EpicsMotor("XF:16IDB-OP{fastshutter:Ax:X}Mtr", name="shutter_z")
-photon_shutter = PhotonShutter('XF:16IDA-PPS', name='photon_shutter')
+photon_shutter = PhotonShutter('XF:16IDA-PPS{PSh}', name='photon_shutter')

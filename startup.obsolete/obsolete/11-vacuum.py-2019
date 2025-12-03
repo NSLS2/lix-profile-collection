@@ -1,0 +1,417 @@
+from ophyd import (EpicsSignal, Device, Component as Cpt, DerivedSignal,
+                   FormattedComponent)
+from nslsii.devices import TwoButtonShutter
+
+class _MaxiPressure(DerivedSignal):
+    def inverse(self, value):
+        msg = value
+        if msg == "UNDER":
+            return 1.0e-3
+        elif msg == "OVER":
+            return 1.1e3
+        else:
+            return float(msg)
+
+    def describe(self):
+        desc = super().describe()
+        desc[self.name]['dtype'] = 'float'
+        return desc
+
+    def put(self, value, **kwrags):
+        raise Exception("gauge is read only")
+
+class MaxiGaugeOphyd(Device):
+    raw_pressure = Cpt(EpicsSignal, 'P:Raw-I', kind='omitted')
+    pressure = Cpt(_MaxiPressure, derived_from='raw_pressure')
+
+    
+class _MKSPressure(DerivedSignal):
+    def inverse(self, value):
+        Pr = value
+        if Pr=="NO_GAUGE" or Pr=="OFF":
+            raise Exception(Pr, self.pres_sig.name)
+        elif Pr=="LO<E-03":
+            P0 = 1.0e-3
+        elif Pr==">1.0E+03":
+            P0 = 1.1e3
+        else:
+            P0 = float(Pr)
+
+        return P0
+
+    def describe(self):
+        desc = super().describe()
+        desc[self.name]['dtype'] = 'float'
+        return desc
+
+    def put(self, value, **kwrags):
+        raise Exception("gauge is read only")
+
+    
+class MKSGaugeOphyd(Device):
+    raw_pressure = Cpt(EpicsSignal, 'P:Raw-I', kind='omitted')
+    pressure = Cpt(_MKSPressure, derived_from='raw_pressure')
+
+    power = Cpt(EpicsSignal, 'Pwr-Sts', kind='config', string=True)
+
+    # def turn_on(self, max_try=10):
+    #     if max_try < 0:
+    #         raise Exception("failed to turn on")
+    #     ret = yield from bps.read(self.power)
+    #     if ret is not None:
+    #         state = ret[self.name]['value']
+    #         if state == 'ON':
+    #             return
+    #         else:
+    #             yield from bps.set(self.power, 'ON')
+    #             yield from bps.sleep(1.5)
+    #             yield from self.turn_on(max_try - 1)
+
+class TwoButtonValve(TwoButtonShutter):
+    err_status = Cpt(EpicsSignalRO, 'Err-Sts', kind='config')
+    def stop(self, success):
+        ...
+
+    # non-standard device method, maybe not a good idea....        
+    def close(self):
+        yield from bps.mov(self, 'Close')
+
+    # non-standard device method, maybe not a good idea....        
+    def open(self, softOpen=False):
+        yield from bps.mov(self, 'Open')
+
+class DoubleValve(Device):
+    full = FormattedComponent(TwoButtonValve,
+                              '{self.prefix}:{self._num}}}')
+    soft = FormattedComponent(TwoButtonValve,
+                              '{self.prefix}:SoftPump{self._num}}}')
+
+    # state = Cpt(CombinedState(['soft', 'full'])
+
+    def __init__(self, *args, num, **kwargs):
+        self._num = num
+        super().__init__(*args, **kwargs)
+
+    # could make this smart and take "Open Full", "Open Soft", "Close"
+    # def set(self, value):
+
+    
+    #def read(...):
+
+    # non-standard device method, maybe not a good idea....
+    def close(self):
+        yield from self.full.close()
+        yield from self.soft.close()
+
+    def open(self, softOpen=False):
+        # TODO add full / soft deconfliction logic
+        # if already open full and asked to open soft is this:
+        #  1. already done!
+        #  2. an error
+        #  3. close to 'soft open'
+        if softOpen:
+            yield from self.soft.open()
+        else:
+            yield from self.full.open()            
+
+class VacuumSystemO:
+    """ Maintain a list as the map of the vacuum system. constructed by appending vacuum sections
+        Each vacuum section must have a pressure gauge, a vent valve, an evacuation valve and a downstream gate valve
+        It is assumed that the vacuum system starts and ends with a window/blank
+        Operations allowed:
+            vent: check gate valves
+            evacuate: check pump pressure
+            openGV: check downstream vacuum pressure
+            closeGV: just do it
+        
+        the endstation manifold needs to be treated separately
+    """
+    def __init__(self, pumpGaugeDev):
+        self.pump_gauge = pumpGaugeDev
+        self.VSmap = []
+        self.VSindex = {}
+        self.manifolds = {}
+        self.numSec = 0
+        # not allow to open GV if pres. diff. exceeds this value
+        self.maxAllowedPressureDiff = 0.1
+        # pump pressure should be better than this during normal ops
+        self.acceptablePumpPressure = 0.01
+
+    def _select_gauge(self, secName):
+        if secName=='pump':
+            dev = self.pump_gauge
+        else:
+            dev = self.VSmap[self.VSindex[secName]]['gauge']
+
+        return dev
+
+    def pressure(self, secName='pump'):
+        """ support "pump" as a secName as well
+        """
+        dev = _select_gauge(secName)
+        return dev.pressure.get()
+            
+    def appendManifold(self, mfName, EVDevName, VVDevName):
+        """ a manifold is not directly connected to a vacuum section
+            but it has an evacuation valve and a vent valve
+        """
+        EV = SolenoidValve(EVDevName)
+        VV = SolenoidValve(VVDevName)
+        self.manifolds[mfName] = {"EV": EV, "VV": VV, "vacSecs": []}
+        
+    def findManifold(self, secName):
+        """ return the name of the manifold that the vacuum section is attached to
+            return None if the section is not attached to a manifold
+        """
+        ns = self.VSindex[secName]
+        if "manifold" in list(ESVacSys.VSmap[ns].keys()):
+            return self.manifolds[self.VSmap[ns]["manifold"]]
+        return None
+    
+    def appendSection(self, secName, gaugeDev, EV=None, VV=None, 
+                      manifoldName=None, IV=None, downstreamGV=None):
+        """ a vacuum section must have a vacuum gauge
+            it should either have a set of evacuation/vent valves
+            or be attached to a manifold through a isolation valve 
+            
+            vacuum sections in a vacuum systems are continuous, separated by a GV
+            the GV could be None, meaning the sections are effectively separated by a window
+        """
+        # TODO error checking IV, EV, VV
+        
+        GV2 = downstreamGV
+
+        self.VSindex[secName] = self.numSec
+        if self.numSec > 0:
+            GV1 = self.VSmap[self.numSec-1]["GVs"][1]
+        else:
+            GV1 = None
+            
+        GVs = [GV1, GV2]
+                        
+        if manifoldName is not None:
+            if manifoldName not in self.manifolds:
+                raise Exception("manifold not defined: ", manifoldName)
+            self.VSmap.append({"name": secName,
+                               "IV": IV,
+                               "GVs": GVs,
+                               "gauge": gaugeDev,
+                               "manifold": manifoldName})
+            # to keep track of what vacuum sections are attached to the manifold
+            self.manifolds[manifoldName]["vacSecs"].append(secName)
+        else:
+            self.VSmap.append({"name": secName,
+                               "EV": EV,
+                               "VV": VV,
+                               "GVs": GVs,
+                               "gauge": gaugeDev})     
+        
+        self.numSec += 1
+        
+    def allowToOpen(self, P0, P1):
+        """allow the valve open if the pressure diffence is sufficiently
+        small (0.05 mbar)
+
+        """
+        if np.fabs(P0 - P1) < self.maxAllowedPressureDiff:
+            return True
+        
+        print("pressure difference is too great to open the valve: %.3f / %.3f mbar" % (P0, P1))
+        return False
+        
+    def normalOps(self):
+        """ open the EV on each section with acceptable vacuum pressure
+            this is useful after evacuating one of the vacuum sections
+        """
+        for vs in self.VSmap:
+            #TODO change to read
+            if self.pressure(vs['name']) > self.acceptablePumpPressure:
+                continue
+            yield from self.openValve(vs['name'], 'EV')        
+         
+    def evacuate(self, secName):
+        """ check pump vacuum pressure, exit if section vacuum better than pump vacuum (pump off?)
+            close the vent valve
+            close the evacuation valve on all other vacuum sections
+            close the gate valves (in case other sections are vented)
+            if on a manifold:
+                open the isolation valve after closing other isolation valves on the same manifold
+            soft-open the evacuation valve
+            wait until the vacuum pressure is sufficiently low (10 mbar??)
+            open the evacuation valve
+        """
+        #TODO change to read
+        if self.pressure(secName) < self.pressure("pump"):
+            print("vacuum pressure in this section is already better than the pump pressure.")
+            return
+        
+        ns = self.VSindex[secName]
+        yield from self.closeValve(secName, "VV")
+        yield from self.closeValve(secName, "GV")   
+        
+        for vs in self.VSmap:
+            if vs['name']==secName:
+                continue
+            yield from self.closeValve(vs['name'], 'EV')
+        
+        yield from self.openValve(secName, "EV", softOpen=True)
+        t0 = time.time()
+        # TODO do this with a subscription
+        while True:
+            P0 = self.pressure(secName)
+            t1 = time.time()
+            print("pressure in %s: %.3f, time lapses: %d     \r"%(secName,P0,t1-t0), end="")
+            sys.stdout.flush()
+            time.sleep(1)
+            if P0 < 10.:
+                print("pressure in %s: %.3f, fully opening EV.     \n"%(secName,P0))
+                break
+        yield from self.openValve(secName, "EV")
+    
+    def vent(self, secName):
+        """ close gate valves on either end
+            close the evacuation valve
+            if on a manifold:
+                open the isolation valve after closing other isolation valves on the same manifold
+            soft-open the vent valve
+            wait until the vacuum pressure is sufficiently high (10 mbar??)
+            open the vent valve
+        """
+        yield from self.closeValve(secName, "GV")
+        yield from self.closeValve(secName, "EV")
+        t0 = time.time()
+        yield from self.openValve(secName, "VV", softOpen=True)
+        while True:
+            P0 = self.pressure(secName)
+            t1 = time.time()
+            print("pressure in %s: %.3f, time lapses: %d    \r"%(secName,P0,t1-t0), end="")
+            sys.stdout.flush()
+            time.sleep(1)
+            if P0>500.:
+                print("pressure in %s: %.3f, fully opening VV.   \n"%(secName,P0))
+                break
+        yield from self.openValve(secName, "VV")
+    
+    def openValve(self, secName, valveType, softOpen=False, checkPumpPressure=False):
+        """ valveType should be "EV", "VV", "IV", "GV" 
+            EV/VV: check pump pressure if EV
+                if the section is attached to a manifold, 
+                    close all other IVs on the manifold, then open IV 
+                    open the EV/VV on the manifold
+            IV: if the manifold EV is open, check against pressure on other branches of the manifold
+                if the manifold VV is open, just open it
+            GV: both ends of the vacuum section, check pressure of the upstream and downstream sections
+        """
+        ns = self.VSindex[secName]
+        P0 = self.pressure(secName)
+        mf = self.findManifold(secName)
+        if valveType == "GV":
+            # allow GV open on one side only
+            usGV, dsGV = self.VSmap[ns]["GVs"]
+            # check pressure 
+            if usGV != None:
+                assert ns != 0
+                P1 = self.pressure(self.VSmap[ns-1]["name"])
+                if self.allowToOpen(P0, P1):
+                    yield from usGV.open()
+            if dsGV != None:
+                P1 = self.pressure(self.VSmap[ns+1]["name"])
+                if self.allowToOpen(P0, P1):
+                    yield from dsGV.open()
+                    
+        elif valveType == "EV":
+            P1 = self.pressure("pump")
+            if checkPumpPressure and P1>self.acceptablePumpPressure:
+                raise Exception("pump pressure is not adequate for evacuation.")
+            if mf is not None:
+                for vs in mf['vacSecs']:
+                    if vs != secName:
+                        yield from self.closeValve(vs, "IV")
+                yield from self.VSmap[ns]["IV"].open()
+                EV = mf["EV"]
+            else:
+                EV = self.VSmap[ns]["EV"]
+            yield from EV.open(softOpen=softOpen)
+        elif valveType == "VV":
+            if mf is not None:
+                for vs in mf['vacSecs']:
+                    if vs != secName:
+                        yield from self.closeValve(vs, "IV")
+                yield from self.VSmap[ns]["IV"].open()
+                VV = mf["VV"]
+            else:
+                VV = self.VSmap[ns]["VV"]
+            yield from VV.open(softOpen=softOpen)
+        elif valveType=="IV":
+            if mf is None:
+                raise Exception("vacuum section %s does not have IV" % secName)
+            if mf['VV'].status>0.1:
+                yield from self.VSmap[ns]["IV"].open()
+            elif mf['EV'].status>0.1:
+                # open only if pressure difference between pump and vacSection is small
+                # could also check the pressure on other branches of the manifold, but this is easier
+                P1 = self.pressure("pump")
+                if self.allowToOpen(P0, P1):
+                    yield from self.VSmap[ns]["IV"].open()
+            else: # manifold vacuum pressure is unknown
+                raise Exception("evacuate/vent using the EV/VV on the manifold instead.")
+        else:
+            raise Exception("Unknown valveType: ", valveType)
+    
+    def closeValve(self, secName, valveType):
+        """ same types as above
+        """
+        ns = self.VSindex[secName]
+        mf = self.findManifold(secName)
+        if valveType == "GV":
+            for gv in self.VSmap[ns]["GVs"]:
+                if gv is not None:
+                    yield from gv.close()
+        elif valveType == "EV":
+            if mf is None:
+                yield from self.VSmap[ns]["EV"].close()
+            else:
+                #raise Exception("vacuum section %s does not have EV" % secName)
+                yield from mf['EV'].close()
+        elif valveType=="VV":
+            if mf is None:
+                yield from self.VSmap[ns]["VV"].close()
+            else:
+                #raise Exception("vacuum section %s does not have VV" % secName)
+                yield from mf['VV'].close()
+        elif valveType == "IV":
+            if mf is not None:
+                yield from self.VSmap[ns]["IV"].close()
+            else:
+                raise Exception("vacuum section %s does not have IV" % secName)
+        else:
+            raise Exception("Unknown valveType: ", valveType)
+
+                    
+#ESVacSysO = VacuumSystemO(MKSGaugeOphyd("XF:16IDC-VA{ES-TCG:1}"))
+#ESVacSysO.appendManifold("EMmf", 
+#                        DoubleValve("XF:16IDC-VA{ES-EV:", num=3),
+#                        DoubleValve("XF:16IDC-VA{ES-VV:", num=3))
+#
+#ESVacSysO.appendSection("SS", MKSGaugeOphyd("XF:16IDB-VA{Chm:SS-TCG:2}"), 
+#                       EV=DoubleValve("XF:16IDB-VA{Chm:SS-EV:", num=1),
+#                       VV=DoubleValve("XF:16IDB-VA{Chm:SS-VV:", num=1),
+#                       downstreamGV=TwoButtonValve("XF:16IDC-VA{Chm:SS-GV:1}"))
+# 
+#ESVacSys.appendSection("SF", MKSGaugeOphyd("XF:16IDB-VA{Chm:SF-TCG:1}"), 
+#                       EV="XF:16IDC-VA{ES-EV:2}", "XF:16IDC-VA{ES-EV:SoftPump2}"], 
+#                       VVName=["XF:16IDC-VA{ES-VV:2}", "XF:16IDC-VA{ES-VV:SoftPump2}"],
+#                        downstreamGVName="XF:16IDC-VA{Chm:SF-GV:1}")
+#
+#ESVacSys.appendSection("microscope", MaxiGauge("XF:16IDC-VA:{ES-Maxi:1}"), #MKSGauge("XF:16IDB-VA{EM-TCG:2}"), 
+#                       manifoldName="EMmf", IVName="XF:16IDC-VA{ES-EV:Micrscp}",
+#                       downstreamGVName=None)
+#
+#ESVacSys.appendSection("nosecone", MaxiGauge("XF:16IDC-VA:{ES-Maxi:2}"), #MKSGauge("XF:16IDB-VA{EM-TCG:1}", 
+#                       manifoldName="EMmf", IVName="XF:16IDC-VA{ES-EV:Nosecone}",
+#                       downstreamGVName="XF:16IDC-VA{EM-GV:1}")
+#
+#ESVacSys.appendSection("WAXS", MKSGauge("XF:16IDB-VA{det:WAXS-TCG:1}"), 
+#                       EVName=["XF:16IDC-VA{ES-EV:4}", "XF:16IDC-VA{ES-EV:SoftPump4}"], 
+#                       VVName=["XF:16IDC-VA{ES-VV:4}", "XF:16IDC-VA{ES-VV:SoftPump4}"],
+#                       downstreamGVName=None)

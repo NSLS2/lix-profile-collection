@@ -19,6 +19,8 @@ print(f"Loading {__file__}...")
 import os
 BSconfig = os.environ['BS_CONFIG']
 
+EMconfig = EpicsSignal("XF:16IDC-ES:EMconfig")
+
 if BSconfig in ["solution", "scanning", "generic", "vacuum"]:
     # define beamline optics
     reload_macros("components/10-motors.py")        
@@ -28,6 +30,7 @@ if BSconfig in ["solution", "scanning", "generic", "vacuum"]:
     reload_macros("components/14-energy.py")    
     reload_macros("components/15-transfocator.py")
     reload_macros("components/19-robot.py")
+    reload_macros("components/20-ext_trigger.py")
     reload_macros("components/20-bpm.py")
     reload_macros("components/20-detectors.py")
     reload_macros("components/20-pilatus.py")
@@ -41,6 +44,7 @@ if BSconfig in ["solution", "scanning", "generic", "vacuum"]:
     reload_macros("components/31-scans.py")
 
     reload_macros("utils/60-utils.py")
+    reload_macros("utils/61-report.py")
     reload_macros("utils/90-settings.py")
 
     reload_macros("components/21-metadata.py")

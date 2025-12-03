@@ -117,6 +117,8 @@ class EM_Robot():
                 'MT_autoCalib']
 		if cmd not in cmdLists:
 			raise Exception(cmd+" is not a valid Task.")
+		#if cmd=="Initialize":
+			#return "Done","",""
 
 		return runATask(cmd,timeout)
                 #result = runATask(cmd,timeout)

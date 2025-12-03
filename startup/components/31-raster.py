@@ -29,19 +29,21 @@ pil and emXext need to be revised to work like a flyer
         xsp3 shouldn't need it, single hdf per scan
 """    
         
-def rel_raster(exp_time, fast_axis, f_start, f_end, Nfast,
-               slow_axis=None, s_start=0, s_end=0, Nslow=1, debug=False, md=None, 
+def rel_raster(exp_time, fast_axis, f_start, f_end, Nfast, 
+               slow_axis=None, s_start=0, s_end=0, Nslow=1, 
+               time_per_step=-1, debug=False, md=None, 
                detectors = [pil, em1ext, em2ext]
               ):
 
     fm0 = fast_axis.position
     sm0 = slow_axis.position
-    yield from raster(exp_time, fast_axis, fm0+f_start, fm0+f_end, Nfast,
+    yield from raster(exp_time, fast_axis, fm0+f_start, fm0+f_end, Nfast, 
                       slow_axis=slow_axis, s_start=sm0+s_start, s_end=sm0+s_end, Nslow=Nslow, 
-                      debug=debug, md=md, detectors=detectors)
+                      time_per_step=time_per_step, debug=debug, md=md, detectors=detectors)
     
-def raster(exp_time, fast_axis, f_start, f_end, Nfast,
-           slow_axis=None, s_start=0, s_end=0, Nslow=1, debug=False, md=None,
+def raster(exp_time, fast_axis, f_start, f_end, Nfast, 
+           slow_axis=None, s_start=0, s_end=0, Nslow=1, 
+           time_per_step=-1, debug=False, md=None,
            detectors = [pil, em1ext, em2ext] 
           ):
     """ raster scan in fly mode using detectors with exposure time of exp_time
@@ -56,10 +58,13 @@ def raster(exp_time, fast_axis, f_start, f_end, Nfast,
         
     """
     step_size = np.fabs((f_end-f_start)/(Nfast-1))
-    dt = exp_time + 0.005    # exposure_period is 5ms longer than exposure_time, as defined in Pilatus
+    if time_per_step<0:
+        dt = exp_time + 0.005    # exposure_period is 5ms longer than exposure_time, as defined in Pilatus
+    else:
+        dt = time_per_step
 
     if not hasattr(fast_axis, "traj"):
-        raise exception(f"don't know how to run atrajectory using {fast_axis} ...")
+        raise Exception(f"don't know how to run atrajectory using {fast_axis} ...")
         
     traj = fast_axis.traj
     traj.setup_traj(fast_axis, f_start, f_end, Nfast, step_size, dt, slow_axis, Nslow)

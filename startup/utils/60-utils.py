@@ -64,13 +64,13 @@ def align_crl(rep=32, x_range=0.6, y_range=0.6, det=em1):
 
     RE(fast_shutter_wrapper(agent_x.learn("qr", n=rep))) #, iterations=4))) 
     agent_x.plot_objectives()
-    crl.x1.move(agent_x.best['crl_x1'])
-    crl.x2.move(agent_x.best['crl_x2'])
+    crl.x1.move(agent_x.best['crl_x1']) # ['crl_x1'][0]
+    crl.x2.move(agent_x.best['crl_x2']) # [0]
 
     RE(fast_shutter_wrapper(agent_y.learn("qr", n=rep))) #, iterations=4))) 
     agent_y.plot_objectives()
-    crl.y1.move(agent_y.best['crl_y1'])
-    crl.y2.move(agent_y.best['crl_y2'])
+    crl.y1.move(agent_y.best['crl_y1']) # [0]
+    crl.y2.move(agent_y.best['crl_y2']) # [0]
 
 
 def get_cnts():
@@ -370,7 +370,7 @@ def sol_cam_roi_trigger_setup(ywidth=80,xwidth=200):
             print(peaks0)
             ymin=peaks[1]-ywidth/2
             ysize = ywidth
-            xmin = peaks0[3]-xwidth/2
+            xmin = peaks0[2]-xwidth/2
             xsize = xwidth
             xmax = xmin + xsize
             ymax = ymin + ysize

@@ -53,10 +53,10 @@ class TimeSeries(Device):
 
 
 class LiX_EM(QuadEM):
-    ts = ADCpt(TimeSeries, "TS:")
     x_position = ADCpt(EpicsSignalRO, "PosX:MeanValue_RBV", kind='normal')
     y_position = ADCpt(EpicsSignalRO, "PosY:MeanValue_RBV", kind='normal')
-
+    
+    
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.stage_sigs.update([(self.acquire_mode, "Single")])  # single mode
@@ -71,7 +71,6 @@ class LiX_EM(QuadEM):
 class LiXTetrAMM(QuadEM):
     conf = Cpt(QuadEMPort, port_name="TetrAMM", kind="omitted")
     ts = ADCpt(TimeSeries, "TS:")
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.stage_sigs.update([(self.acquire_mode, "Single")])  # single mode
@@ -83,6 +82,10 @@ class LiXTetrAMM(QuadEM):
             "values_per_read",
             "trigger_mode",
         ]
+
+    def exp_time(self, exp):
+        self.avg_time.put(exp)
+
     
 class LiXTetrAMMext(QuadEM):
     conf = Cpt(QuadEMPort, port_name="TetrAMM", kind="omitted")
@@ -94,11 +97,6 @@ class LiXTetrAMMext(QuadEM):
         super().__init__(*args, **kwargs)
         self._fstatus = None
         self.rep = 1
-        self.stage_sigs.update([('acquire_mode', 0), # continuous 
-                                ('trigger_mode', 1), # ext trigger
-                                ('ts.acquire_mode', 1), # circular buffer
-                                ('ts.read_rate', 0), # passive
-                               ])
         self.configuration_attrs = [
             "integration_time",
             "averaging_time",
@@ -107,14 +105,58 @@ class LiXTetrAMMext(QuadEM):
             "values_per_read",
             "trigger_mode",
         ]
-    
+
+    def exp_time(self, exp):
+        self.avg_time.put(exp)
+        
+    def restart(self):
+        self.acquire.set(0).wait()
+        self.acquire_mode.set(0).wait()   # continuous
+        self.trigger_mode.set(0).wait()   # free run    
+        self.acquire.set(1).wait()
+
     def stage(self):
+        """
         self.stage_sigs.update([('averaging_time', self.avg_time.get()),
                                 ('ts.averaging_time', self.avg_time.get()),
                                 ('ts.num_points', self.npoints.get()),
                                ])
+        """
+        """
+        self.stage_sigs.update([('acquire_mode', 0), # continuous 
+                                ('trigger_mode', 1), # ext trigger
+                                ('ts.acquire_mode', 1), # circular buffer
+                                ('ts.read_rate', 0), # passive
+                               ])        
+        """
+        self.stage_sigs.update([('acquire_mode', "Continuous"), # continuous 
+                                ('trigger_mode', "Ext. trig."), # ext trigger
+                                ('averaging_time', self.avg_time.get()),
+                                ('ts.acquire_mode', 1), # circular buffer
+                                ('ts.read_rate', 0), # passive
+                                ('ts.averaging_time', self.avg_time.get()),
+                                ('ts.num_points', self.npoints.get()),
+                               ])        
         super().stage()
+        self.acquire.set(0).wait()
+        time.sleep(0.1)
+        self.acquire.set(1).wait()
+        time.sleep(0.1)
         self.read_back = {'data': [], 'ts': []}
+
+    def trigger(self):
+        if self._staged != Staged.yes:
+            raise RuntimeError(
+                "This detector is not ready to trigger."
+                "Call the stage() method before triggering."
+            )
+
+        self._status = self._status_type(self)
+        #self._acquisition_signal.put(1, wait=False)
+        
+        self.generate_datum(self._image_name, ttime.time(), {})
+        self._status._finished()
+        return self._status
     
     def kickoff(self):
         print("kicking off emext ...")
@@ -141,7 +183,8 @@ class LiXTetrAMMext(QuadEM):
         self.read_back['data'].append(np.asarray(em2d['value'][:self.npoints.get()]))  
         self.read_back['ts'].append(em2d['timestamp'])        
 
-        self._fstatus._finished()
+        if not self._fstatus.done:
+            self._fstatus.set_finished()
         print("emext compelte done")
         return self._fstatus
         #return NullStatus()
@@ -149,9 +192,10 @@ class LiXTetrAMMext(QuadEM):
     def collect(self):
         print("in em collect ...")
         k = self.ts.SumAll.name
+        l = self.npoints.get()*self.rep         # sometimes the last read from the circular buffer is repeated
         yield  {'time': time.time(),
-                'data': {k: np.array(self.read_back['data'])},
-                'timestamps': {k: self.read_back['ts']},
+                'data': {k: np.array(self.read_back['data'][:l])},
+                'timestamps': {k: self.read_back['ts'][:l]},
                 }   
         
     def describe_collect(self):
