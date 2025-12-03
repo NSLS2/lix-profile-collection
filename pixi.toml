@@ -25,12 +25,16 @@ blosc-hdf5-plugin = "*"
 databroker = "*"
 epicscorelibs = "*"
 ophyd-async = "*"
+fabio = ">=2025.10.0,<2026"
+tomopy = ">=1.15.3,<2"
+reportlab = ">=4.4.5,<5"
 
 
 [feature.profile.pypi-dependencies]
 pvxslibs = "*"
 bluesky-tiled-plugins = "*"
 blop = { path = "/home/xf16id/blop", editable = true }
+lixtools = { path = "/nsls2/software/mx/lix/pylibs/lixtools" }
 
 
 [feature.qs.dependencies]
@@ -60,7 +64,3 @@ pvs = "ipython --profile-dir=. -c 'get_pv_types(); exit()'"
 terminal = {features=["profile", "terminal"], solve-group="profile"}
 qs = {features=["profile", "qs"], solve-group="profile"}
 
-[dependencies]
-fabio = ">=2025.10.0,<2026"
-tomopy = ">=1.15.3,<2"
-reportlab = ">=4.4.5,<5"
