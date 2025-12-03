@@ -60,7 +60,10 @@ target/
 history.sqlite
 
 zz-dama.py
-
 .ipynb_checkpoints/
 db/
 **/tmp/**
+
+# pixi environments
+.pixi/*
+!.pixi/config.toml

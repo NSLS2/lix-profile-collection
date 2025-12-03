@@ -1,6 +1,6 @@
-from time import sleep 
+from time import sleep
 from cycler import cycler
-from . import utils
+# from . import utils
 import operator
 from epics import caget,caput
 from PIL import Image
@@ -59,7 +59,7 @@ def ct_time(exp):
     pil1M.cam.acquire_time.put(exp)
     pilW1.cam.acquire_time.put(exp)
     pilW2.cam.acquire_time.put(exp)
-    
+
 def get_uid():
     global B
     B=[]
@@ -69,9 +69,9 @@ def get_uid():
     with open('test.txt', 'w') as out_file:
         out_file.write('\n'.join(B))
     print(B)
-    
+
 def snapshot(camera, showWholeImage=False, ROIs=None):
-    img = np.asarray(camera.image.array_data.value).reshape([camera.image.array_size.height.value, 
+    img = np.asarray(camera.image.array_data.value).reshape([camera.image.array_size.height.value,
                                                             camera.image.array_size.width.value])
     # demosaic first
     if showWholeImage:
@@ -93,7 +93,7 @@ def set_voltage(chn):
     zchange = caget('XF:16IDA-OP{Mir:KB-PS}:U%d_CURRENT_MON' % chn)
     print("current voltage is %.3f mm\r" % zchange)
     print("done")
-    
+
 def reset_voltage(chn):
     zchange = caget('XF:16IDA-OP{Mir:KB-PS}:U%d_CURRENT_MON' % chn)
     #caput('XF:16IDA-OP{Mir:KB-PS}:U_STEP', step)
@@ -101,7 +101,7 @@ def reset_voltage(chn):
     zorig = caget('XF:16IDA-OP{Mir:KB-PS}:U%d_CURRENT_MON' % chn)
     print("reseted voltage to %.3f mm\r" % zorig)
     print("done")
-    
+
 def Bi_vert_scan(filename="none"):
     # Increaments/Decreaments Voltage on each vertical mirror channel, while scanning the vertical slits
     #sv_avg=np.zeros(steps+4, order='F') # zero array for averaging over the centroid
