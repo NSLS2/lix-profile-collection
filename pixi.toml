@@ -63,3 +63,4 @@ qs = {features=["profile", "qs"], solve-group="profile"}
 [dependencies]
 fabio = ">=2025.10.0,<2026"
 tomopy = ">=1.15.3,<2"
+reportlab = ">=4.4.5,<5"

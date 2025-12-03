@@ -440,7 +440,7 @@ def vertical_profile_digestion(
         The number of pixels to crop from the edges of the image. Default to 0.
     """
     suggestion = suggestions[0]
-    image = np.array(list(db[uid].data(f"{optimization_detectors[0].cam.name}_image"))[0])
+    image = np.array(list(db[uid].data(f"{optimization_detectors[0].name}_image"))[0])
     _, _, metrics_dict = vertical_profile_metric(image, threshold_factor=threshold_factor, edge_crop=edge_crop)
     return [{
         "vertical_coefficient_variation": metrics_dict["cv"],
