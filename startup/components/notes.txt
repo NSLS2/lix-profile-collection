@@ -1,0 +1,67 @@
+2025 Sept:
+
+Add 20-kinetix.py
+
+20-xspress3.py:
+    note under collect_asset_docs() says cleaning up needed; implement complete()
+
+20-pilatus.py:
+    Is LIXPilatus.make_data_key() necessary? already defined (but differently) under LIXPilatus.
+    LiXDetectors.complete() is defined twice???
+
+create class ADflyer???
+    implement kickoff(), complete(), trigger(), collect(), describe_collect()
+    generate_datum(), already part of the DetectorBase
+        - file plugins need to implement generate_datum(key, timestamp, datum_kwargs)
+
+
+
+In [15]: LIXhdfPlugin.generate_datum??
+Signature: LIXhdfPlugin.generate_datum(self, key, timestamp, datum_kwargs)
+Docstring: Generate a uid and cache it with its key for later insertion.
+Source:   
+    def generate_datum(self, key, timestamp, datum_kwargs):
+        i = next(self._point_counter)
+        datum_kwargs = datum_kwargs or {}
+        datum_kwargs.update({"point_number": i})
+        return super().generate_datum(key, timestamp, datum_kwargs)
+File:      /nsls2/conda/envs/2025-2.0-py311-tiled/lib/python3.11/site-packages/ophyd/areadetector/filestore_mixins.py
+Type:      function
+
+This is good for single-point counting only
+SHould be called instead at the end of the scan only??
+
+FileStoreBase._generate_resource() does that, but when the plugin is staged!!
+https://github.com/bluesky/ophyd/blob/4585e1a0285c8898001dfe0aa90b905895a8f611/ophyd/areadetector/filestore_mixins.py#L329
+
+Should observe the contents of hdf._asset_docs_cache during a scan???
+
+
+
+
+This seems vaugely correct:
+
+Call generate_datum() any time a data point is generated
+In a step scan, call under trigger(), multiple data points can share a single resource
+In a fly scan, call under complete()
+The resource is generated under stage()
+
+_datum_uids is part of FileStoreBase, updated under FileStoreBase.generate_datum()
+returned by FileStoreBase.read()
+
+
+
+In fly scans and hardware-triggered step scans, the detectors behave the same way
+Need to have a way to incoporate the trigger signal. 
+Currently must have pil involved to generate the trigger when pil._flying is False
+
+
+frame_per_point: this goes into the resource document
+the hdf plugin implements get_frame_per_point(); typically get it from the parent (a detector)
+
+_num_captures:  number of frames to be captured by the hdf plugin
+_num_images:    this should be the number of image per trigger
+_num_repeats:   this should be the number of triggers 
+
+
+

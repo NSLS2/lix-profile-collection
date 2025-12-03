@@ -78,11 +78,12 @@ class LiXXspress(xspress3_class_4ch):
             **kwargs,)
 
         if read_attrs is None:
-            read_attrs = ["hdf"]  # "spectrum", "channel1", 
+            self.read_attrs = ["hdf"]  # "spectrum", "channel1", 
         self.hdf.data_dir = det_data_dir
         self.hdf.use_ioc_path = True
         self.detector_id = self.name   # this appears in the filename
         self._num_images = 1
+        self._num_repeats = 1    
         self.data_key = f'{self.name}_image'
         
         if self.hdf.run_time.get()==0: # first time using the plugin
@@ -112,7 +113,7 @@ class LiXXspress(xspress3_class_4ch):
             self._trigger_width.put(self.cam.acquire_time.get()-0.001)  # doesn't work if same as acquire_time
         else: 
             self.cam.trigger_mode.put(1)
-        self.cam.num_images.set(self._num_images).wait()
+        self.cam.num_images.set(self._num_repeats).wait()
 
         status = super().stage()
         if self.ext_trig:
@@ -128,7 +129,8 @@ class LiXXspress(xspress3_class_4ch):
         print(self.name, "unstaging completed.")    
        
     def set_num_images(self, num):
-        self._num_images = num
+        self._num_images = 1       # not aware of Xspress3 being able to do differently
+        self._num_repeats = num
         self._num_captures = num   # for the hdf plugin; ??? not used anywhere???
 
     def set_ext_trigger(self, ext=True):
@@ -178,8 +180,8 @@ class LiXXspress(xspress3_class_4ch):
     def describe_collect(self):
         print(f"in {self.name} describe_collect ...")
         ret = {}
-        ret[f'{self.name}_image'] = self.make_data_key()
-        ret[f'{self.name}_image']['shape'] = (self._num_images, *ret[f'{self.name}_image']['shape'][1:])
+        ret[self.data_key] = self.make_data_key()
+        ret[self.data_key]['shape'] = (self._num_repeats, *ret[self.data_key]['shape'][1:])
         for k,desc in self.describe().items():
             ret[k] = desc
         return {self.name: ret}

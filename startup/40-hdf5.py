@@ -85,8 +85,8 @@ def pack_h5(uids, dest_dir='', fn=None, fix_sample_name=True, stream_name=None,
             raise Exception("a file name must be given for a list of uids.")
         headers = [db[u] for u in uids]
         pns = [h.start['plan_name'] for h in headers]
-        if not (pns[1:]==pns[:-1]):
-            raise Exception("mixed plan names in uids: %s" % pns)
+        #if not (pns[1:]==pns[:-1]):
+        #    raise Exception("mixed plan names in uids: %s" % pns)
     else:
         header = db[uids]
         if fn is None:

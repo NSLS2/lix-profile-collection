@@ -109,7 +109,7 @@ class LIXPilatus(PilatusDetector):
             self.cam.num_images.put(self._num_images*self._num_repeats,
                                     wait=True)
         else:
-            self.cam.num_images.put(self._num_images, wait=True)
+            self.cam.num_images.put(self._num_repeats, wait=True)
         print(self.name, f" staging for {trigger_mode}")
         self.cam.trigger_mode.put(trigger_mode.value, wait=True)
         super().stage()
@@ -226,10 +226,11 @@ class LiXDetectors(Device):
             print(f"invalid trigger mode: {trigger_mode}")
         RE.md['pilatus']['trigger_mode'] = trigger_mode.name
 
-    def set_num_images(self, num, rep=1):
-        self._num_images = num
-        self._num_repeats = rep
-        RE.md['pilatus']['num_images'] = [num, rep]
+    def set_num_images(self, n_triggers, img_per_trig=1):
+        self._num_images = img_per_trig
+        self._num_repeats = n_triggers
+        self._num_captures = n_triggers*img_per_trig
+        RE.md['pilatus']['num_images'] = [img_per_trig, n_triggers]
 
     def number_reset(self, reset=True):
         self.reset_file_number = reset
@@ -300,13 +301,14 @@ class LiXDetectors(Device):
         #if len(self.active_detectors)==0:
         #    return
         self._status = DeviceStatus(self)
-        if self.trigger_mode is not PilatusTriggerMode.soft and not self._flying:
-            while self.trigger_lock.locked():
-                time.sleep(self._trigger_width)
-            self.trigger_time.put(time.time())
-            print("generating triggering pulse ...")
-            self._trigger_signal.put(1, wait=True)
-            self._trigger_signal.put(0, wait=True)
+        # this is now provided by ext_trig
+        #if self.trigger_mode is not PilatusTriggerMode.soft and not self._flying:
+        #    while self.trigger_lock.locked():
+        #        time.sleep(self._trigger_width)
+        #    self.trigger_time.put(time.time())
+        #    print("generating triggering pulse ...")
+        #    self._trigger_signal.put(1, wait=True)
+        #    self._trigger_signal.put(0, wait=True)
         for det in self.active_detectors:
             det.trigger()
         if self.trigger_mode is not PilatusTriggerMode.soft:

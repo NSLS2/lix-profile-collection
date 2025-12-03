@@ -60,3 +60,7 @@ target/
 history.sqlite
 
 zz-dama.py
+
+.ipynb_checkpoints/
+db/
+**/tmp/**

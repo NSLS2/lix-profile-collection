@@ -52,8 +52,10 @@ def collect_std(r_range=1.5,cell_type=None,pos=None):
         md = {'holderName': holderName}
         pil.use_sub_directory(holderName)
         pil.set_trigger_mode(PilatusTriggerMode.soft)
-        pil.set_num_images(1)
-        pil.exp_time(0.2)
+        #pil.set_num_images(1)
+        #pil.exp_time(0.2)
+        set_exp_time(dets=[pil,em1ext,em2ext],exp=0.2)
+        set_num_images(dets=[pil,em1ext,em2ext],n_triggers=1)
         ts = gettimestamp()
         ###
         uids =[]
@@ -62,10 +64,11 @@ def collect_std(r_range=1.5,cell_type=None,pos=None):
         for i in sn_list:
             if i == 'dark':
                 sol.mc_move_sample(pos=4,cell_type='AgBH')
-                pil.exp_time(2)
+                #pil.exp_time(2)
+                set_exp_time(dets=[pil,em1,em2],exp=2)
                 PShutter_close.put(1)
                 change_sample(f"{i}-{ts}")
-                RE(ct([pil,em1,em2], num=1, md=md))
+                RE(ct([pil,em1,em2,ext_trig], num=1, md=md))
                 pil.exp_time(0.2)
                 PShutter_open.put(1)
                 time.sleep(5)
@@ -73,12 +76,13 @@ def collect_std(r_range=1.5,cell_type=None,pos=None):
             elif i == 'empty':
                 sol.mc_move_sample(pos=4,cell_type='AgBH')
                 change_sample(f"{i}-{ts}")
-                RE(ct([pil,em1,em2], num=1, md=md))
+                RE(ct([pil,em1ext,em2ext,ext_trig], num=1, md=md))
                 uids.append(last_scan_uid)
             else:
                 sol.mc_move_sample(pos=j,cell_type='AgBH')
+                set_exp_time(dets=[pil,em1ext,em2ext],exp=0.2)
                 change_sample(f"{i}-{ts}")
-                RE(ct([pil,em1,em2], num=1, md=md))
+                RE(ct([pil,em1,em2,ext_trig], num=1, md=md))
                 print(j)
                 j = j-1
                 uids.append(last_scan_uid)
@@ -87,6 +91,7 @@ def collect_std(r_range=1.5,cell_type=None,pos=None):
 
         pil.use_sub_directory()
         print(uids)
+        time.sleep(10)
         ###
         # now pack h5 file and recalibrate
         pack_h5(uids, fn="std.h5")
@@ -101,8 +106,11 @@ def collect_std(r_range=1.5,cell_type=None,pos=None):
         md = {'holderName': holderName}
         pil.use_sub_directory(holderName)
         pil.set_trigger_mode(PilatusTriggerMode.soft)
-        pil.set_num_images(1)
-        pil.exp_time(0.2)
+        #pil.set_num_images(1)
+        #pil.exp_time(0.2)
+        set_exp_time(dets=[pil],exp=0.2)
+        set_num_images(dets=[pil],n_triggers=1)
+        
         ts = gettimestamp()
         uids = []
         
@@ -111,23 +119,30 @@ def collect_std(r_range=1.5,cell_type=None,pos=None):
             if i == 'dark':
                 sol.select_flow_cell('empty', r_range=r_range)
                 time.sleep(5)
-                pil.exp_time(2)
+                #pil.exp_time(2)
+                set_exp_time(dets=[pil],exp=2)
+                set_num_images(dets=[pil],n_triggers=1)
                 PShutter_close.put(1)
                 change_sample(f"{i}-{ts}")
-                RE(ct([pil,em1,em2], num=1, md=md))
-                pil.exp_time(0.2)
+                RE(ct([pil,ext_trig], num=1, md=md))
+                #pil.exp_time(0.2)
+                set_exp_time(dets=[pil],exp=2)
                 PShutter_open.put(1)
                 time.sleep(5)
                 uids.append(last_scan_uid)
             else:
                 sol.select_flow_cell(i, r_range=r_range)
                 change_sample(f"{i}-{ts}")
-                RE(ct([pil,em1,em2], num=1, md=md))
+                #RE(ct([pil,em1,em2], num=1, md=md))
+                set_exp_time(dets=[pil], exp=0.2)
+                set_num_images(dets=[pil],n_triggers=1)
+                RE(ct([pil,ext_trig],num=1, md=md))
         
                 uids.append(last_scan_uid)
 
         pil.use_sub_directory()
         print(uids)
+        time.sleep(10)
         # now pack h5 file and recalibrate
         pack_h5(uids, fn="std.h5")
         dexp = h5exp("exp.h5")
@@ -831,11 +846,11 @@ def rbt_unload_sample(pos):
     else:
         print("invalid config state")
     print("sample mounted")
-    
+ 
 try:
     #sol.tctrl = tctrl_FTC100D(("xf16idc-tsvr-sena", 7002))
     #sol.tctrl = tctrl_FTC100D(("10.66.122.81",4001))
-    sol.tctrl = tctrl_FTC100D(("10.66.122.159",4004))
+    sol.tctrl = tctrl_FTC100D(("10.66.122.159",4008))
 except:
     print("cannot connect to sample storage temperature controller")
 

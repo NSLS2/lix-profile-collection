@@ -177,8 +177,8 @@ class SolutionScatteringExperimentalModule():
     
     Ntube = 18
     # these are mechanically determined and should not change
-    tube1_pos = -18.83
-    #tube1_pos = -18.72
+    #tube1_pos = -18.83
+    tube1_pos = -18.72
     #tube1_pos = -18.83     #4/10/20 sc[new sensor]    #12/20/17 by JB
     tube_spc = -5.84 #-5.84    
 
@@ -552,9 +552,11 @@ class SolutionScatteringExperimentalModule():
         change_sample(sample_name, check_sname=check_sname)
 
         pil.set_trigger_mode(PilatusTriggerMode.ext)
-        pil.exp_time(exp)
+        #pil.exp_time(exp)
+        set_exp_time(dets=[pil],exp=exp)
         #pil.number_reset(True)
-        pil.set_num_images(repeats, rep=1)
+        #pil.set_num_images(repeats, rep=1)
+        set_num_images(dets=[pil],n_triggers=repeats)
 
         em1.averaging_time.put(0.25)
         em2.averaging_time.put(0.25)
@@ -575,7 +577,7 @@ class SolutionScatteringExperimentalModule():
                                  "release_delay": self.delay_before_release}).start()
         self.ctrl.pump_mvR(vol+self.vol_flowcell_headroom)
         print('data collection begins')
-        RE(ct([pil], num=1, md=_md))   # number of exposures determined by pil.set_num_images()
+        RE(ct([pil,ext_trig], num=1, md=_md))   # number of exposures determined by pil.set_num_images()
         sd.monitors = []
         change_sample()
         

@@ -6,7 +6,7 @@ from bluesky.suspenders import SuspendFloor
 import cv2
 from matplotlib.patches import Rectangle
 
-EMconfig = EpicsSignal("XF:16IDC-ES:EMconfig")
+#EMconfig = EpicsSignal("XF:16IDC-ES:EMconfig")
 EMconfig.put('scanning')
 
 # beam height is 0, out position is 418.5
@@ -25,6 +25,8 @@ except:
 # might need to first run rbt.resetSoftIO()
 ready_for_robot([],[],init=True)
 
+SS_Z_POS_MEASURE = 7
+
 try:
     print("camES2 defined:", camES2)
 except:
@@ -40,9 +42,9 @@ def move_sample(pos=None, use_XSP3=False, use_robot=True):
         sdd_y.move(415)
         if use_robot:
             #ready_for_robot([ss.xc, ss.sx, ss.sz, ss.x, ss.y, ss.z, ss.ry, sdd_y],
-            #                [63,    0,     0,     0,    0,    6,   -90,  415])
+            #                [63,    0,     0,     0,    0,    6,   -90,  410])
             ready_for_robot([ss.xc, ss.tx, ss.tz, ss.sx, ss.sz, ss.x, ss.y, ss.z, ss.ry, sdd_y],
-                            [63,    0,     0,     0,     0,     0,    0,    6,   -90,  415])
+                            [63,    0,     0,     0,     0,     0,    5,    6,   -90,  410])
         else:
             ss.xc.move(63)
             ss.ry.move(-90)
@@ -50,7 +52,7 @@ def move_sample(pos=None, use_XSP3=False, use_robot=True):
     else:
         if use_robot:
             rbt.goHome()    # robot must be out of the way for SDD to come down 
-        ss.z.move(6)  # 7.5
+        ss.z.move(SS_Z_POS_MEASURE)  # 7.5
         ss.xc.move(0)
         if use_XSP3:
             sdd_y.move(0)
@@ -315,8 +317,8 @@ def collect_projections0(sname, x1, x2, y1, y2, step_size_x=0.1, step_size_y=0.1
 def collect_tomo(sname, x1, x2, step_size=0.1, Nphi=120, Nseg=1, skip=0, dy=0.0,
                         exp_time=0.2, check_beam=True, use_XSP3=False, md=None):
     
-    if not Nphi in [90, 100, 120]:
-        print("dphi must be one of 90 (2.0deg), 100 (1.8deg), or 120 (1.5deg)")
+    if not Nphi in [50, 75, 90, 100, 120]:
+        print("dphi must be one of 75 (2.4deg), 90 (2.0deg), 100 (1.8deg), or 120 (1.5deg)")
         return
     if int(Nphi/Nseg)*Nseg<Nphi:
         print(f"Nphi={Nphi} is not divisible by Nseg={Nseg}")

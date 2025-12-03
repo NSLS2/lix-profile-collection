@@ -1,0 +1,4 @@
+NAME=HPLC_ADF
+USER=softioc-lix
+PORT=4009
+HOST=xf16id-ioc2

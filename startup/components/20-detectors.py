@@ -73,7 +73,7 @@ class StandardProsilica(ProsilicaDetector, SingleTrigger):
                 self.tiff.array_size.height.get(),
                 self.tiff.array_size.width.get()
                 ]
-            ret['dims'] = ['frame', 'y', 'x']
+            ret['dims'] = ['frame', 'y', 'x'] 
         else:
             ret['shape'] = [
                 # this seems screwed up:
@@ -322,13 +322,39 @@ class Screen(Device):
         super().__init__(*args, **kwargs)
 
     def mov(self, pos):
-        if not pos in list(self.pos_dict.keys()):
-            raise Exception(f"{pos} is not an known location.")
-        self.y.mov(self.pos_dict[pos])
-        
-#scnMono = Screen('XF:16IDA-BI{FS:3-Ax:Y}Mtr', {}, cam_name="camMono", name='scnMono')
-#scnKB = Screen('XF:16IDA-BI{FS:4-Ax:Y}Mtr', {}, cam_name="camKB", name='scnKB')
-#scnSS = Screen('XF:16IDB-BI{SCN:SS', 'XF:16IDB-BI{SCN:SS', cam_name="camSS",  name='scnSS')
-#scnSF = Screen('XF:16IDC-BI{FS:SF', 'XF:16IDC-BI{FS:SF', cam_name="camSF",  name='scnSF')
+        #if not pos in list(self.pos_dict.keys()):
+        #    raise Exception(f"{pos} is not an known location.")
+        self.y.move(pos)#(self.pos_dict[pos])
+        print("test")#self.pos_dict[pos])
+
+    def insert(self):
+        if self.name == "scnMono":
+            self.y.move(-23)
+        elif self.name == "scnKB":
+            self.y.move(85)
+        elif self.name == "scnSS":
+            self.y.move(0)
+        elif self.name == "scnSF":
+            self.y.move(-53)
+        else:
+            print('not a valid motor')
+
+    def retreat(self):
+        if self.name == "scnMono":
+            self.y.move(0)
+        elif self.name == "scnKB":
+            self.y.move(110)
+        elif self.name == "scnSS":
+            self.y.move(1.5)
+        elif self.name == "scnSF":
+            self.y.move(0)
+        else:
+            print('not a valid motor')
+    
+    
+scnMono = Screen('XF:16IDA-BI{FS:3-Ax:Y}Mtr', 'XF:16IDA-BI{FS:3', cam_name="camMono", name='scnMono')
+scnKB = Screen('XF:16IDA-BI{FS:4-Ax:Y}Mtr', 'XF:16IDA-BI{FS:4', cam_name="camKB", name='scnKB')
+scnSS = Screen('XF:16IDB-BI{SCN:SS', 'XF:16IDB-BI{SCN:SS', cam_name="camSS",  name='scnSS')
+scnSF = Screen('XF:16IDC-BI{FS:SF', 'XF:16IDC-BI{FS:SF', cam_name="camSF",  name='scnSF')
 
 

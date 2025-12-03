@@ -268,7 +268,11 @@ class LIXhdfPlugin(HDF5Plugin, LiXFileStoreHDF5):
         return ret
     
     def get_frames_per_point(self):
-        return self.parent._num_images
+        """ In fly scans, this should be the total number images recorded during the scan
+            For step scans this should be 1??
+            Could be cases it's neither: time-resolved, one trigger, multiple images 
+        """
+        return self.parent._num_images    
 
 
 @register_plugin

@@ -174,14 +174,15 @@ class XPSmotor(PositionerBase):
         self.setpoint = None
         self.user_offset_dir = Signal(parent=self, name="motor dir", value=direction)
         
-    def wait_for_stop(self, poll_time=0.1):
+    def wait_for_stop(self, poll_time=0.1, tol=0.001):
         if self.debug:
             print(f"{self.name}: waiting for stop ...")
-        while self.moving:
-            pos = self.position
+        pos = self.position
+        while self.moving or abs(self.position-self.set_point*self._dir)>tol:
             time.sleep(poll_time)
+            pos = self.position
         time.sleep(self.settle_time)
-        #pos = self.position
+        print(f"done moving {self.name}, pos={pos:.3f}")
         self._done_moving(success=True, timestamp=time.time())
     
     def move(self, position, wait=True, **kwargs): #moved_cb=None, timeout=None, 
@@ -278,7 +279,7 @@ class XPSmotor(PositionerBase):
         desc = OrderedDict()
         desc[self.name] = {'source': str(self.source),
                            'dtype': data_type(self.position),
-                           'shape': data_shape(self.position),
+                           'shape': [],
                            'units': self.egu,
                            'lower_ctrl_limit': self.low_limit,
                            'upper_ctrl_limit': self.high_limit,
