@@ -1,3 +1,4 @@
+import functools
 import time as ttime
 from typing import Any
 import pandas as pd
@@ -14,273 +15,275 @@ import numpy as np
 
 
 
-from blop import DOF, Objective, Agent, DOFConstraint
+from blop import DOF, Objective, Agent
 from blop.ax import Agent as AxAgent
-from blop.plans import acquire
+from blop.plans import default_acquire
+from blop.dofs import DOFConstraint
+from blop.protocols import OptimizationProblem
 
 
-def list_scan_with_delay(*args, delay=0, bimorph=bimorph, **kwargs):
-    "Accepts all the normal 'scan' parameters, plus an optional delay."
-
-    def arm_residuals(bimorph):
-        return (bimorph.all_armed_voltages() - bimorph.all_setpoint_voltages())[12:24]
-        
-    def ramp_residuals(bimorph):
-        return (bimorph.all_current_voltages.get() - bimorph.all_setpoint_voltages())[12:24]
-
-    def one_nd_step_with_delay(detectors, step, pos_cache):
-        "This is a copy of bluesky.plan_stubs.one_nd_step with a sleep added."
-
-        motors = step.keys()
-
-        yield from bps.move_per_step(step, pos_cache)
-
-        timeout_ms = 10e3
-        tolerance_volts = 1e0
-        check_every_ms = 1e3
-
-        start_time = ttime.monotonic()
-        while not all(np.abs(arm_residuals(bimorph)) < tolerance_volts):
-            
-            print(f"arming... (residuals = {np.array2string(arm_residuals(bimorph), precision=0, floatmode='fixed')} V)")
-            time.sleep(1e-3*check_every_ms)
-
-            if 1e3 * (ttime.monotonic() - start_time) > timeout_ms:
-                raise TimeoutError()
-
-        yield from bimorph.start_plan()
-
-        start_time = ttime.monotonic()
-        while not all(np.abs(ramp_residuals(bimorph)) < tolerance_volts):
-
-            print(f"ramping... (residuals = {np.array2string(ramp_residuals(bimorph), precision=0, floatmode='fixed')} V)")
-            time.sleep(1e-3*check_every_ms)
-
-            if 1e3 * (ttime.monotonic() - start_time) > timeout_ms:
-                raise TimeoutError()
-
-        yield from bps.sleep(1.0)
-        yield from bps.trigger_and_read(list(detectors) + list(motors))
-
-
-    kwargs.setdefault("per_step", one_nd_step_with_delay)
-    uid = yield from bp.list_scan(*args, **kwargs)
-    return uid
-
-
+# def list_scan_with_delay(*args, delay=0, bimorph=bimorph, **kwargs):
+#     "Accepts all the normal 'scan' parameters, plus an optional delay."
+# 
+#     def arm_residuals(bimorph):
+#         return (bimorph.all_armed_voltages() - bimorph.all_setpoint_voltages())[12:24]
+#         
+#     def ramp_residuals(bimorph):
+#         return (bimorph.all_current_voltages.get() - bimorph.all_setpoint_voltages())[12:24]
+# 
+#     def one_nd_step_with_delay(detectors, step, pos_cache):
+#         "This is a copy of bluesky.plan_stubs.one_nd_step with a sleep added."
+# 
+#         motors = step.keys()
+# 
+#         yield from bps.move_per_step(step, pos_cache)
+# 
+#         timeout_ms = 10e3
+#         tolerance_volts = 1e0
+#         check_every_ms = 1e3
+# 
+#         start_time = ttime.monotonic()
+#         while not all(np.abs(arm_residuals(bimorph)) < tolerance_volts):
+#             
+#             print(f"arming... (residuals = {np.array2string(arm_residuals(bimorph), precision=0, floatmode='fixed')} V)")
+#             time.sleep(1e-3*check_every_ms)
+# 
+#             if 1e3 * (ttime.monotonic() - start_time) > timeout_ms:
+#                 raise TimeoutError()
+# 
+#         yield from bimorph.start_plan()
+# 
+#         start_time = ttime.monotonic()
+#         while not all(np.abs(ramp_residuals(bimorph)) < tolerance_volts):
+# 
+#             print(f"ramping... (residuals = {np.array2string(ramp_residuals(bimorph), precision=0, floatmode='fixed')} V)")
+#             time.sleep(1e-3*check_every_ms)
+# 
+#             if 1e3 * (ttime.monotonic() - start_time) > timeout_ms:
+#                 raise TimeoutError()
+# 
+#         yield from bps.sleep(1.0)
+#         yield from bps.trigger_and_read(list(detectors) + list(motors))
+# 
+# 
 #     kwargs.setdefault("per_step", one_nd_step_with_delay)
 #     uid = yield from bp.list_scan(*args, **kwargs)
 #     return uid
-
-def bimorph_acquisition_plan(dofs, inputs, dets, **kwargs):
-    delay = kwargs.get("delay", 0)
-    args = []
-    for dof, points in zip(dofs, np.atleast_2d(inputs).T):
-        args.append(dof)
-        args.append(list(points))
-
-    yield from bps.mv(scnSS.y, 0)
-    yield from bps.sleep(1.0)
-
-    uid = yield from list_scan_with_delay(dets, *args, delay=delay)
-
-    yield from bps.mv(scnSS.y, 3)
-
-    return uid
-
-
-def digestion(db, uid):
-
-    products = db[uid].table(fill=True)
-
-    products["cropped_image"] = pd.Series(dtype="object")
-
-    products["processed_image"] = pd.Series(dtype="object")
-
-    products["beam_profile_y"] = pd.Series(dtype="object")
-
-
-    cropped_images = []
-
-    processed_images = []
-
-    for index, entry in products.iterrows():
-
-        print(index)
-
-        x_min = entry.camSS_roi1_min_xyz_min_x
-        y_min = entry.camSS_roi1_min_xyz_min_y
-
-        x_max = x_min + entry.camSS_roi1_size_x
-        y_max = y_min + entry.camSS_roi1_size_y
-
-        image = entry.camSS_image[0]
-
-        cim = image[y_min:y_max, x_min:x_max].astype(float).sum(axis=-1)
-
-        cropped_images.append(cim)
-
-        n_y, n_x = cim.shape
-
-        fcim = sp.ndimage.median_filter(cim, size=1)
-        fcim = fcim - np.median(fcim, axis=1)[:, None]
-
-        THRESHOLD = 0.1 * fcim.max()
-
-        mfcim = np.where(fcim > THRESHOLD, fcim, 0)
-
-        x_weight = mfcim.sum(axis=0)
-        y_weight = mfcim.sum(axis=1)
-
-        time = ttime.time()
-
-        #$plt.plot(x_weight)
-        # plt.figure()
-        # plt.imshow(cim, aspect="auto")
-        # plt.savefig(f"{int(time)}.png")
-        #plt.plot(y_weight)
-
-        x = np.arange(n_x)
-        y = np.arange(n_y)
-
-        x0 = np.sum(x_weight * x) / np.sum(x_weight)
-        y0 = np.sum(y_weight * y) / np.sum(y_weight)
-
-        xw = 2 * np.sqrt((np.sum(x_weight * x**2) / np.sum(x_weight) - x0**2))
-        yw = 2 * np.sqrt((np.sum(y_weight * y**2) / np.sum(y_weight) - y0**2))
-
-        area_pixels = (mfcim > THRESHOLD).sum()
-
-        processed_images.append(mfcim)
-
-        products.loc[index, "area"] = area_pixels
-
-        products.at[index, "beam_profile_y"] = y_weight
-
-        # bad = False
-        # bad |= x0 < 16
-        # bad |= x0 > nx - 16
-        # bad |= y0 < 16
-        # bad |= y0 > ny - 16
-
-        # if bad:
-        #     x0, xw, y0, yw = 4 * [np.nan]
-
-        products.loc[index, "pos_x"] = x0
-        products.loc[index, "pos_y"] = y0
-        products.loc[index, "wid_x"] = xw 
-        products.loc[index, "wid_y"] = yw
-
-    products.loc[:, "cropped_image"] = cropped_images
-    products.loc[:, "processed_image"] = processed_images
-
-    return products
-
-
-fid_voltages = bimorph.all_target_voltages.get()   
-
-
-# first 12 are horizontal
-# second 12 are vertical
-# last 8?????
-
-fid_voltages = [-253. , -261. , -260. , -260. , -266.8, -260. , -469.3, -260. ,
-                -260. , -590.7, -260. , -510.7, -321. , -371. , -270. , -270. ,
-                -195. , -195. , -195. , -195. , -195. , -195. , -195. , -195. ,
-                    0. ,    0. ,    0. ,    0. ,    0. ,    0. ,    0. ,    0. ]
-
-
-dofs = []
-
-voltage_radius = 400
-
-for i in range(12):
-
-
-    device = getattr(pseudo_bimorph, f"r{i}")
-    device.readback.name = device.name
-
-    center = device.read()[device.name]["value"]
-
-    dof = DOF(device=device, 
-              description=f"piezo {i}", 
-              search_bounds=(center-100, center+100),
-              units="V",
-              )
-
-
-    device = getattr(pseudo_bimorph, f"p{i}")
-    #device.readback.name = device.name
-
-    center = 0 #device.read()[device.name]["value"]
-
-    pseudo_radius = 500. / (2. ** i)
-
-    dof = DOF(device=device, 
-              description=(f"pseudo {i}"), 
-              search_bounds=(center-pseudo_radius, center+pseudo_radius),
-              units="V",
-              )
-
-
-    dofs.append(dof)
-
-objectives = [
-    Objective(name="wid_y", description="beam height", log=True, target="min")
-]
-
-#scnSS = setup_cam('camSS')
-
-scnSS.cam.ext_trig = False
-
-dets = [scnSS.cam]
-
-agent = Agent(dofs=dofs, 
-                objectives=objectives, 
-                dets=dets, 
-                digestion=digestion, 
-                acquistion_plan=bimorph_acquisition_plan, 
-                db=db,
-                verbose=True,
-                trigger_delay=0.1)
-
-# agent.dofs.deactivate()
-
-for dof in agent.dofs[6:]:
-    dof.active = False
-
-agent.dofs[0].search_bounds = (-100, 100)
-agent.dofs[1].search_bounds = (-100, 100)
-agent.dofs[2].search_bounds = (-100, 100)
-agent.dofs[3].search_bounds = (-100, 100)
-agent.dofs[4].search_bounds = (-100, 100)
-agent.dofs[5].search_bounds = (-100, 100)
-
-def plot_all_profiles(agent, axis=0):
-
-    images = np.array(agent.table.cropped_image.values)
-
-    for im in images:
-
-        plt.plot(im.sum(axis=axis))
-
-def plot_all_images(agent):
-
-    images = np.array(agent.table.cropped_image.values)
-
-    nx = int(np.sqrt(len(images)))
-    ny = len(images) // nx + 1
-
-    fig, axes = plt.subplots(nx, ny, figsize=(nx, ny))
-
-    axes = np.atleast_2d(axes)
-
-    for iax in range(len(images)):
-
-        im = images[iax]
-        ax = axes.ravel()[iax]
-
-        ax.imshow(im)
+# 
+# 
+# #     kwargs.setdefault("per_step", one_nd_step_with_delay)
+# #     uid = yield from bp.list_scan(*args, **kwargs)
+# #     return uid
+# 
+# def bimorph_acquisition_plan(dofs, inputs, dets, **kwargs):
+#     delay = kwargs.get("delay", 0)
+#     args = []
+#     for dof, points in zip(dofs, np.atleast_2d(inputs).T):
+#         args.append(dof)
+#         args.append(list(points))
+# 
+#     yield from bps.mv(scnSS.y, 0)
+#     yield from bps.sleep(1.0)
+# 
+#     uid = yield from list_scan_with_delay(dets, *args, delay=delay)
+# 
+#     yield from bps.mv(scnSS.y, 3)
+# 
+#     return uid
+# 
+# 
+# def digestion(db, uid):
+# 
+#     products = db[uid].table(fill=True)
+# 
+#     products["cropped_image"] = pd.Series(dtype="object")
+# 
+#     products["processed_image"] = pd.Series(dtype="object")
+# 
+#     products["beam_profile_y"] = pd.Series(dtype="object")
+# 
+# 
+#     cropped_images = []
+# 
+#     processed_images = []
+# 
+#     for index, entry in products.iterrows():
+# 
+#         print(index)
+# 
+#         x_min = entry.camSS_roi1_min_xyz_min_x
+#         y_min = entry.camSS_roi1_min_xyz_min_y
+# 
+#         x_max = x_min + entry.camSS_roi1_size_x
+#         y_max = y_min + entry.camSS_roi1_size_y
+# 
+#         image = entry.camSS_image[0]
+# 
+#         cim = image[y_min:y_max, x_min:x_max].astype(float).sum(axis=-1)
+# 
+#         cropped_images.append(cim)
+# 
+#         n_y, n_x = cim.shape
+# 
+#         fcim = sp.ndimage.median_filter(cim, size=1)
+#         fcim = fcim - np.median(fcim, axis=1)[:, None]
+# 
+#         THRESHOLD = 0.1 * fcim.max()
+# 
+#         mfcim = np.where(fcim > THRESHOLD, fcim, 0)
+# 
+#         x_weight = mfcim.sum(axis=0)
+#         y_weight = mfcim.sum(axis=1)
+# 
+#         time = ttime.time()
+# 
+#         #$plt.plot(x_weight)
+#         # plt.figure()
+#         # plt.imshow(cim, aspect="auto")
+#         # plt.savefig(f"{int(time)}.png")
+#         #plt.plot(y_weight)
+# 
+#         x = np.arange(n_x)
+#         y = np.arange(n_y)
+# 
+#         x0 = np.sum(x_weight * x) / np.sum(x_weight)
+#         y0 = np.sum(y_weight * y) / np.sum(y_weight)
+# 
+#         xw = 2 * np.sqrt((np.sum(x_weight * x**2) / np.sum(x_weight) - x0**2))
+#         yw = 2 * np.sqrt((np.sum(y_weight * y**2) / np.sum(y_weight) - y0**2))
+# 
+#         area_pixels = (mfcim > THRESHOLD).sum()
+# 
+#         processed_images.append(mfcim)
+# 
+#         products.loc[index, "area"] = area_pixels
+# 
+#         products.at[index, "beam_profile_y"] = y_weight
+# 
+#         # bad = False
+#         # bad |= x0 < 16
+#         # bad |= x0 > nx - 16
+#         # bad |= y0 < 16
+#         # bad |= y0 > ny - 16
+# 
+#         # if bad:
+#         #     x0, xw, y0, yw = 4 * [np.nan]
+# 
+#         products.loc[index, "pos_x"] = x0
+#         products.loc[index, "pos_y"] = y0
+#         products.loc[index, "wid_x"] = xw 
+#         products.loc[index, "wid_y"] = yw
+# 
+#     products.loc[:, "cropped_image"] = cropped_images
+#     products.loc[:, "processed_image"] = processed_images
+# 
+#     return products
+# 
+# 
+# fid_voltages = bimorph.all_target_voltages.get()   
+# 
+# 
+# # first 12 are horizontal
+# # second 12 are vertical
+# # last 8?????
+# 
+# fid_voltages = [-253. , -261. , -260. , -260. , -266.8, -260. , -469.3, -260. ,
+#                 -260. , -590.7, -260. , -510.7, -321. , -371. , -270. , -270. ,
+#                 -195. , -195. , -195. , -195. , -195. , -195. , -195. , -195. ,
+#                     0. ,    0. ,    0. ,    0. ,    0. ,    0. ,    0. ,    0. ]
+# 
+# 
+# dofs = []
+# 
+# voltage_radius = 400
+# 
+# for i in range(12):
+# 
+# 
+#     device = getattr(pseudo_bimorph, f"r{i}")
+#     device.readback.name = device.name
+# 
+#     center = device.read()[device.name]["value"]
+# 
+#     dof = DOF(device=device, 
+#               description=f"piezo {i}", 
+#               search_bounds=(center-100, center+100),
+#               units="V",
+#               )
+# 
+# 
+#     device = getattr(pseudo_bimorph, f"p{i}")
+#     #device.readback.name = device.name
+# 
+#     center = 0 #device.read()[device.name]["value"]
+# 
+#     pseudo_radius = 500. / (2. ** i)
+# 
+#     dof = DOF(device=device, 
+#               description=(f"pseudo {i}"), 
+#               search_bounds=(center-pseudo_radius, center+pseudo_radius),
+#               units="V",
+#               )
+# 
+# 
+#     dofs.append(dof)
+# 
+# objectives = [
+#     Objective(name="wid_y", description="beam height", log=True, target="min")
+# ]
+# 
+# #scnSS = setup_cam('camSS')
+# 
+# scnSS.cam.ext_trig = False
+# 
+# dets = [scnSS.cam]
+# 
+# agent = Agent(dofs=dofs, 
+#                 objectives=objectives, 
+#                 dets=dets, 
+#                 digestion=digestion, 
+#                 acquistion_plan=bimorph_acquisition_plan, 
+#                 db=db,
+#                 verbose=True,
+#                 trigger_delay=0.1)
+# 
+# # agent.dofs.deactivate()
+# 
+# for dof in agent.dofs[6:]:
+#     dof.active = False
+# 
+# agent.dofs[0].search_bounds = (-100, 100)
+# agent.dofs[1].search_bounds = (-100, 100)
+# agent.dofs[2].search_bounds = (-100, 100)
+# agent.dofs[3].search_bounds = (-100, 100)
+# agent.dofs[4].search_bounds = (-100, 100)
+# agent.dofs[5].search_bounds = (-100, 100)
+# 
+# def plot_all_profiles(agent, axis=0):
+# 
+#     images = np.array(agent.table.cropped_image.values)
+# 
+#     for im in images:
+# 
+#         plt.plot(im.sum(axis=axis))
+# 
+# def plot_all_images(agent):
+# 
+#     images = np.array(agent.table.cropped_image.values)
+# 
+#     nx = int(np.sqrt(len(images)))
+#     ny = len(images) // nx + 1
+# 
+#     fig, axes = plt.subplots(nx, ny, figsize=(nx, ny))
+# 
+#     axes = np.atleast_2d(axes)
+# 
+#     for iax in range(len(images)):
+# 
+#         im = images[iax]
+#         ax = axes.ravel()[iax]
+# 
+#         ax.imshow(im)
 
 
 from ophyd.pseudopos import (
@@ -408,10 +411,17 @@ def vertical_profile_metric(image, background=None, threshold_factor=0.1,
     
     return metric, debug_img, metrics_dict
 
+optimization_detectors = [
+    #scnSS,
+    #scnSF,
+    ktx22,
+    ext_trig,
+    pil,
+]
 
 def vertical_profile_digestion(
-    trial_index: int,
-    readings: dict[str, list[Any]],
+    uid: str,
+    suggestions: list[dict],
     threshold_factor: float = 0.1,
     edge_crop: int = 0,
 ) -> dict[str, float | tuple[float, float]]:
@@ -429,12 +439,14 @@ def vertical_profile_digestion(
     edge_crop : int, optional
         The number of pixels to crop from the edges of the image. Default to 0.
     """
-    image = readings[f"{scnSS.cam.name}_image"][0]
+    suggestion = suggestions[0]
+    image = np.array(list(db[uid].data(f"{optimization_detectors[0].cam.name}_image"))[0])
     _, _, metrics_dict = vertical_profile_metric(image, threshold_factor=threshold_factor, edge_crop=edge_crop)
-    return {
+    return [{
         "vertical_coefficient_variation": metrics_dict["cv"],
         "total_vertical_intensity": metrics_dict["total_intensity"],
-    }
+        "_id": suggestion["_id"]
+    }]
 
 
 def _get_channel_neighbors(channel: int) -> list[Channel]:
@@ -518,27 +530,6 @@ def _setup_bimorph_dofs(channel_range: range, search_radius: float = 100.0, cons
     return dofs, dof_constraints
 
 
-vertical_mirror_dofs, vertical_mirror_dof_constraints = _setup_bimorph_dofs(
-    range(12, 24),
-    search_radius=100.0,
-    constraint=300.0,
-)
-uniform_vertical_profile_objectives = [
-    Objective(name="vertical_coefficient_variation", target="min"),
-    Objective(name="total_vertical_intensity", target="max"),
-]
-optimization_detectors = [scnSS]
-uniform_vertical_profile_agent = AxAgent(
-    readables=optimization_detectors,
-    dofs=vertical_mirror_dofs,
-    objectives=uniform_vertical_profile_objectives,
-    db=db,
-    dof_constraints=vertical_mirror_dof_constraints,
-    digestion=vertical_profile_digestion,
-    digestion_kwargs={"threshold_factor": 0.1, "edge_crop": 0},
-)
-
-
 def one_nd_bimorph_step(detectors, step, pos_cache, take_reading=None, *, bimorph_device=None, timeout=10, tolerance=1, poll_interval=0.1):
     """
     Per-step hook that allows for coordinated movement of the bimorph mirrors.
@@ -573,12 +564,12 @@ def one_nd_bimorph_step(detectors, step, pos_cache, take_reading=None, *, bimorp
         bimorph_device = bimorph
 
     def _armed() -> bool:
-        armed_voltages = np.array(bimorph_device.all_armed_voltages(), dtype=np.float32)
-        return np.allclose(armed_voltages, bimorph_device.all_setpoint_voltages(), atol=tolerance)
+        armed_voltages = np.array(bimorph_device.all_armed_voltages()[12:24], dtype=np.float32)
+        return np.allclose(armed_voltages, bimorph_device.all_setpoint_voltages()[12:24], atol=tolerance)
 
     def _ramped() -> bool:
-        current_voltages = np.array(bimorph_device.all_current_voltages.get(), dtype=np.float32)
-        return np.allclose(current_voltages, bimorph_device.all_setpoint_voltages(), atol=tolerance)
+        current_voltages = np.array(bimorph_device.all_current_voltages.get()[12:24], dtype=np.float32)
+        return np.allclose(current_voltages, bimorph_device.all_setpoint_voltages()[12:24], atol=tolerance)
     
     # Move to the next position (change setpoints for bimorph channels)
     yield from bps.move_per_step(step, pos_cache)
@@ -607,18 +598,76 @@ def one_nd_bimorph_step(detectors, step, pos_cache, take_reading=None, *, bimorp
     yield from take_reading(list(detectors) + list(step.keys()))
 
 
-def optimize_vertical_profile(iterations: int = 30) -> MsgGenerator[None]:
+vertical_mirror_dofs, vertical_mirror_dof_constraints = _setup_bimorph_dofs(
+    range(12, 24),
+    search_radius=100.0,
+    constraint=300.0,
+)
+uniform_vertical_profile_objectives = [
+    Objective(name="vertical_coefficient_variation", target="min"),
+    Objective(name="total_vertical_intensity", target="max"),
+]
+uniform_vertical_profile_agent = AxAgent(
+    readables=optimization_detectors,
+    dofs=vertical_mirror_dofs,
+    objectives=uniform_vertical_profile_objectives,
+    evaluation=vertical_profile_digestion,
+    dof_constraints=vertical_mirror_dof_constraints,
+    acquisition_plan=functools.partial(default_acquire, per_step=one_nd_bimorph_step),
+)
+optimization_problem = uniform_vertical_profile_agent.to_optimization_problem()
+
+@plan
+def optimize_step(
+    optimization_problem: OptimizationProblem,
+    n_points: int = 1,
+    *args: Any,
+    **kwargs: Any,
+) -> MsgGenerator[None]:
     """
-    Optimization plan to optimize the vertical beam profile to maximize intensity and minimize coefficient of variation.
+    A single step of the optimization loop.
+
+    Parameters
+    ----------
+    optimization_problem : OptimizationProblem
+        The optimization problem to solve.
+    n_points : int, optional
+        The number of points to suggest.
     """
+    if optimization_problem.acquisition_plan is None:
+        acquisition_plan = default_acquire
+    else:
+        acquisition_plan = optimization_problem.acquisition_plan
+    optimizer = optimization_problem.optimizer
+    movables = optimization_problem.movables
+    suggestions = optimizer.suggest(n_points)
+    _ = yield from bps.input_plan(f"{suggestions=}")
+    uid = yield from acquisition_plan(suggestions, movables, optimization_problem.readables, *args, **kwargs)
+    outcomes = optimization_problem.evaluation_function(uid, suggestions)
+    optimizer.ingest(outcomes)
+
+
+@plan
+def optimize(
+    optimization_problem: OptimizationProblem,
+    iterations: int = 1,
+    n_points: int = 1,
+    *args: Any,
+    **kwargs: Any,
+) -> MsgGenerator[None]:
+    """
+    A plan to solve the optimization problem.
+
+    Parameters
+    ----------
+    optimization_problem : OptimizationProblem
+        The optimization problem to solve.
+    iterations : int, optional
+        The number of optimization iterations to run.
+    n_points : int, optional
+        The number of points to suggest per iteration.
+    """
+
     for _ in range(iterations):
-        trials = uniform_vertical_profile_agent.get_next_trials(1)
-        uid = yield from acquire(
-            uniform_vertical_profile_agent.readables,
-            uniform_vertical_profile_agent.dofs,
-            trials,
-            per_step=one_nd_bimorph_step,
-        )
-        results = uniform_vertical_profile_agent.data_access.get_data(uid)
-        data = {trial_index: uniform_vertical_profile_agent.digestion(trial_index, results, **uniform_vertical_profile_agent.digestion_kwargs) for trial_index in trials.keys()} 
-        uniform_vertical_profile_agent.complete_trials(trials, data)
+        yield from optimize_step(optimization_problem, n_points, *args, **kwargs)
+

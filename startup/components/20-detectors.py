@@ -328,7 +328,7 @@ class Screen(Device):
         
 #scnMono = Screen('XF:16IDA-BI{FS:3-Ax:Y}Mtr', {}, cam_name="camMono", name='scnMono')
 #scnKB = Screen('XF:16IDA-BI{FS:4-Ax:Y}Mtr', {}, cam_name="camKB", name='scnKB')
-#scnSS = Screen('XF:16IDB-BI{SCN:SS', 'XF:16IDB-BI{SCN:SS', cam_name="camSS",  name='scnSS')
-#scnSF = Screen('XF:16IDC-BI{FS:SF', 'XF:16IDC-BI{FS:SF', cam_name="camSF",  name='scnSF')
+scnSS = Screen('XF:16IDB-BI{SCN:SS', 'XF:16IDB-BI{SCN:SS', cam_name="camSS",  name='scnSS')
+scnSF = Screen('XF:16IDC-BI{FS:SF', 'XF:16IDC-BI{FS:SF', cam_name="camSF",  name='scnSF')
 
 
