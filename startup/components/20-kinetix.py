@@ -4,6 +4,7 @@ from ophyd import Component as Cpt
 from ophyd.areadetector.cam import AreaDetectorCam
 from ophyd.areadetector.detectors import DetectorBase
 from nslsii.ad33 import CamV33Mixin,SingleTriggerV33
+from ophyd import EpicsSignal, EpicsSignalRO
 
 """ based on xspress3 code
     KineticCam from FXI
@@ -109,10 +110,8 @@ class LiXKinetix(SingleTriggerV33, DetectorBase):
         self._num_repeats = n_triggers
         self._num_captures = n_triggers*img_per_trig     # for the hdf plugin
 
-    """ ext_trig only ???
     def set_ext_trigger(self, ext=True):
         self.ext_trig = ext
-    """
     
     def exp_time(self, exp_t, time_between_frames=0.001):  
         self.cam.acquire_time.set(exp_t).wait()
