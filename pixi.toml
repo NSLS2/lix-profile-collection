@@ -33,8 +33,9 @@ reportlab = ">=4.4.5,<5"
 [feature.profile.pypi-dependencies]
 pvxslibs = "*"
 bluesky-tiled-plugins = "*"
-blop = { path = "/home/xf16id/blop", editable = true }
-lixtools = { path = "/nsls2/software/mx/lix/pylibs/lixtools" }
+blop = { git = "https://github.com/NSLS-II/blop.git", rev = "main" }
+lixtools = { git = "https://github.com/NSLS-II-LIX/lixtools.git", rev = "main" }
+pymoo = "!=0.6.1.6"
 
 
 [feature.qs.dependencies]
