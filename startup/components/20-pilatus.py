@@ -282,13 +282,14 @@ class LiXDetectors(Device):
         for det in self.active_detectors:
             det._num_images = self._num_images
             det._num_repeats = self._num_repeats
+            det._num_captures = self._num_captures
             det.stage(self.trigger_mode)
 
         if self.trigger_mode == PilatusTriggerMode.ext_multi:
             # the name is misleading, multi_triger means one image per trigger
             self.trig_wait = self.acq_time   #+0.02
         else:
-            self.trig_wait = self.acq_time*self._num_images*self._num_repeats   #+0.02
+            self.trig_wait = self.acq_time*self._num_captures   #+0.02
         
         self.datum={}
 
@@ -335,14 +336,6 @@ class LiXDetectors(Device):
             self._exp_completed = 0
             self._status._finished()
 
-#    def describe(self):
-#        """ aim to reduce the amount of information saved in the databroker
-#            all detectors share the same name, path and template
-#            in fact these are the same for the entire scan
-#        """
-#        attrs = OrderedDict([])
-#        common_attrs = self.active_detectors[0].describe()
-
     def collect_asset_docs(self):
         print(f"in {self.name} collect_asset_docs")
         for det in self.active_detectors:
@@ -364,29 +357,13 @@ class LiXDetectors(Device):
                            RE emit(DocumentNames.event, ev) or add to bulk data for later emit() call
             DocumentNames is defined in event_model, enum
 
-            following HXN example
         '''
         print(f"in {self.name} complete ...")
 
         for det in self.active_detectors:
-            k = f'{det.name}_image'
-            print(list(det.hdf._asset_docs_cache))
-            (name, resource), = det.hdf.collect_asset_docs()
-            assert name == 'resource'
-            # hack the resource
-            resource['resource_kwargs']['frame_per_point'] = self._num_images
-            det.hdf._asset_docs_cache.append(('resource', resource))
-            resource_uid = resource['uid']
-            datum_id = '{}/{}'.format(resource_uid, 0)
-            #datum_id = resource_uid
-            self.datum[k] = [datum_id, ttime.time()]
-            datum = {'resource': resource_uid,
-                     'datum_id': datum_id,
-                     'datum_kwargs': {'point_number': 0}}
-            det.hdf._asset_docs_cache.append(('datum', datum))     # the scattering patterns go to the hdf plugin asset_docs_cache
+            det.generate_datum(f'{det.name}_image', ttime.time())
+            print(det.hdf._asset_docs_cache)
 
-        print("+++", det.hdf._asset_docs_cache)
-        print("---", self.datum)   
         return NullStatus()
 
     def collect(self):
@@ -395,7 +372,9 @@ class LiXDetectors(Device):
         ts = {}
         for det in self.active_detectors:
             k = f'{det.name}_image'
-            data[k],ts[k] = self.datum[k]
+            datum_ids = det.hdf.read()[k]
+            data[k] = datum_ids['value']
+            ts[k] = datum_ids['timestamp']
         
         ret = {'time': time.time(),
                'data': data,

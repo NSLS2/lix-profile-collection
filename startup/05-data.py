@@ -6,6 +6,8 @@ from pathlib import Path
 import redis
 from py4xs.utils import get_bin_ranges_from_grid
 from ophyd import Device
+from ophyd.areadetector import EpicsSignalWithRBV
+
 last_scan_uid = None
 last_scan_id = None
 
@@ -175,6 +177,7 @@ class LiXFileStoreHDF5(LiXFileStorePluginBase):
 
 class LIXhdfPlugin(HDF5Plugin, LiXFileStoreHDF5):
     run_time = Component(EpicsSignalRO, "RunTime")
+    data_type = Component(EpicsSignalWithRBV, "DataType")
     sub_directory = None
 
     def __init__(self, *args, **kwargs):
@@ -260,19 +263,33 @@ class LIXhdfPlugin(HDF5Plugin, LiXFileStoreHDF5):
         return filename, read_path, write_path
     
     def describe(self):
-        ret = super().describe()
-        key = f'{self.parent.name}_image'
-        if key not in ret:
-            return ret
+        dtype_strs = {"UInt16": "<u2",  
+                      "Int16": "<i2",  
+                      "UInt32": "<u4",
+                      "Int32": "<i4",
+                      "Float64": "<f8",
+                     }
+        # copied from XPD per Max
+        description = super().describe()
+        key = f"{self.parent.name}_image"
+        if not description:
+            description[key] = self.parent.make_data_key()
+        shape = list(description[key]["shape"])
+        shape[0] = self.get_frames_per_point()
+        shape = tuple(shape)
+        description[key].update({
+            "shape": shape,
+            "dtype_str": dtype_strs[self.data_type.get(as_string=True)],
+        })
 
-        return ret
+        return description
     
     def get_frames_per_point(self):
         """ In fly scans, this should be the total number images recorded during the scan
             For step scans this should be 1??
             Could be cases it's neither: time-resolved, one trigger, multiple images 
         """
-        return self.parent._num_images    
+        return self.parent._num_captures    
 
 
 @register_plugin

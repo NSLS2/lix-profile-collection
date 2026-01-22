@@ -11,9 +11,10 @@ class data_file_path(Enum):
     gpfs_experiments = '/nsls2/xf16id1/experiments'
     ramdisk = '/ramdisk'
 
-redis_host = 'xf16id-ioc2'
+#redis_host = 'xf16id-ioc2'
+redis_host = 'epics-services-lix'
 redis_port = 6379
-current_cycle = '2025-3'
+current_cycle = '2026-1'
 pilatus_data_dir = data_file_path.lustre_legacy.value
 #pilatus_data_dir = f"{data_file_path.ramdisk.value}/hdf"
 det_data_dir = pilatus_data_dir # "/home/xspress3/lix"  # 
