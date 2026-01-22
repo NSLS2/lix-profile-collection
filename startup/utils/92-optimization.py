@@ -123,8 +123,8 @@ def vertical_profile_digestion(
     }]
 
 
-def _get_channel_neighbors(channel: int) -> list[Channel]:
-    """Helper function to get the neighbors of a channel in the bimorph."""
+def _get_channel_neighbor_indices(channel: int) -> list[int]:
+    """Helper function to get the indices of the neighbors of a channel in the bimorph."""
     neighbors_indices = []
     # Horizontal mirror channels: 0-11
     if 0 <= channel <= 11:
@@ -150,9 +150,14 @@ def _get_channel_neighbors(channel: int) -> list[Channel]:
     else:
         return []
     
+    return neighbors_indices
+
+
+def _get_channel_neighbors(channel: int) -> list[Channel]:
+    """Helper function to get the neighbors of a channel in the bimorph."""
     return [
         getattr(bimorph.channels, f"channel{i}")
-        for i in neighbors_indices
+        for i in _get_channel_neighbor_indices(channel)
     ]
 
 
@@ -205,7 +210,6 @@ def _setup_bimorph_dofs(channel_range: range, search_radius: float = 100.0, cons
                 )
     return dofs, dof_constraints
 
-
 def _check_channel_constraint(channel_idx, target_voltage, current_values, armed_values, max_distance=500.0):
     """
     Check if setting channel to target voltage would violate constraint with adjacent channels.
@@ -213,13 +217,13 @@ def _check_channel_constraint(channel_idx, target_voltage, current_values, armed
     Parameters
     ----------
     channel_idx : int
-        Channel index (12-23 for vertical mirror)
+        Channel index (0-11 is for horizontal mirror, 12-23 is for vertical mirror)
     target_voltage : float
         Target voltage to check
     current_values : np.ndarray
-        Current voltage values for all channels (12-23)
+        Current voltage values for all channels
     armed_values : np.ndarray
-        Armed voltage values for all channels (12-23)
+        Armed voltage values for all channels
     max_distance : float, optional
         Maximum allowed distance between adjacent channels (default 500.0 V)
     
@@ -228,25 +232,11 @@ def _check_channel_constraint(channel_idx, target_voltage, current_values, armed
     bool
         True if safe (no constraint violation), False if would violate constraint
     """
-    # Get indices relative to array (channels 12-23 map to indices 0-11)
-    idx = channel_idx - 12
-    
-    # Check constraint with previous channel
-    if idx > 0:
-        prev_idx = idx - 1
-        # Check against both current and armed values of neighbor
-        if (abs(target_voltage - current_values[prev_idx]) > max_distance or
-            abs(target_voltage - armed_values[prev_idx]) > max_distance):
+    channel_indices = _get_channel_neighbor_indices(channel_idx) + [channel_idx]
+    for idx in channel_indices:
+        if (abs(target_voltage - current_values[idx]) > max_distance or
+            abs(target_voltage - armed_values[idx]) > max_distance):
             return False
-    
-    # Check constraint with next channel
-    if idx < len(current_values) - 1:
-        next_idx = idx + 1
-        # Check against both current and armed values of neighbor
-        if (abs(target_voltage - current_values[next_idx]) > max_distance or
-            abs(target_voltage - armed_values[next_idx]) > max_distance):
-            return False
-    
     return True
 
 
@@ -277,18 +267,20 @@ def _calculate_intermediate_step(channel_idx, current_voltage, target_voltage, c
     float
         Intermediate voltage value that respects constraint and step limit
     """
-    # Get indices relative to array (channels 12-23 map to indices 0-11)
-    idx = channel_idx - 12
-    
     # Calculate direction of movement
     direction = 1.0 if target_voltage > current_voltage else -1.0
     voltage_diff = abs(target_voltage - current_voltage)
     
-    # Start with step limit constraint
+    # 1. Start with step limit constraint
     max_step = min(voltage_diff, step_limit)
     candidate_voltage = current_voltage + direction * max_step
+
+    neighbor_indices = _get_channel_neighbor_indices(channel_idx)
+    for idx in neighbor_indices:
+        distance_current = abs(target_voltage - current_values[idx])
+        distance_armed = abs(target_voltage - armed_values[idx])
     
-    # Check constraint with previous channel
+    # 2. Check constraint with previous channel
     if idx > 0:
         prev_idx = idx - 1
         # Find maximum safe voltage based on previous channel
@@ -438,8 +430,6 @@ def _arm_and_ramp_bimorph(step, pos_cache, bimorph_device=None, timeout=60, tole
     if bimorph_device is None:
         bimorph_device = bimorph
     
-    start_time = ttime.monotonic()
-    
     # Extract target voltages for channels 12-23
     # step dictionary has channel objects as keys
     target_voltages = {}
@@ -448,17 +438,12 @@ def _arm_and_ramp_bimorph(step, pos_cache, bimorph_device=None, timeout=60, tole
         if hasattr(channel_obj, 'name'):
             channel_name = channel_obj.name
             if 'channel' in channel_name:
-                try:
-                    # Extract number from name like "bimorph_channels_channel12"
-                    channel_num = int(channel_name.split('channel')[-1])
-                    if 12 <= channel_num <= 23:
-                        target_voltages[channel_num] = (channel_obj, target_value)
-                except (ValueError, IndexError):
-                    continue
+                channel_num = int(channel_name.split('channel')[-1])
+                target_voltages[channel_num] = (channel_obj, target_value)
     
     # Sort channels by number (12, 13, 14, ..., 23)
     sorted_channels = sorted(target_voltages.items())
-    
+
     # Main loop: repeat until all channels reach target
     max_iterations = 20  # Prevent infinite loops
     iteration = 0
@@ -467,25 +452,22 @@ def _arm_and_ramp_bimorph(step, pos_cache, bimorph_device=None, timeout=60, tole
         iteration += 1
         
         # Get current state
-        current_values = np.array(bimorph_device.all_current_voltages.get()[12:24], dtype=np.float32)
-        armed_values = np.array(bimorph_device.all_armed_voltages()[12:24], dtype=np.float32)
+        current_values = np.array(bimorph_device.all_current_voltages.get(), dtype=np.float32)
+        armed_values = np.array(bimorph_device.all_armed_voltages(), dtype=np.float32)
         
         # Check if we're done (all channels at target)
         all_at_target = True
         for channel_num, (channel_obj, target_value) in sorted_channels:
-            idx = channel_num - 12
-            if abs(current_values[idx] - target_value) > tolerance:
+            if abs(current_values[channel_num] - target_value) > tolerance:
                 all_at_target = False
                 break
         
+        # Success - Exit when all channels are at target
         if all_at_target:
-            break  # Success!
+            break 
         
-        # Set channels sequentially
+        # Arm channels in order, to a safe value, one at a time
         for channel_num, (channel_obj, target_value) in sorted_channels:
-            idx = channel_num - 12
-            current_voltage = current_values[idx]
-            
             # Check if constraint would be violated
             constraint_ok = _check_channel_constraint(
                 channel_num, target_value, current_values, armed_values, max_distance
@@ -497,7 +479,7 @@ def _arm_and_ramp_bimorph(step, pos_cache, bimorph_device=None, timeout=60, tole
             else:
                 # Calculate intermediate step
                 set_value = _calculate_intermediate_step(
-                    channel_num, current_voltage, target_value, current_values, armed_values,
+                    channel_num, target_value, current_values, armed_values,
                     max_distance, step_limit
                 )
             
@@ -509,19 +491,14 @@ def _arm_and_ramp_bimorph(step, pos_cache, bimorph_device=None, timeout=60, tole
                 channel_obj, set_value, armed_wait_timeout, armed_wait_tolerance
             )
             
-            # Update current and armed values for next channel's constraint check
-            current_values = np.array(bimorph_device.all_current_voltages.get()[12:24], dtype=np.float32)
-            armed_values = np.array(bimorph_device.all_armed_voltages()[12:24], dtype=np.float32)
+            # Update armed values for next channel's constraint check
+            armed_values = np.array(bimorph_device.all_armed_voltages(), dtype=np.float32)
         
-        # Wait 5 seconds after all channels are set
+        # Wait after all channels are armed
         yield from bps.sleep(post_set_wait)
         
         # Ramp all channels
         yield from _ramp_all_channels(bimorph_device, timeout=timeout, wait_interval=post_set_wait)
-        
-        # Check timeout
-        if ttime.monotonic() - start_time > timeout:
-            raise TimeoutError(f"Bimorph arm and ramp operation exceeded timeout of {timeout} seconds")
     
     if iteration >= max_iterations:
         raise RuntimeError(f"Bimorph arm and ramp operation exceeded maximum iterations ({max_iterations})")
