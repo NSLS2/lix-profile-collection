@@ -1,57 +1,44 @@
-"""
-Tests for bimorph control algorithm.
-
-Tests the sequential channel setting algorithm with constraint checking.
-
-Note: These tests require the full Bluesky environment to run properly.
-They test the algorithm logic with mocked devices.
-"""
+import os
+import sys
+import functools
+from unittest.mock import Mock, MagicMock, patch
+import time as ttime
 
 import pytest
 import numpy as np
-from unittest.mock import Mock, MagicMock, patch
 from bluesky.run_engine import RunEngine
+from bluesky.plans import list_scan
 import bluesky.plan_stubs as bps
-import time as ttime
-import os
-import sys
+from ophyd.sim import NullStatus
 
 # Add path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
+from startup.utils.bimorph_control import one_bimorph_step
 
 class MockChannel:
     """Mock bimorph channel."""
     def __init__(self, channel_num, initial_voltage=0.0):
         self.channel_num = channel_num
         self.name = f"bimorph_channels_channel{channel_num}"
-        self._setpoint = initial_voltage
-        self._current = initial_voltage
-        self._armed = initial_voltage
-        
-        # Create mock signals
-        self.setpoint = Mock()
-        self.setpoint.get = Mock(return_value=self._setpoint)
-        self.setpoint.put = Mock(side_effect=self._set_setpoint)
-        
-        self.readback = Mock()
-        self.readback.get = Mock(return_value=self._current)
+        self.setpoint = initial_voltage
+        self.current = initial_voltage
+        self.armed = initial_voltage
         
         self.armed_voltage = Mock()
-        self.armed_voltage.get = Mock(return_value=self._armed)
-    
-    def _set_setpoint(self, value):
-        """Simulate setting setpoint - armed updates immediately for testing."""
-        self._setpoint = value
-        self._armed = value  # In real device, this updates after delay
-    
-    def set_current(self, value):
-        """Set current voltage (simulates ramping)."""
-        self._current = value
-    
-    def set_armed(self, value):
-        """Set armed voltage."""
-        self._armed = value
+        self.armed_voltage.get = Mock(side_effect=lambda: self.armed)
+
+    def set(self, value):
+        print(f"Setting {self.name} to {value}")
+        self.setpoint = value
+        self.armed = value  # In real device, this updates after delay
+        return NullStatus()
+
+    def read(self):
+        return {self.name: {"value": self.setpoint, "timestamp": ttime.time()}}
+
+    def describe(self):
+        return {self.name: {"source": "MockChannel", "dtype": "number", "shape": [], "precision": 1}}
 
 
 class MockBimorphDevice:
@@ -65,15 +52,18 @@ class MockBimorphDevice:
         for i in range(32):
             channel = MockChannel(i, float(initial_voltages[i]))
             setattr(self.channels, f"channel{i}", channel)
+            channel.parent = self
         
         self._is_ramping = False
         self._ramp_delay = 0.1
+        self.parent = None
     
+    @property
     def all_current_voltages(self):
         """Get all current voltages."""
         result = Mock()
         voltages = np.array([
-            getattr(self.channels, f"channel{i}")._current for i in range(32)
+            getattr(self.channels, f"channel{i}").current for i in range(32)
         ], dtype=np.float32)
         result.get = Mock(return_value=voltages)
         return result
@@ -81,14 +71,14 @@ class MockBimorphDevice:
     def all_armed_voltages(self):
         """Get all armed voltages."""
         voltages = np.array([
-            getattr(self.channels, f"channel{i}")._armed for i in range(32)
+            getattr(self.channels, f"channel{i}").armed for i in range(32)
         ], dtype=np.float32)
         return voltages
     
     def all_setpoint_voltages(self):
         """Get all setpoint voltages."""
         voltages = np.array([
-            getattr(self.channels, f"channel{i}")._setpoint for i in range(32)
+            getattr(self.channels, f"channel{i}").setpoint for i in range(32)
         ], dtype=np.float32)
         return voltages
     
@@ -99,14 +89,10 @@ class MockBimorphDevice:
             # Simulate ramp: current moves to match armed
             for i in range(32):
                 channel = getattr(self.channels, f"channel{i}")
-                channel.set_current(channel._armed)
+                channel.current = channel.armed
             self._is_ramping = False
             yield from bps.sleep(self._ramp_delay)
         return ramp()
-    
-    def is_ramping(self):
-        """Check if ramping."""
-        return self._is_ramping
 
 
 @pytest.fixture
@@ -116,12 +102,12 @@ def mock_bimorph():
 
 
 @pytest.fixture
-def re():
+def RE():
     """Create a RunEngine for testing."""
     return RunEngine({})
 
 
-def test_small_change_single_step_success(mock_bimorph, re):
+def test_small_change_single_step_success(mock_bimorph, RE):
     """
     Test 1: Simple Success Case
     
@@ -134,56 +120,41 @@ def test_small_change_single_step_success(mock_bimorph, re):
     mock_bimorph = MockBimorphDevice(initial_voltages)
     
     # Target: small change to 350V for channels 12-15
-    target_voltages = {12: 350.0, 13: 350.0, 14: 350.0, 15: 350.0}
-    
-    # Create step dictionary
-    step = {}
-    for ch_num, target in target_voltages.items():
-        channel = getattr(mock_bimorph.channels, f"channel{ch_num}")
-        step[channel] = target
-    
-    pos_cache = {}
-    
-    # Mock bps.mv to update channel setpoints
-    mv_calls = []
-    def mock_mv(channel, value):
-        mv_calls.append((channel.channel_num, value))
-        channel._set_setpoint(value)
-        return []
-    
-    with patch('bluesky.plan_stubs.mv', side_effect=mock_mv):
-        with patch('bluesky.plan_stubs.sleep', return_value=[]):
-            # Import the function - this will only work if globals are set up
-            # For a real test environment, the module would be loaded with all globals
-            try:
-                # Test the helper functions directly
-                from startup.utils import optimization_92 as opt
-                
-                # Test constraint checking
-                current = mock_bimorph.all_current_voltages().get()[12:24]
-                armed = mock_bimorph.all_armed_voltages()[12:24]
-                
-                # All should pass constraint check
-                for ch_num in [12, 13, 14, 15]:
-                    is_safe = opt._check_channel_constraint(
-                        ch_num, 350.0, current, armed, max_distance=500.0
-                    )
-                    assert is_safe, f"Channel {ch_num} should pass constraint check"
-                
-                # If we can import the main function, test it
-                if hasattr(opt, '_arm_and_ramp_bimorph'):
-                    plan = opt._arm_and_ramp_bimorph(
-                        step, pos_cache, bimorph_device=mock_bimorph,
-                        timeout=60, tolerance=1.0
-                    )
-                    re(plan)
-                    
-                    # Verify all channels reached target
-                    final_current = mock_bimorph.all_current_voltages().get()[12:16]
-                    assert np.allclose(final_current, [350.0, 350.0, 350.0, 350.0], atol=1.0)
-            except (ImportError, AttributeError) as e:
-                pytest.skip(f"Cannot import optimization module: {e}")
+    scan_args = [
+        mock_bimorph.channels.channel12, [350.0],
+        mock_bimorph.channels.channel13, [350.0],
+        mock_bimorph.channels.channel14, [350.0],
+        mock_bimorph.channels.channel15, [350.0],
+        mock_bimorph.channels.channel16, [300.0],
+        mock_bimorph.channels.channel17, [300.0],
+        mock_bimorph.channels.channel18, [300.0],
+        mock_bimorph.channels.channel19, [300.0],
+        mock_bimorph.channels.channel20, [300.0],
+        mock_bimorph.channels.channel21, [300.0],
+        mock_bimorph.channels.channel22, [300.0],
+        mock_bimorph.channels.channel23, [300.0],
+    ]
 
+    RE(list_scan([], *scan_args, per_step=functools.partial(one_bimorph_step, bimorph_device=mock_bimorph, timeout=0.5)))
+
+    final_current = mock_bimorph.all_current_voltages.get()[12:24]
+    assert np.allclose(
+        final_current,
+        [350.0, 350.0, 350.0, 350.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0],
+        atol=1.0
+    )
+    final_armed = mock_bimorph.all_armed_voltages()[12:24]
+    assert np.allclose(
+        final_armed,
+        [350.0, 350.0, 350.0, 350.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0],
+        atol=1.0
+    )
+    final_setpoint = mock_bimorph.all_setpoint_voltages()[12:24]
+    assert np.allclose(
+        final_setpoint,
+        [350.0, 350.0, 350.0, 350.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0],
+        atol=1.0
+    )
 
 def test_sequential_setting_with_intermediate_steps(mock_bimorph, re):
     """
