@@ -1,38 +1,18 @@
-import copy
 import functools
 import time as ttime
 from typing import Any
-import pandas as pd
-import scipy as sp
 import cv2
-
-from ophyd import Device, EpicsSignal
-from ophyd import Component as Cpt
 
 from bluesky.utils import MsgGenerator
 import bluesky.plan_stubs as bps
-import bluesky.plans as bp
 import numpy as np
-
-
 
 from blop import DOF, Objective, Agent
-from blop.ax import Agent as AxAgent
 from blop.plans import default_acquire
-from blop.dofs import DOFConstraint
+from blop.ax.dof import DOFConstraint
 from blop.protocols import OptimizationProblem
 
-
-from ophyd.pseudopos import (
-    PseudoPositioner,
-    PseudoSingle,
-    pseudo_position_argument,
-    real_position_argument
-)
-from ophyd import Component, SoftPositioner
-
 import numpy as np
-import scipy as sp
 
 
 def vertical_profile_metric(image, background=None, threshold_factor=0.1,
@@ -226,61 +206,364 @@ def _setup_bimorph_dofs(channel_range: range, search_radius: float = 100.0, cons
     return dofs, dof_constraints
 
 
-def _try_move_again(not_armed_mask, step, pos_cache, poll_interval):
-    step_copy = step.copy()
-    not_armed_channel_names = [f"bimorph_channels_channel{index + 12}" for index in np.where(not_armed_mask)]
-    for channel in step_copy.keys():
-        for not_armed_channel_name in not_armed_channel_names:
-            if channel.name == not_armed_channel_name:
-                step_copy[channel] = step_copy[channel] - 10
+def _check_channel_constraint(channel_idx, target_voltage, current_values, armed_values, max_distance=500.0):
+    """
+    Check if setting channel to target voltage would violate constraint with adjacent channels.
+    
+    Parameters
+    ----------
+    channel_idx : int
+        Channel index (12-23 for vertical mirror)
+    target_voltage : float
+        Target voltage to check
+    current_values : np.ndarray
+        Current voltage values for all channels (12-23)
+    armed_values : np.ndarray
+        Armed voltage values for all channels (12-23)
+    max_distance : float, optional
+        Maximum allowed distance between adjacent channels (default 500.0 V)
+    
+    Returns
+    -------
+    bool
+        True if safe (no constraint violation), False if would violate constraint
+    """
+    # Get indices relative to array (channels 12-23 map to indices 0-11)
+    idx = channel_idx - 12
+    
+    # Check constraint with previous channel
+    if idx > 0:
+        prev_idx = idx - 1
+        # Check against both current and armed values of neighbor
+        if (abs(target_voltage - current_values[prev_idx]) > max_distance or
+            abs(target_voltage - armed_values[prev_idx]) > max_distance):
+            return False
+    
+    # Check constraint with next channel
+    if idx < len(current_values) - 1:
+        next_idx = idx + 1
+        # Check against both current and armed values of neighbor
+        if (abs(target_voltage - current_values[next_idx]) > max_distance or
+            abs(target_voltage - armed_values[next_idx]) > max_distance):
+            return False
+    
+    return True
 
-    # Initial fake move to dumb value
-    tmp_pos_cache = copy.deepcopy(pos_cache)
-    yield from bps.move_per_step(step_copy, tmp_pos_cache)
-    yield from bps.sleep(poll_interval)
 
-    # Try the real step again
-    tmp_pos_cache = copy.deepcopy(pos_cache)
-    yield from bps.move_per_step(step, tmp_pos_cache)
-    yield from bps.sleep(poll_interval)
+def _calculate_intermediate_step(channel_idx, current_voltage, target_voltage, current_values, armed_values, 
+                                 max_distance=500.0, step_limit=400.0):
+    """
+    Calculate intermediate step value for channel that would violate constraint.
+    
+    Parameters
+    ----------
+    channel_idx : int
+        Channel index (12-23 for vertical mirror)
+    current_voltage : float
+        Current voltage of this channel
+    target_voltage : float
+        Target voltage for this channel
+    current_values : np.ndarray
+        Current voltage values for all channels (12-23)
+    armed_values : np.ndarray
+        Armed voltage values for all channels (12-23)
+    max_distance : float, optional
+        Maximum allowed distance between adjacent channels (default 500.0 V)
+    step_limit : float, optional
+        Maximum step size (default 400.0 V)
+    
+    Returns
+    -------
+    float
+        Intermediate voltage value that respects constraint and step limit
+    """
+    # Get indices relative to array (channels 12-23 map to indices 0-11)
+    idx = channel_idx - 12
+    
+    # Calculate direction of movement
+    direction = 1.0 if target_voltage > current_voltage else -1.0
+    voltage_diff = abs(target_voltage - current_voltage)
+    
+    # Start with step limit constraint
+    max_step = min(voltage_diff, step_limit)
+    candidate_voltage = current_voltage + direction * max_step
+    
+    # Check constraint with previous channel
+    if idx > 0:
+        prev_idx = idx - 1
+        # Find maximum safe voltage based on previous channel
+        max_from_prev_current = current_values[prev_idx] + max_distance
+        max_from_prev_armed = armed_values[prev_idx] + max_distance
+        max_from_prev = min(max_from_prev_current, max_from_prev_armed)
+        candidate_voltage = min(candidate_voltage, max_from_prev)
+        
+        # Also check minimum
+        min_from_prev_current = current_values[prev_idx] - max_distance
+        min_from_prev_armed = armed_values[prev_idx] - max_distance
+        min_from_prev = max(min_from_prev_current, min_from_prev_armed)
+        candidate_voltage = max(candidate_voltage, min_from_prev)
+    
+    # Check constraint with next channel
+    if idx < len(current_values) - 1:
+        next_idx = idx + 1
+        # Find maximum safe voltage based on next channel
+        max_from_next_current = current_values[next_idx] + max_distance
+        max_from_next_armed = armed_values[next_idx] + max_distance
+        max_from_next = min(max_from_next_current, max_from_next_armed)
+        candidate_voltage = min(candidate_voltage, max_from_next)
+        
+        # Also check minimum
+        min_from_next_current = current_values[next_idx] - max_distance
+        min_from_next_armed = armed_values[next_idx] - max_distance
+        min_from_next = max(min_from_next_current, min_from_next_armed)
+        candidate_voltage = max(candidate_voltage, min_from_next)
+    
+    # Ensure we don't go past target
+    if direction > 0:
+        candidate_voltage = min(candidate_voltage, target_voltage)
+    else:
+        candidate_voltage = max(candidate_voltage, target_voltage)
+    
+    # Ensure we actually move (at least a small amount)
+    if abs(candidate_voltage - current_voltage) < 1.0:
+        # If we can't move due to constraints, try to move at least 1V toward target
+        candidate_voltage = current_voltage + direction * 1.0
+    
+    return candidate_voltage
 
 
-def _arm_bimorph(step, pos_cache, bimorph_device=None, timeout=30, tolerance=1, poll_interval=1.5):
-    print(f"{timeout=}\n{poll_interval=}")
-    def _armed() -> bool:
-        armed_voltages = np.array(bimorph_device.all_armed_voltages()[12:24], dtype=np.float32)
-        return np.allclose(armed_voltages, bimorph_device.all_setpoint_voltages()[12:24], atol=tolerance)
-
-    copy_pos_cache = copy.deepcopy(pos_cache)
-    yield from bps.move_per_step(step, pos_cache)
-    while not _armed():
+def _wait_for_channel_armed(channel, target_value, timeout=10.0, tolerance=1.0, poll_interval=0.1):
+    """
+    Wait until channel's armed value matches target value.
+    
+    Parameters
+    ----------
+    channel : Channel
+        Bimorph channel object
+    target_value : float
+        Target value to wait for
+    timeout : float, optional
+        Maximum time to wait (default 10.0 seconds)
+    tolerance : float, optional
+        Tolerance for matching (default 1.0 V)
+    poll_interval : float, optional
+        Polling interval (default 0.1 seconds)
+    
+    Yields
+    ------
+    Msg
+        Bluesky messages
+    """
+    start_time = ttime.monotonic()
+    while True:
+        armed_value = channel.armed_voltage.get()
+        if abs(armed_value - target_value) <= tolerance:
+            break
+        
+        if ttime.monotonic() - start_time > timeout:
+            raise TimeoutError(
+                f"Timeout waiting for channel {channel.name} armed value to reach {target_value} "
+                f"(current: {armed_value})"
+            )
+        
         yield from bps.sleep(poll_interval)
-        setpoint_voltages = bimorph_device.all_setpoint_voltages()[12:24]
-        armed_voltages = bimorph_device.all_armed_voltages()[12:24]
-        not_armed = ~(np.abs(armed_voltages - setpoint_voltages) <= tolerance)
-        invalid_mask = np.abs(armed_voltages[1:] - setpoint_voltages[:-1]) > 500.0
-        invalid_mask |= np.abs(armed_voltages[:-1] - setpoint_voltages[1:]) > 500.0
-        if np.any(invalid_mask):
-            raise RuntimeError("Invalid configuration of the bimorph, check setpoints and adjacent armed values.")
 
-        print(f"NOT ARMED: {not_armed}")
-        print(f"NOT ARMED: {np.any(not_armed)}")
 
-        current_voltages = bimorph_device.all_current_voltages.get()[12:24]
-        invalid_mask = np.abs(current_voltages[1:] - setpoint_voltages[:-1]) > 500.0
-        invalid_mask |= np.abs(current_voltages[:-1] - setpoint_voltages[1:]) > 500.0
-        print(f"INVALID: {np.any(not_armed)}")
-        if np.any(invalid_mask):
-            yield from _ramp_bimorph(bimorph_device, timeout, tolerance, poll_interval)
-            yield from bps.sleep(poll_interval)
-            if np.any(not_armed):
-                print(f"MOVING AGAIN (INVALID): {not_armed}")
-                print(f"MOVING AGAIN (INVALID): {step}")
-                yield from _try_move_again(not_armed, step, copy_pos_cache, poll_interval)
-        elif np.any(not_armed):
-            print(f"MOVING AGAIN (INVALID): {not_armed}")
-            print(f"MOVING AGAIN (ALL VALID): {step}")
-            yield from _try_move_again(not_armed, step, copy_pos_cache, poll_interval)
+def _ramp_all_channels(bimorph_device, timeout=60, wait_interval=5.0):
+    """
+    Ramp all channels (armed values to current values).
+    
+    Parameters
+    ----------
+    bimorph_device : Bimorph
+        Bimorph device
+    timeout : float, optional
+        Maximum time to wait for ramp to complete (default 60 seconds)
+    wait_interval : float, optional
+        Wait time after ramp completes (default 5.0 seconds)
+    
+    Yields
+    ------
+    Msg
+        Bluesky messages
+    """
+    # Start ramping
+    yield from bimorph_device.start_plan()
+    
+    # Wait for ramp to complete (check if still ramping)
+    start_time = ttime.monotonic()
+    while bimorph_device.is_ramping():
+        yield from bps.sleep(0.1)
+        if ttime.monotonic() - start_time > timeout:
+            raise TimeoutError(f"Failed to ramp bimorph channels within {timeout} seconds")
+    
+    # Wait additional time after ramping
+    yield from bps.sleep(wait_interval)
+
+
+def _arm_and_ramp_bimorph(step, pos_cache, bimorph_device=None, timeout=60, tolerance=1.0, 
+                           max_distance=500.0, step_limit=400.0, post_set_wait=5.0,
+                           armed_wait_timeout=10.0, armed_wait_tolerance=1.0):
+    """
+    Arm and ramp bimorph channels using sequential setting with constraint checking.
+    
+    Parameters
+    ----------
+    step : dict[NamedMovable, Any]
+        Dictionary mapping channel objects to target voltages
+    pos_cache : dict[NamedMovable, Any]
+        Position cache (not used in this implementation but kept for compatibility)
+    bimorph_device : Bimorph, optional
+        Bimorph device (defaults to global `bimorph`)
+    timeout : float, optional
+        Overall timeout for the operation (default 60 seconds)
+    tolerance : float, optional
+        Tolerance for matching voltages (default 1.0 V)
+    max_distance : float, optional
+        Maximum distance between adjacent channels (default 500.0 V)
+    step_limit : float, optional
+        Maximum step size when calculating intermediate steps (default 400.0 V)
+    post_set_wait : float, optional
+        Wait time after all channels are set, before ramping (default 5.0 seconds)
+    armed_wait_timeout : float, optional
+        Timeout for waiting for channel to arm (default 10.0 seconds)
+    armed_wait_tolerance : float, optional
+        Tolerance for armed value matching (default 1.0 V)
+    
+    Yields
+    ------
+    Msg
+        Bluesky messages
+    """
+    if bimorph_device is None:
+        bimorph_device = bimorph
+    
+    start_time = ttime.monotonic()
+    
+    # Extract target voltages for channels 12-23
+    # step dictionary has channel objects as keys
+    target_voltages = {}
+    for channel_obj, target_value in step.items():
+        # Extract channel number from channel name (e.g., "bimorph_channels_channel12" -> 12)
+        if hasattr(channel_obj, 'name'):
+            channel_name = channel_obj.name
+            if 'channel' in channel_name:
+                try:
+                    # Extract number from name like "bimorph_channels_channel12"
+                    channel_num = int(channel_name.split('channel')[-1])
+                    if 12 <= channel_num <= 23:
+                        target_voltages[channel_num] = (channel_obj, target_value)
+                except (ValueError, IndexError):
+                    continue
+    
+    # Sort channels by number (12, 13, 14, ..., 23)
+    sorted_channels = sorted(target_voltages.items())
+    
+    # Main loop: repeat until all channels reach target
+    max_iterations = 20  # Prevent infinite loops
+    iteration = 0
+    
+    while iteration < max_iterations:
+        iteration += 1
+        
+        # Get current state
+        current_values = np.array(bimorph_device.all_current_voltages.get()[12:24], dtype=np.float32)
+        armed_values = np.array(bimorph_device.all_armed_voltages()[12:24], dtype=np.float32)
+        
+        # Check if we're done (all channels at target)
+        all_at_target = True
+        for channel_num, (channel_obj, target_value) in sorted_channels:
+            idx = channel_num - 12
+            if abs(current_values[idx] - target_value) > tolerance:
+                all_at_target = False
+                break
+        
+        if all_at_target:
+            break  # Success!
+        
+        # Set channels sequentially
+        for channel_num, (channel_obj, target_value) in sorted_channels:
+            idx = channel_num - 12
+            current_voltage = current_values[idx]
+            
+            # Check if constraint would be violated
+            constraint_ok = _check_channel_constraint(
+                channel_num, target_value, current_values, armed_values, max_distance
+            )
+            
+            if constraint_ok:
+                # Set directly to target
+                set_value = target_value
+            else:
+                # Calculate intermediate step
+                set_value = _calculate_intermediate_step(
+                    channel_num, current_voltage, target_value, current_values, armed_values,
+                    max_distance, step_limit
+                )
+            
+            # Set channel to value (intermediate or target)
+            yield from bps.mv(channel_obj, set_value)
+            
+            # Wait for this channel's armed value to match
+            yield from _wait_for_channel_armed(
+                channel_obj, set_value, armed_wait_timeout, armed_wait_tolerance
+            )
+            
+            # Update current and armed values for next channel's constraint check
+            current_values = np.array(bimorph_device.all_current_voltages.get()[12:24], dtype=np.float32)
+            armed_values = np.array(bimorph_device.all_armed_voltages()[12:24], dtype=np.float32)
+        
+        # Wait 5 seconds after all channels are set
+        yield from bps.sleep(post_set_wait)
+        
+        # Ramp all channels
+        yield from _ramp_all_channels(bimorph_device, timeout=timeout, wait_interval=post_set_wait)
+        
+        # Check timeout
+        if ttime.monotonic() - start_time > timeout:
+            raise TimeoutError(f"Bimorph arm and ramp operation exceeded timeout of {timeout} seconds")
+    
+    if iteration >= max_iterations:
+        raise RuntimeError(f"Bimorph arm and ramp operation exceeded maximum iterations ({max_iterations})")
+
+
+# OLD FUNCTION - DEPRECATED - Replaced by _arm_and_ramp_bimorph
+# def _arm_bimorph(step, pos_cache, bimorph_device=None, timeout=30, tolerance=1, poll_interval=1.5):
+#     print(f"{timeout=}\n{poll_interval=}")
+#     def _armed() -> bool:
+#         armed_voltages = np.array(bimorph_device.all_armed_voltages()[12:24], dtype=np.float32)
+#         return np.allclose(armed_voltages, bimorph_device.all_setpoint_voltages()[12:24], atol=tolerance)
+# 
+#     copy_pos_cache = copy.deepcopy(pos_cache)
+#     yield from bps.move_per_step(step, pos_cache)
+#     while not _armed():
+#         yield from bps.sleep(poll_interval)
+#         setpoint_voltages = bimorph_device.all_setpoint_voltages()[12:24]
+#         armed_voltages = bimorph_device.all_armed_voltages()[12:24]
+#         not_armed = ~(np.abs(armed_voltages - setpoint_voltages) <= tolerance)
+#         invalid_mask = np.abs(armed_voltages[1:] - setpoint_voltages[:-1]) > 500.0
+#         invalid_mask |= np.abs(armed_voltages[:-1] - setpoint_voltages[1:]) > 500.0
+#         if np.any(invalid_mask):
+#             raise RuntimeError("Invalid configuration of the bimorph, check setpoints and adjacent armed values.")
+# 
+#         print(f"NOT ARMED: {not_armed}")
+#         print(f"NOT ARMED: {np.any(not_armed)}")
+# 
+#         current_voltages = bimorph_device.all_current_voltages.get()[12:24]
+#         invalid_mask = np.abs(current_voltages[1:] - setpoint_voltages[:-1]) > 500.0
+#         invalid_mask |= np.abs(current_voltages[:-1] - setpoint_voltages[1:]) > 500.0
+#         print(f"INVALID: {np.any(not_armed)}")
+#         if np.any(invalid_mask):
+#             yield from _ramp_bimorph(bimorph_device, timeout, tolerance, poll_interval)
+#             yield from bps.sleep(poll_interval)
+#             if np.any(not_armed):
+#                 print(f"MOVING AGAIN (INVALID): {not_armed}")
+#                 print(f"MOVING AGAIN (INVALID): {step}")
+#                 yield from _try_move_again(not_armed, step, copy_pos_cache, poll_interval)
+#         elif np.any(not_armed):
+#             print(f"MOVING AGAIN (INVALID): {not_armed}")
+#             print(f"MOVING AGAIN (ALL VALID): {step}")
+#             yield from _try_move_again(not_armed, step, copy_pos_cache, poll_interval)
 
 
 # 1. Choose setpoints
@@ -314,23 +597,23 @@ def _arm_bimorph(step, pos_cache, bimorph_device=None, timeout=30, tolerance=1, 
 #         if end_time - start_time > timeout:
 #             raise TimeoutError(f"Failed to arm the bimorph mirrors within {timeout} seconds")
 
-def _ramp_bimorph(bimorph_device=None, timeout=10, tolerance=1, poll_interval=0.5):
-    def _ramped() -> bool:
-        current_voltages = np.array(bimorph_device.all_current_voltages.get()[12:24], dtype=np.float32)
-        return np.allclose(current_voltages, bimorph_device.all_setpoint_voltages()[12:24], atol=tolerance)
-    
-    # Start ramping
-    yield from bimorph_device.start_plan()
-
-    # Wait for the bimorph mirror to be ramped
-    start_time = ttime.monotonic()
-    while not _ramped():
-        yield from bps.sleep(poll_interval)
-        if ttime.monotonic() - start_time > timeout:
-            raise TimeoutError(f"Failed to ramp the bimorph mirrors within {timeout} seconds")
-
-    # settle time after ramping
-    yield from bps.sleep(1.0)
+# def _ramp_bimorph(bimorph_device=None, timeout=10, tolerance=1, poll_interval=0.5):
+#     def _ramped() -> bool:
+#         current_voltages = np.array(bimorph_device.all_current_voltages.get()[12:24], dtype=np.float32)
+#         return np.allclose(current_voltages, bimorph_device.all_setpoint_voltages()[12:24], atol=tolerance)
+#     
+#     # Start ramping
+#     yield from bimorph_device.start_plan()
+# 
+#     # Wait for the bimorph mirror to be ramped
+#     start_time = ttime.monotonic()
+#     while not _ramped():
+#         yield from bps.sleep(poll_interval)
+#         if ttime.monotonic() - start_time > timeout:
+#             raise TimeoutError(f"Failed to ramp the bimorph mirrors within {timeout} seconds")
+# 
+#     # settle time after ramping
+#     yield from bps.sleep(1.0)
 
 
 def one_nd_bimorph_step(detectors, step, pos_cache, take_reading=None, *, bimorph_device=None, timeout=60, tolerance=1, poll_interval=5.0):
@@ -350,14 +633,14 @@ def one_nd_bimorph_step(detectors, step, pos_cache, take_reading=None, *, bimorp
         The last position moved to for each movable device
     take_reading : Callable[[list[Readable]], MsgGenerator] | None, optional
         Custom plan hook to take a reading from the detectors, defaults to ``bps.trigger_and_read``
-    bimorph : Bimorph | None, optional
+    bimorph_device : Bimorph | None, optional
         The bimorph mirror system to control, default to ``bimorph`` device defined in the namespace
     timeout : float, optional
-        The timeout for the bimorph to arm and ramp, default to 10 seconds
+        The timeout for the bimorph to arm and ramp, default to 60 seconds
     tolerance : float, optional
         The tolerance for each channel's residual voltage to be within, default to 1 V
     poll_interval : float, optional
-        The interval to poll the bimorph to arm and ramp, default to 0.001 seconds
+        The interval to poll the bimorph to arm and ramp, default to 5.0 seconds (not used in new algorithm)
     """
 
     if take_reading is None:
@@ -366,17 +649,14 @@ def one_nd_bimorph_step(detectors, step, pos_cache, take_reading=None, *, bimorp
     if bimorph_device is None:
         bimorph_device = bimorph
 
-    yield from _arm_bimorph(
+    # Use new algorithm that handles sequential setting, constraint checking, and ramping
+    yield from _arm_and_ramp_bimorph(
         step,
         pos_cache,
         bimorph_device=bimorph_device,
         timeout=timeout,
         tolerance=tolerance,
-        poll_interval=poll_interval,
     )
-
-    # Actual ramp to the setpoint
-    yield from _ramp_bimorph(bimorph_device, timeout, tolerance, poll_interval)
 
     # Take a reading from the detectors
     yield from take_reading(list(detectors) + list(step.keys()))
@@ -391,7 +671,7 @@ uniform_vertical_profile_objectives = [
     Objective(name="vertical_coefficient_variation", target="min"),
     Objective(name="total_vertical_intensity", target="max"),
 ]
-uniform_vertical_profile_agent = AxAgent(
+uniform_vertical_profile_agent = Agent(
     readables=optimization_detectors,
     dofs=vertical_mirror_dofs,
     objectives=uniform_vertical_profile_objectives,
