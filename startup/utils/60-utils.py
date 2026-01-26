@@ -13,7 +13,7 @@ from scipy.signal import find_peaks
 
 import tiled
 
-from blop import DOF, Objective, Agent
+from blop import RangeDOF, Objective, Agent
 import numpy as np
 
 beam_current = EpicsSignal('SR:OPS-BI{DCCT:1}I:Real-I')
@@ -32,6 +32,81 @@ mon0 = "bpm_int_mean"
 
 c = tiled.client.from_profile('lix')
 
+
+def intensity_metric(image, background=None, threshold_factor=0.1, edge_crop=0):
+    # Convert to grayscale
+    image = image.squeeze()
+    if len(image.shape) == 3 and image.shape[0] == 3:
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    else:
+        gray = image.copy()
+
+    # Crop edges to remove artifacts
+    if edge_crop > 0:
+        gray = gray[edge_crop:-edge_crop, edge_crop:-edge_crop]
+        if background is not None:
+            background = background[edge_crop:-edge_crop, edge_crop:-edge_crop]
+    
+    # Background subtraction
+    if background is None:
+        background = np.zeros_like(gray)
+    else:
+        if len(background.shape) == 3:
+            background = cv2.cvtColor(background, cv2.COLOR_BGR2GRAY)
+    corrected = cv2.subtract(gray, background)
+    corrected = cv2.GaussianBlur(corrected, (5, 5), 0)
+    max_intensity = np.max(corrected)
+    if max_intensity == 0:
+        return float('inf'), None, {}
+        
+    thresh_value = threshold_factor * max_intensity
+    _, thresh = cv2.threshold(corrected, thresh_value, 255, cv2.THRESH_TOZERO)
+    
+    # ========== TOTAL INTENSITY ==========
+    # Total integrated intensity
+    total_intensity = np.sum(thresh)
+    
+    return total_intensity
+
+
+def scnSF_intensity_evaluation(
+    uid: str,
+    suggestions: list[dict],
+    threshold_factor: float = 0.1,
+    edge_crop: int = 0,
+) -> list[dict]:
+
+    run = c[uid]
+    images = run[f"primary/{scnSF.name}_image"].read()
+    suggestion_ids = [suggestion["_id"] for suggestion in run.metadata["start"]["blop_suggestions"]]
+    results = []
+
+    for idx, sid in enumerate(suggestion_ids):
+        beam_intensity = intensity_metric(images[idx].squeeze(), threshold_factor=threshold_factor, edge_crop=edge_crop)
+        results.append({
+            "beam_intensity": beam_intensity,
+            "_id": sid
+        })
+
+    return results
+
+
+def bpm_intensity_evaluation(uid: str, suggestions: list[dict], det=em1) -> list[dict]:
+    run = c[uid]
+    em1_sum_all_mean_value = run[f"primary/{det.name}_sum_all_mean_value"].read()
+    suggestion_ids = [suggestion["_id"] for suggestion in run.metadata["start"]["blop_suggestions"]]
+    results = []
+
+    for idx, sid in enumerate(suggestion_ids):
+        beam_intensity = em1_sum_all_mean_value[idx]
+        results.append({
+            "beam_intensity": beam_intensity,
+            "_id": sid
+        })
+
+    return results
+
+
 def align_crl(rep=32, x_range=0.6, y_range=0.6, det=em1):
 
     pos_x10 = crl.x1.position
@@ -40,37 +115,69 @@ def align_crl(rep=32, x_range=0.6, y_range=0.6, det=em1):
     pos_y20 = crl.y2.position
 
     dofs_x = [
-        DOF(device=crl.x1, description="transfocator upstream x", 
-            search_domain=(pos_x10-x_range/2, pos_x10+x_range/2)),
-        DOF(device=crl.x2, description="transfocator downstream x", 
-            search_domain=(pos_x20-x_range/2, pos_x20+x_range/2)),
+        RangeDOF(
+            actuator=crl.x1,
+            bounds=(pos_x10-x_range/2, pos_x10+x_range/2),
+            parameter_type="float",
+        ),
+        RangeDOF(
+            actuator=crl.x2,
+            bounds=(pos_x20-x_range/2, pos_x20+x_range/2),
+            parameter_type="float",
+        ),
     ]
 
     dofs_y = [
-        DOF(device=crl.y1, description="transfocator upstream y", 
-            search_domain=(pos_y10-y_range/2, pos_y10+y_range/2)),
-        DOF(device=crl.y2, description="transfocator downstream y", 
-            search_domain=(pos_y20-y_range/2, pos_y20+y_range/2))
+        RangeDOF(
+            actuator=crl.y1,
+            bounds=(pos_y10-y_range/2, pos_y10+y_range/2),
+            parameter_type="float",
+        ),
+        RangeDOF(
+            actuator=crl.y2,
+            bounds=(pos_y20-y_range/2, pos_y20+y_range/2),
+            parameter_type="float",
+        ),
     ]
 
+    if det.name == "scnSF":
+        objective_name = "beam_intensity"
+        evaluation_function = scnSF_intensity_evaluation
+    else:
+        objective_name = f"{det.name}_sum_all_mean_value"
+        evaluation_function = bpm_intensity_evaluation
+
     objectives = [
-        Objective(name=f"{det.name}_sum_all_mean_value", description="beam intensity", target="max", trust_domain=(100000, np.inf))
+        Objective(name=objective_name, minimize=False),
     ]
 
     dets = [det]
 
-    agent_x = Agent(dofs=dofs_x, objectives=objectives, detectors=dets, db=db)
-    agent_y = Agent(dofs=dofs_y, objectives=objectives, detectors=dets, db=db)
+    agent_x = Agent(dofs=dofs_x, objectives=objectives, sensors=dets, evaluation_function=evaluation_function)
+    agent_y = Agent(dofs=dofs_y, objectives=objectives, sensors=dets, evaluation_function=evaluation_function)
+    
+    agent_x.ax_client.configure_generation_strategy(
+        initialization_budget=rep,
+        initialize_with_center=False,
+    )
+    agent_y.ax_client.configure_generation_strategy(
+        initialization_budget=rep,
+        initialize_with_center=False,
+    )
 
-    RE(fast_shutter_wrapper(agent_x.learn("qr", n=rep))) #, iterations=4))) 
-    agent_x.plot_objectives()
-    crl.x1.move(agent_x.best['crl_x1']) # ['crl_x1'][0]
-    crl.x2.move(agent_x.best['crl_x2']) # [0]
+    RE(fast_shutter_wrapper(agent_x.optimize(iterations=1, n_points=rep))) #, iterations=4))) 
+    #agent_x.plot_objective(crl.x1.name, crl.x2.name, objective_name)
+    best_parameterization = agent_x.ax_client.get_best_parameterization()[0]
+    print(f"best parameterization for x: {best_parameterization}")
+    crl.x1.move(best_parameterization['crl_x1']) # ['crl_x1'][0]
+    crl.x2.move(best_parameterization['crl_x2']) # [0]
 
-    RE(fast_shutter_wrapper(agent_y.learn("qr", n=rep))) #, iterations=4))) 
-    agent_y.plot_objectives()
-    crl.y1.move(agent_y.best['crl_y1']) # [0]
-    crl.y2.move(agent_y.best['crl_y2']) # [0]
+    RE(fast_shutter_wrapper(agent_y.optimize(iterations=1, n_points=rep))) #, iterations=4))) 
+    #agent_y.plot_objective(crl.y1.name, crl.y2.name, objective_name)
+    print(f"best parameterization for y: {best_parameterization}")
+    best_parameterization = agent_y.ax_client.get_best_parameterization()[0]
+    crl.y1.move(best_parameterization['crl_y1']) # [0]
+    crl.y2.move(best_parameterization['crl_y2']) # [0]
 
 
 def get_cnts():
@@ -83,6 +190,7 @@ def get_cnts():
     return {"bpm_int_mean": float(d['bpm_int_mean'][0]), 
             "em1_sum_all_mean_value": float(d['em1_sum_all_mean_value'][0]), 
             "em2_sum_all_mean_value": float(d['em2_sum_all_mean_value'][0])}
+
 
 def scan_for_ctr(ax, scan_range=0.3, npts=31, opposite_dir=False,
                  mon="em1_sum_all_mean_value", nedge=4):
