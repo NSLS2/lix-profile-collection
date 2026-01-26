@@ -13,7 +13,7 @@ from bluesky.callbacks.olog import logbook_cb_factory
 
 #from bluesky.global_state import gs
 
-global DETS 
+#global DETS 
 
 # moved to 00-base.py during 2020-2 deployment
 #class CustomRunEngine(RunEngine):
@@ -39,6 +39,6 @@ global DETS
 RE.md['group'] = 'lix'
 RE.md['beamline_id'] = 'LIX'
 
-DETS = []
+#DETS = []
 
 

@@ -43,22 +43,23 @@ class VICI_valves:
         cmd=f"{valve_ID}{cmd}\r"
         print(f"this is the command being sent: {cmd}")
         self.sockets[valve].sendall(cmd.encode())
+        sleep(1)
         print(f"Command {cmd} has been sent to valve {valve} with ID {valve_ID}")
         sleep(0.2)
-        if cmd==f'{valve_ID}GOA\r':
+        if cmd==f'{valve_ID}GOA':
             sleep(2)
             cur_pos=self.check_valve_pos(valve=valve, valve_ID=valve_ID)
-            if cur_pos[-3] == com[-1]:
-                print(f"changed to pos {com[-1]}")
+            if cur_pos[-3] == cmd[-1]:
+                print(f"changed to pos {cmd[-1]}")
             else:
-                raise ValueError(f"10 port valve did not change to {com[-1]}!")
-        elif cmd==f'{valve_ID}GOB\r':
+                raise ValueError(f"Valve {valve} did not change to {cmd[-1]}!")
+        elif cmd==f'{valve_ID}GOB':
             sleep(2)
             cur_pos=self.check_valve_pos(valve=valve, valve_ID=valve_ID)
-            if cur_pos[-3] == com[-1]:
-                print(f"changed to pos {com[-1]}")
+            if cur_pos[-3] == cmd[-1]:
+                print(f"changed to pos {cmd[-1]}")
             else:
-                raise ValueError(f"10 port valve did not change to {com[-1]}!")
+                raise ValueError(f"Valve {valve} did not change to {cmd[-1]}!")
         elif cmd==f'{valve_ID}GO\r':
             cur_pos = self.check_valve_pos(valve=valve, valve_ID=valve_ID)
             print(f"GO issued command, and now at {cur_pos}")

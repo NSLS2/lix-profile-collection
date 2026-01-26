@@ -17,8 +17,8 @@ camqr = setup_cam('camBHutch')
 sol = SolutionScatteringExperimentalModule(camName="camIR")
 sol.cam.cam.acquire_time.put(0.001)
 sol.cam.cam.gain.put(5)
-sol.cam.setup_watch("upstream", "stats4.total", 0.6e5, base_value=4.4e5)#7.1,8.6 came out 5.5
-sol.cam.setup_watch("downstream", "stats4.total", 0.7e5, base_value=4.6e5)#6.1,7.7 came out 4.4
+sol.cam.setup_watch("upstream", "stats4.total", 1e6, base_value=1.1e6)#7.1,8.6 came out 5.5
+sol.cam.setup_watch("downstream", "stats4.total", 1e6, base_value=1.15e6)#6.1,7.7 came out 4.4
 
 #cell 2 ES2
 '''
@@ -40,8 +40,8 @@ sol.vol_sample_headroom = 5
 sol.drain_duration = 2
 sol.wash_duration = 0.4
 sol.default_wash_repeats = 2
-sol.default_dry_time = 25
-sol.delay_before_release = 0.3
+sol.default_dry_time = 40
+sol.delay_before_release = 4
 sol.ctrl.water_pump_spd.put(1)
 sol.default_piston_pos = 90
 sol.default_load_pump_speed = 750
@@ -50,30 +50,30 @@ sol.default_pump_speed = 750 #1000
 # need to define positions for ss.z, ss.xc
 
 sol.vol_p4_to_cell = {'upstream': -90, 'downstream': -80}
-sol.vol_tube_to_cell = {'upstream':89,'downstream':89} 
+sol.vol_tube_to_cell = {'upstream':89,'downstream':93} 
 # u -80 d -80
 # u 150, d 145
 
-sol.flowcell_pos = {'bottom': [-9.3, 0, 11.41], #[-7.53, 0, 5.8] #cell 2 position
-                    'top':    [-8.99, 0, 6.4], #[-7.53, 0, 0.8] #cell 2 position
-                    'middle': [40.75, 0, 8.95],#39.75, 0,1.56
+sol.flowcell_pos = {'bottom': [-8.85, 0, 11.51], #[-7.53, 0, 5.8] #cell 2 position
+                    'top':    [-8.85, 0, 6.5], #[-7.53, 0, 0.8] #cell 2 position
+                    'middle': [40.3, 0, 9.25],#39.75, 0,1.56
                     'scint': [ 16.01, 0, 4.35],
                     'carbon': [20.25, 0, 4.35],
                     'empty':  [ 9.25, 0, 9.3],
-                    'AgBH':  [ 23.75, 0, 4.35]}  ##23.47 scintillator switched & 19.27
+                    'AgBH':  [ 23.25, 0, 4.35]}  ##23.47 scintillator switched & 19.27
 
 sol.cam.watch_timeouts_limit = 10      # default is 3
 
 # cell_type: N, x0, y0, dx, dy,
 # position 0 is on the inboard side
-cell_formats = {'cap': [15, 57.93, 3.45, 6.35, 0.00],  # capillary holder
-                'flat8': [8, 43.6, 2.25, 9.0, 0.2], # washable  
+cell_formats = {'cap': [15, 57.93, 9, 6.35, 0.00],  # capillary holder
+                'flat8': [8, 43.6, 9, 9.0, 0.2], # washable  
                 'flat10UIUC': [10, 78.1, 14.5, 9.432, 0], 
                 'flat14a': [7, 58715, 4.8, 6.35, 0.2], 
                 'flat14b': [7, 11.2, 4.8, 6.35, 0.2], 
                 'flat14': [14, 56.6, 0.95, 6.35, 0.2],
-                'flat15': [15, 57.85, 3.0, 6.35, 0.06], # Northwestern# 0.0725 angle, edited y from 2.75 to 2.5 and dy from 0 to 0.03 250715
-                'AgBH': [4, 29.1, 2.5, 20, 0], # std samples mounted on flat15, pos 2 - AgBH, 3, Scintillator, 1, Carbon
+                'flat15': [15, 57.85, 9.0, 6.35, 0.06], # Northwestern# 0.0725 angle, edited y from 2.75 to 2.5 and dy from 0 to 0.03 250715
+                'AgBH': [4, 29.1, 8.0, 20, 0], # std samples mounted on flat15, pos 2 - AgBH, 3, Scintillator, 1, Carbon
                }
 
 sol.sample_format_dict = {}

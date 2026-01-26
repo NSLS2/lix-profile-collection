@@ -65,10 +65,10 @@ def collect_std(r_range=1.5,cell_type=None,pos=None):
             if i == 'dark':
                 sol.mc_move_sample(pos=4,cell_type='AgBH')
                 #pil.exp_time(2)
-                set_exp_time(dets=[pil,em1,em2],exp=2)
+                set_exp_time(dets=[pil,em1ext,em2ext],exp=2)
                 PShutter_close.put(1)
                 change_sample(f"{i}-{ts}")
-                RE(ct([pil,em1,em2,ext_trig], num=1, md=md))
+                RE(ct([pil,em1ext,em2ext,ext_trig], num=1, md=md))
                 pil.exp_time(0.2)
                 PShutter_open.put(1)
                 time.sleep(5)
@@ -161,12 +161,15 @@ def collect_reference_from_tube12():
     pil.set_trigger_mode(PilatusTriggerMode.ext_multi)
     pil.set_num_images(5)
     pil.exp_time(1)
+    set_exp_time(dets=[pil], exp=1)
+    set_num_images(dets=[pil],n_triggers=5)
+
     
     sol.select_flow_cell("empty")
     sname = f"empty_{ts}"
     change_sample(sname)
     sd.monitors = []
-    RE(ct([pil,em1,em2], num=5, md=md))
+    RE(ct([pil,em1,em2,ext_trig], num=5, md=md))
 
     for pos in [1,2]:
         nd = sol.verify_needle_for_tube(pos, None)
@@ -176,25 +179,25 @@ def collect_reference_from_tube12():
         sname = f"{fcell}_blank_{ts}"
         change_sample(sname)
         sd.monitors = []
-        RE(ct([pil,em1,em2], num=5, md=md))
+        RE(ct([pil,em1,em2,ext_trig], num=5, md=md))
         sname = f"{fcell}_water_{ts}"
         sol.measure(pos, sample_name=sname, exp=1, repeats=5, md=md)
     pil.use_sub_directory()
 
 def collect_reference():
-    nd_list = ['upstream','downstream']
+    nd_list = ['upstream']
     holderName='reference'
     md = {'holderName': holderName}
     pil.use_sub_directory(holderName)
     ts = gettimestamp()   
     pil.set_trigger_mode(PilatusTriggerMode.ext_multi)
-    pil.set_num_images(5)
-    pil.exp_time(1)
+    set_exp_time(dets=[pil], exp=1)
+    set_num_images(dets=[pil],n_triggers=5)
     
     sol.select_flow_cell("empty")
     sname = f"empty_{ts}"
     change_sample(sname)
-    RE(ct([pil,em1,em2], num=5, md=md))
+    RE(ct([pil,em1,em2,ext_trig], num=5, md=md))
 
     for nd in nd_list:
         fcell = sol.flowcell_nd[nd]
@@ -208,10 +211,11 @@ def collect_reference():
             if ref=='water':
                 sol.ctrl.water_pump_spd.put(0.3) 
                 sol.wash_needle(nd, option="wash only")
+                sol.wash_needle(nd, option="wash only")
                 sol.ctrl.water_pump_spd.put(0.8)         
-                sol.load_water(nd, vol=50)
+                #sol.load_water(nd, vol=50)
             change_sample(sname)
-            RE(ct([pil,em1,em2], num=5, md=md))
+            RE(ct([pil,em1,em2,ext_trig], num=5, md=md))
             sol.wash_needle(nd, option="dry only")
     pil.use_sub_directory()
 
@@ -661,41 +665,50 @@ def mc_pack_h5(spreadSheet, holderName, run_id, T=None,
     send_to_packing_queue('|'.join(uids), "multi", froot)    
 
 def mc_measure_sample(pos, sname='test', exp=0.5, rep=1, check_sname=True, cell_form=None):
-    pil.exp_time(exp)
+    set_exp_time(dets=[pil,em1ext,em2ext],exp=exp)
+    set_num_images(dets=[pil,em1ext,em2ext],n_triggers=rep)
+    #pil.exp_time(exp)
     pil.set_num_images(rep)
     change_sample(sname, check_sname=check_sname)
     sol.mc_move_sample(pos, cell_form)
-    RE(ct([pil,em1,em2], num=rep))
+    #RE(ct([pil,em1,em2], num=rep))
+    RE(ct([pil,em1ext,em2ext,ext_trig], num=rep))
     
 def mc_measure_sample_dscanx(pos, sname='test', exp=0.5, y_points=5, yrange=4, x_points=5, xrange=0.5,offset_y=0,check_sname=True, cell_form=None,):
     pil.set_trigger_mode(PilatusTriggerMode.ext_multi)
-    pil.exp_time(exp)
-    pil.set_num_images(x_points)
+    set_exp_time(dets=[pil,em1ext,em2ext],exp=exp)
+    set_num_images(dets=[pil,em1ext,em2ext],n_triggers=x_points)
+    #pil.exp_time(exp)
+    #pil.set_num_images(x_points)
     change_sample(sname, check_sname=check_sname)
     sol.mc_move_sample(pos, cell_form)
     time.sleep(1)
     #ss.y.move(ss.y.position+offset_y)
-    RE(dscan([pil,em1,em2],ss.x, -xrange/2,xrange/2,x_points))
+    RE(dscan([pil,em1ext,em2ext,ext_trig],ss.x, -xrange/2,xrange/2,x_points))
     
 def mc_measure_sample_dscany(pos, sname='test', exp=0.5, y_points=5, yrange=4, x_points=5, xrange=0.5,offset_y=0,check_sname=True, cell_form=None):
     pil.set_trigger_mode(PilatusTriggerMode.ext_multi)
-    pil.exp_time(exp)
-    pil.set_num_images(y_points)
+    set_exp_time(dets=[pil,em1ext,em2ext],exp=exp)
+    set_num_images(dets=[pil,em1ext,em2ext],n_triggers=y_points)
+    #pil.exp_time(exp)
+    #pil.set_num_images(y_points)
     change_sample(sname, check_sname=check_sname)
     sol.mc_move_sample(pos, cell_form)
     time.sleep(1)
     #ss.y.move(ss.y.position+offset_y)
-    RE(dscan([pil,em1,em2],ss.y, -yrange/2,yrange/2,y_points))
+    RE(dscan([pil,em1ext,em2ext,ext_trig],ss.y, -yrange/2,yrange/2,y_points))
     
 def mc_measure_sample_mesh(pos, sname='test', exp=0.5, y_points=5, yrange=4, x_points=5, xrange=0.5,offset_y=0,check_sname=True, cell_form=None):
     pil.set_trigger_mode(PilatusTriggerMode.ext_multi)
-    pil.exp_time(exp)
-    pil.set_num_images(y_points*x_points)
+    set_exp_time(dets=[pil,em1ext,em2ext],exp=exp)
+    set_num_images(dets=[pil,em1ext,em2ext],n_triggers=y_points*x_points)
+    #pil.exp_time(exp)
+    #pil.set_num_images(y_points*x_points)
     change_sample(sname, check_sname=check_sname)
     sol.mc_move_sample(pos, cell_form)
     time.sleep(1)
     ss.y.move(ss.y.position+offset_y)
-    RE(dmesh([pil,em1,em2],ss.y, -yrange/2,yrange/2,y_points, ss.x, -xrange/2,xrange/2,x_points))
+    RE(dmesh([pil,em1ext,em2ext,ext_trig],ss.y, -yrange/2,yrange/2,y_points, ss.x, -xrange/2,xrange/2,x_points))
     
 def mc_measure_sample_scany(pos, sname='test', exp=0.5, 
                             y_points=10, yrange=4, x_points=2, xrange=0.5, offset_y=0.3,
@@ -846,14 +859,14 @@ def rbt_unload_sample(pos):
     else:
         print("invalid config state")
     print("sample mounted")
- 
+"""
 try:
     #sol.tctrl = tctrl_FTC100D(("xf16idc-tsvr-sena", 7002))
     #sol.tctrl = tctrl_FTC100D(("10.66.122.81",4001))
     sol.tctrl = tctrl_FTC100D(("10.66.122.159",4008))
 except:
     print("cannot connect to sample storage temperature controller")
-
+"""
 
 
 

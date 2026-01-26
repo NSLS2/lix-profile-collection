@@ -815,7 +815,7 @@ class SEC_SAXSCollection():
                     send_to_packing_queue(uid, "HPLC")
                     try:
                         sleep(post_run)
-                        t = threading.Thread(target=self.run_UV_collection, args=(method=method), daemon = True)
+                        t = threading.Thread(target=self.run_UV_collection, args=(method), daemon = True)
                         ##t = threading.Thread(target=self._copy_and_verify, args=(sample_name,),
                         #                     daemon=True)
                         t.start()

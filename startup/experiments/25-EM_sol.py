@@ -178,7 +178,7 @@ class SolutionScatteringExperimentalModule():
     Ntube = 18
     # these are mechanically determined and should not change
     #tube1_pos = -18.83
-    tube1_pos = -18.72
+    tube1_pos = -18.72 ##-18.72
     #tube1_pos = -18.83     #4/10/20 sc[new sensor]    #12/20/17 by JB
     tube_spc = -5.84 #-5.84    
 
@@ -316,7 +316,7 @@ class SolutionScatteringExperimentalModule():
             #ss.x.move(0)
             #ss.y.move(0.5) # ss.y position is 0 for fixed cell.
             #ss.xc.move(self.xc_park_fixed)  # fixed cell park position for robot
-            ready_for_robot(motors=[ss.x, ss.y, ss.xc], positions=[0, 0.5, self.xc_park_fixed]) 
+            ready_for_robot(motors=[ss.x, ss.y, ss.xc], positions=[0,7, self.xc_park_fixed]) 
             print('xc moved outboard for sample holder exchange')
         else:
             raise Exception(f"don't know how to park_sample() for config={config}")
