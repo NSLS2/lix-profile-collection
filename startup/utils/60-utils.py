@@ -178,8 +178,8 @@ def align_crl(rep=32, x_range=0.6, y_range=0.6, det=em1):
 
     RE(fast_shutter_wrapper(agent_y.optimize(iterations=1, n_points=rep))) #, iterations=4))) 
     #agent_y.plot_objective(crl.y1.name, crl.y2.name, objective_name)
-    print(f"best parameterization for y: {best_parameterization}")
     best_parameterization = agent_y.ax_client.get_best_parameterization()[0]
+    print(f"best parameterization for y: {best_parameterization}")
     crl.y1.move(best_parameterization['crl_y1']) # [0]
     crl.y2.move(best_parameterization['crl_y2']) # [0]
 

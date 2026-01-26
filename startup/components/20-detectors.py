@@ -305,6 +305,8 @@ def setup_cam(name):
     cam.stats4.read_attrs = ['total', 'centroid']
     cam.stats1.centroid.read_attrs=['x','y']
     cam.stats1.profile_average.read_attrs=['x','y']
+    cam.stats1.kind = "hinted"
+    cam.stats1.total.kind = "hinted"
     cam.roi1.read_attrs = ['min_xyz', 'size']
     cam.tiff.read_attrs = [] # we dont need anything other than the image
     #cam.over.read_attrs = [] # we dont need anything from overlay
