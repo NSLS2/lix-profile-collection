@@ -37,17 +37,17 @@ def close_purge_pump(valve=VICI_ID.Agilent_purge, valve_ID=2, get_ret=False):
     print(f"Purge pump closed with Valve {valve_ID}.")
     VV.check_valve_pos(valve=valve, valve_ID=2)
 
-def purge_superloop_open(flowrate=2, get_ret=False):
+def purge_superloop_open(valve=VICI_ID.Col1_purge,flowrate=2, valve_ID=3,get_ret=False):
     print("Check pressure limits and do not exceed 2mL/min")
     if flowrate > 2:
         raise Exception("Agilent Superloop flowrate exceeded")
     else:
         #VV.send_valve_cmd(cmd="CP", ID=3)
-        VV.send_valve_cmd(cmd="GO", ID=3, get_ret=get_ret)
+        VV.send_valve_cmd(cmd="GO", valve=valve, valve_ID=3, get_ret=get_ret)
         VV.check_valve_pos(ID=3)
     print("Purging superloop")
 
-def purge_superloop_close(get_ret=False):
+def purge_superloop_close(valve=VICI_ID.Col1_purge, valve_ID=3, get_ret=False):
     print("Check pressure limits and set flowrate in agilent software to 0.35mL/min")
     #VV.send_valve_cmd(cmd="CP", ID=3)
     VV.send_valve_cmd(cmd="GO", ID=3, get_ret=get_ret)

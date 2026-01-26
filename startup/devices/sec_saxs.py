@@ -6,7 +6,9 @@ from time import sleep
 from enum import Enum
 from pathlib import PureWindowsPath, Path
 import yaml, json
+from gen_SEC_report import *
 import threading as th
+from concurrent.futures import ThreadPoolExecutor, TimeoutError
 import pandas as pd
 from epics import caget, caput
 from lixtools.samples import parseSpreadsheet, autofillSpreadsheet
@@ -15,85 +17,8 @@ from lixtools.samples import parseSpreadsheet, autofillSpreadsheet
 global proc_path
 ADF_location = PureWindowsPath(r"C:/CDSProjects/HPLC/")
 windows_ip  = "xf16id@10.66.123.226"
-'''
-TCP_IP = '10.66.122.80'  ##moxa on HPLC cart.  Port 1 is valve, Port 2 is regen pump, Port 3 will contain all VICI valves
-Pump_TCP_PORT = 4002
-VICI_TCP_PORT = 4003
-socket.setdefaulttimeout(10)
-timeout=socket.getdefaulttimeout()
-print(timeout)
-'''
+
        
-'''
-class VICI_ID(Enum):
-    regen_valve = 1
-    buffer_purge = 2
-    Column_1_purge = 3
-    Column_2_purge = 4
-'''    
-'''
-class VICI_valves:
-    def __init__(self):
-        self.sock=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.sock.connect((TCP_IP, VICI_TCP_PORT))
-        #self.vici_id = VICI_ID(vici_id) don't need to setuep a separate call for each valve
-        #self.get_status()
-        #self.get_status()
-        
-    def send_valve_cmd(self, cmd):
-        cmd=f"{ID}{cmd}\r"
-        self.sock.sendall(cmd.encode())
-        print(f"Command {cmd} has been sent")
-        time.sleep(0.2)
-        ret=self.sock.recv(1024)
-        ascii_ret=ret.decode("ascii")
-        print(ascii_ret)
-        
-        #self.sock.close()
-    
-    def check_valve_pos(self):
-        cmd = f"{ID}CP\r"
-        self.sock.sendall(cmd.encode())
-        print("Getting 10-port Valve status")
-        ret = self.sock.recv(1024)
-        ascii_ret = ret.decode("ascii")
-        print(ascii_ret)
-        print(ascii_ret[-3])
-        return ascii_ret
-        
-    def switch_10port_valve(self, pos="A", ID=1):
-        cur_pos=self.check_valve_pos(ID=ID)  ## format is "Postion is A' \r"
-        if cur_pos[-3] == pos:
-            print(f"10-port Valve already at {pos}!")
-        
-        elif cur_pos[-3] != pos:
-            if pos=="A":
-                self.send_valve_cmd("GOA", ID=ID)
-            elif pos=="B":
-                self.send_valve_cmd("GOB", ID=ID)
-        else:
-            raise Exception(f"{pos} is not a valid command to change 10-port valve! Use 'A' or 'B'.")
-    
-VV = VICI_valves()   
-
-'''
-
-
-
-
-
-"""
-def switch_10port_valve(pos="A"):
-    if pos=="A":
-        #send_valve_cmd("GOA")
-        print("A")
-    elif pos=="B":
-            #send_valve_cmd("GOB")
-            print("B")
-            
-    else:
-        raise Exception(f"{pos} is not a valid command to change 10-port valve! Use 'A' or 'B'.")
-"""       
 def open_purge_pump(channel=None, flowrate=3, ID=2):
     """
     This will be used to prime the buffers in the Agilent Pump only.  A purge of the superloop up to column will be a second valve 
@@ -113,7 +38,55 @@ def open_purge_pump(channel=None, flowrate=3, ID=2):
         
     return status
     
+def get_UV_data(sample_name):
     
+     """This will fetch the 280 UV data from the working directory and is used by h5_attach_hplc"""
+     uv_file = f"{sample_name}.dx_DAD1E.CSV"
+     df = pd.read_csv(f'{proc_path}{sample_name}/{uv_file}')
+     k=df.to_numpy(dtype=float) 
+     return k
+
+def h5_attach_hplc(fn_h5, grp_name=None):
+    
+    """ the hdf5 is assumed to contain a structure like this:
+        LIX_104
+        == hplc
+        ==== data
+        == primary (em, scattering patterns, ...)
+        
+        attach the HPLC data to the specified group
+        if the group name is not give, attach to the first group in the h5 file
+    """
+    fn = fn_h5[:-3]
+    fn = f"{fn_h5}.h5"
+    f = h5py.File(fn, "r+")
+    if grp_name == None:
+        grp_name = list(f.keys())[0]
+    sample_name=list(f.keys())[0]
+    k=get_UV_data(sample_name)
+
+    
+    # this group is created by suitcase if using flyer-based hplc_scan
+    # otherwise it has to be created first
+    # it is also possible that there was a previous attempt to populate the data
+
+    if 'hplc' in f[f"{grp_name}"].keys():
+        grp = f["%s/hplc/data" % grp_name]
+    else:
+        grp = f.create_group(f"{grp_name}/hplc/data")
+        
+    key_list=list(grp.keys())
+    for g in grp:
+        if g in key_list:
+            print("warning: %s already exists, deleting ..." % g)
+            del grp[g]
+    else:
+        print("no UV_data previously present")
+    d=np.asarray(k)
+    #print(d)
+    dset=grp.create_dataset('[LC Chromatogram(Detector A-Ch1)]', data=d)
+    dset[:]=d
+    f.close()   
 
 
 class SEC_SAXSCollection(object):
@@ -155,7 +128,7 @@ class SEC_SAXSCollection(object):
         
         #super().__init__()
     def _run(self,cmd, timeout=None, capture=True):
-        """Run a shell command. Returns (rc, stdout, stderr)."""
+        """Run a shell command. Returns (returncode, stdout, stderr)."""
         if isinstance(cmd, list):
             popen_args = cmd
             shell=False
@@ -225,28 +198,7 @@ class SEC_SAXSCollection(object):
                 manifest[rel] = sz
                 print(manifest)
         return manifest        
-    def _verify_dir(self, sample):
-        """Compare Windows -> Linux manifests for the sample directory."""
-        win_path = self._windows_dir_for_sample(sample)
-        uv_dest_path = self._linux_dir_for_sample(sample)
-        rc, src_manifest, err = self._make_remote_manifest(win_path)
-        if rc != 0 or src_manifest is None:
-            return False, f"remote_manifest_failed: {err.strip() or rc}"
-        dst_manifest = self._make_local_manifest(lin_dir)
-
-        # Fast checks
-        if not src_manifest and not dst_manifest:
-            return False, "empty_source_and_dest"
-        if len(src_manifest) != len(dst_manifest):
-            return False, f"file_count_mismatch src={len(src_manifest)} dst={len(dst_manifest)}"
-
-        # Per-file size compare
-        for rel, sz in src_manifest.items():
-            if rel not in dst_manifest:
-                return False, f"missing:{rel}"
-            if int(dst_manifest[rel]) != int(sz):
-                return False, f"size_mismatch:{rel} src={sz} dst={dst_manifest[rel]}"
-        return True, "ok"    
+   
     def _copy_with_scp(self, sample):
         #proc_path = caget('XF:16IDC-ES{HPLC}PROC_PATH') PV is too complicated converting bytes strings
         win_path = self._windows_dir_for_sample(sample)
@@ -254,38 +206,110 @@ class SEC_SAXSCollection(object):
         os.makedirs(uv_dest_path, exist_ok=True)
         src = f"{windows_ip}:{win_path}"
         cmd = ["scp", "-r", src, str(proc_path)]
-        return self._run(cmd)
-    def _copy_and_verify(self, sample):
-        """Main workflow: copy then verify, flip PVs accordingly."""
-        caput('XF:16IDC-ES{HPLC}STATUS', 1)  # BUSY--Need to put this on ioc2?
-        caput('XF:16IDC-ES{HPLC}GET_UV_RBV', 0)
-        caput('XF:16IDC-ES{HPLC}LAST_REASON', "")
+        ret = self._run(cmd)
+        if ret[0] == 0:
+            print("UV files successfully copied")
+        if ret[0]!=0:
+            print(f"Warning: {sample}_UV files were not copied!")
+        return ret                   
+    
+    
+    
+    
+    def build_exp_df(self, dd, batchID, uv_inj_vol=None):
+        df=pd.DataFrame.from_dict(dd, orient='columns')
+        df = df.loc[df["batchID"]==batchID].copy()
+        num_cols = ["Volume", "buffer_position"]
+        df[num_cols] = df[num_cols].apply(pd.to_numeric, errors="raise")
+        df["Data file"] = "<S>"
+        df["Sample Type"] = "Sample"
+        conditional_df = ~df["Exp_Type"].isin(["X-ray_only", "X-ray_Regen"])
+        uv_rows = df.loc[conditional_df].copy()
+        if not uv_rows.empty:
+            uv_rows["Sample Name"] = uv_rows["Sample Name"] + '_UV'
+            if uv_inj_vol == None:
+                uv_inj_vol = 20
+            uv_rows["Volume"] = uv_inj_vol
+            uv_rows["Acq. method"] = uv_rows["Acq. method"].str.replace(r"\.amx$", "_UV.amx", regex=True)
+        exp_df = pd.concat([df, uv_rows], ignore_index = True)
+        return exp_df
+
+    def hplc_dict_from_df(self, exp_df):
+        samples = {}
+        valve_position = {}
+        experiment_type ={}
         
+        for row in exp_df.to_dict(orient="records"):
+            sn =row["Sample Name"]
+            valve_position[sn] = row.get("Valve Position")
+            experiment_type[sn] = row.get("Exp_Type")
+
+            samples[sn] = {
+                "acq time": row.get("Run Time"),
+                "valve_position": row.get("Valve Position"),
+                "md": {
+                    "Column type": row.get("Column type"),
+                    "Injection Volume (ul)": row.get("Volume"),
+                    "Flow Rate (ml_min)": row.get("Flow Rate"),
+                    "Sample buffer": row.get("Buffer"),
+                    "Slot": row.get("Slot"),
+                    "Valve Position": row.get("Valve Position"),
+                    "Acq Method": row.get("Acq. method"),
+                    "Vial": row.get("Vial"),
+                    "experiment_type": row.get("Exp_Type"),
+                    "buffer_position": row.get("buffer_position"),
+                },
+            }
+
+        return samples, valve_position, experiment_type
+        
+        
+        
+    def CreateAgilentSeqFile(self, spreadsheet_fn, batchID, sheet_name='Samples', uv_inj_vol = None): 
+        """
+    Creates the agilent sequence file from the spreadsheet. User input is batchID, sample_name and method for hplc. The other columns are necessary for generating the proper formatted sequence file
+    """
+        strFields=["Vial", "Sample Name", "Sample Type", "Acq. method", "Proc. method", "Data file", "Buffer", "Valve Position", "Exp_Type", "Slot"]
+        numFields=["Volume", "buffer_position"]
+        dd=parseSpreadsheet(spreadsheet_fn, sheet_name=sheet_name, return_dataframe=False)
+      
+        autofillSpreadsheet(dd, fields=["batchID"])
+
+    
+        if proposal_id is None or run_id is None:
+            print("need to login first ...")
+            login()
+  
+        exp_df = self.build_exp_df(dd, batchID, uv_inj_vol)
+        samples, valve_position, experiment_type = self.hplc_dict_from_df(exp_df)
+        sequence_path = "/nsls2/data4/lix/legacy/HPLC/Agilent/"
+        out_csv = f"{sequence_path}sequence_table.csv"
+
+        exp_df.to_csv(
+            out_csv,
+            index=False,
+            encoding="ASCII",
+            columns=["Vial", "Sample Name", "Sample Type", "Volume", "Inj/Vial",
+                     "Acq. method", "Proc. method", "Data file"]
+        )
+        source_file = f"{sequence_path}"+'sequence_table.csv'
+        destination_loc = "xf16id@10.66.123.226:C:/CDSProjects/HPLC/"
         try:
-            rc, out, err = self._copy_with_scp(sample)
-            method = "scp"
-
-            caput('XF:16IDC-ES{HPLC}OUTPUT', (out or "").strip())
-            caput('XF:16IDC-ES{HPLC}ERROR', (err or "").strip())
-
-            if rc != 0:
-                caput('XF:16IDC-ES{HPLC}GET_UV_RBV', 0)
-                caput('XF:16IDC-ES{HPLC}LAST_REASON', f"{method}_failed_rc{rc}")
-                return
-
-            ok, reason = self._verify_dir(sample)
-            caput('XF:16IDC-ES{HPLC}GET_UV_RBV', 1 if ok else 0)
-            caput('XF:16IDC-ES{HPLC}LAST_REASON', reason)
-            if ok == 1:
-                print(f'UV file moved and verified for {sample}')
-                return ok
+                ssh_key = str(pathlib.Path.home())+"/.ssh/id_rsa.pub"
+                if not os.path.isfile(ssh_key):
+                    raise Exception(f"{ssh_key} does not exist!")
+                cmd = ["scp", "/nsls2/data4/lix/legacy/HPLC/Agilent/sequence_table.csv", destination_loc] ##hardcoded path for sequence file
+                #print(cmd)
+                subprocess.run(cmd)
+                print("Sequence_table sucessfully sent")
         except Exception as e:
-            print("Failure to fetch UV file")
-            caput('XF:16IDC-ES{HPLC}ERROR', str(e))
-            caput('XF:16IDC-ES{HPLC}GET_UV_RBV', 0)
-            caput('XF:16IDC-ES{HPLC}LAST_REASON', f"exception:{e}")
-        finally:
-            caput('XF:16IDC-ES{HPLC}STATUS', 0)  # DONE                       
+            print("SCP transfer has failed for!")
+        
+
+        return samples, valve_position, experiment_type
+    
+    '''
+    ##Old method
     def CreateAgilentSeqFile(self, spreadsheet_fn, batchID, sheet_name='Samples'): 
         """
     Creates the agilent sequence file from the spreadsheet. User input is batchID, sample_name and method for hplc. The other columns are necessary for generating the proper formatted sequence file
@@ -350,7 +374,8 @@ class SEC_SAXSCollection(object):
         except Exception as e:
             print("SCP transfer has failed for!")
 
-        return samples, valve_position  
+        return samples, valve_position 
+        '''
         
         
     
@@ -436,7 +461,47 @@ class SEC_SAXSCollection(object):
             #print(f"Buffer Readback Value is {buffer_pos}")
         
         return
-    def collect_hplc(self, sample_name, exp, post_run, nframes,md=None, get_uv = True):
+    def verify_method_valve(self, method, current_valve_position):
+        if method not in self.experiment_type:
+            raise ValueError(f"Selected method {method} not in acceptable methods list! Choose {experiment_type}")
+        elif method == "X-ray_only":
+            if self.column_locations != current_valve_position:
+                self.column_locations = "col_pos1"
+            else:
+                print(f" {self.column_position}")
+        return True
+    def detector_selection(self, position):
+        if position == "X-ray":
+            VV.send_valve_cmd(cmd="GOB", valve=VICI_ID.Detector, valve_ID = 4)
+        if position == "UV":
+            VV.send_valve_cmd(cmd="GOA", valve=VICI_ID.Detector, valve_ID = 4)
+    def run_UV_collection(self, method, sample_name):
+        self.detector_selection(position="UV")
+        print("Switching to UV detectors")
+        caput('XF:16IDC-ES{HPLC}HPLC_status' ,0)
+        caput('XF:16IDC-ES{HPLC}HPLC_status' ,1)
+        caput('XF:16IDC-ES{HPLC}SAMPLE_NAME' ,sample_name)
+        time.sleep(10)
+        if caget('XF:16IDC-ES{HPLC}HPLCRunStatus') == "Idle":
+            caput('XF:16IDC-ES{HPLC}START_RUN', 1) #starts run via SDK
+            time.sleep(1)
+            caput('XF:16IDC-ES{HPLC}START_RUN', 0)
+            status = "Idle"
+        elif caget('XF:16IDC-ES{HPLC}HPLCRunStatus') == "PostRun":
+            print("PostRun")
+            time.sleep(post_run)
+            ##get UV data at this step, need to do this with hardware triggering for better timing.
+            if method in ["X-ray_UV", "UV_MALS_RID_only"]:
+                uv_dest_path = f'{proc_path}'
+                
+                
+            caput('XF:16IDC-ES{HPLC}START_RUN', 1)
+            caput('XF:16IDC-ES{HPLC}START_RUN', 0)
+        print("Running UV data collection")  
+        time.sleep(acq_time_sec)     
+        return {"status":state}
+  
+    def collect_hplc(self, sample_name, exp, post_run, nframes, md=None):
         ##do not include postrun if running 1 sample
         TRP.set_flowrate(5) # to clear any bubbles
         TRP.start_pump()
@@ -448,7 +513,7 @@ class SEC_SAXSCollection(object):
         pil.use_sub_directory(sample_name)
         sol.select_flow_cell('middle')
         pil.set_trigger_mode(PilatusTriggerMode.ext_multi)
-        #pil.set_num_images(nframes)
+        #pil.set_num_images(nframes)  ##old way
         set_num_images(dets=[pil],n_triggers=nframes)
         #pil.exp_time(exp)
         set_exp_time(dets=[pil], exp=exp)
@@ -456,7 +521,7 @@ class SEC_SAXSCollection(object):
         caput('XF:16IDC-ES{HPLC}HPLC_status' ,0)
         caput('XF:16IDC-ES{HPLC}HPLC_status' ,1)
         caput('XF:16IDC-ES{HPLC}SAMPLE_NAME' ,sample_name)
-        time.sleep(10)
+        time.sleep(5)
         if caget('XF:16IDC-ES{HPLC}HPLCRunStatus') == "Idle":
             caput('XF:16IDC-ES{HPLC}START_RUN', 1) #starts run via SDK
             time.sleep(1)
@@ -464,9 +529,6 @@ class SEC_SAXSCollection(object):
         elif caget('XF:16IDC-ES{HPLC}HPLCRunStatus') == "PostRun":
             print("PostRun")
             time.sleep(post_run)
-            ##get UV data at this step, need to do this with hardware triggering for better timing.
-            if get_uv:
-                uv_dest_path = f'{proc_path}'
                 
                 
             caput('XF:16IDC-ES{HPLC}START_RUN', 1)
@@ -490,7 +552,7 @@ class SEC_SAXSCollection(object):
         pil.use_sub_directory()
         change_sample()
     
-    def run_hplc_from_spreadsheet(self, spreadsheet_fn, batchID, sheet_name='Samples', exp=2, flowrate = 0.35, post_run=60, get_uv=True):
+    def run_hplc_from_spreadsheet(self, spreadsheet_fn, batchID, sheet_name='Samples', exp=2, flowrate = 0.35, post_run=60, generate_report=True, uv_inj_vol=20, old_uv_proc=False):
         
         """
         Runs HPLC experiments based on data from a spreadsheet.
@@ -503,82 +565,80 @@ class SEC_SAXSCollection(object):
         """
     
         sequence_name = '/nsls2/data/lix/legacy/HPLC/Agilent/sequence_table.csv'
-        samples, valve_position = self.CreateAgilentSeqFile(spreadsheet_fn, batchID, sheet_name=sheet_name)
+        samples, valve_position, experiment_type = self.CreateAgilentSeqFile(spreadsheet_fn, batchID, 
+                                                                             sheet_name=sheet_name, uv_inj_vol=uv_inj_vol)
    
     
         
     
         print(f"HPLC sequence file has been created in: {sequence_name}")
         print('Make sure you have selected the correct flow path for experiment and column type!')
-        #input("Please start Sequence in Agilent software by importing sequence_table.csv (under sequence tab), click run, then come back to this machine and then hit enter:")
         run_number = 1
+        sample_items = list(samples.items())
+        number_samples = len(sample_items)
+        for run_idx, (sample_name, sample_info) in enumerate(sample_items, start = 1):
+            
+            print(f"Number of samples to run is: {number_samples}")
+            print(f"Starting SEC for sample number {run_idx} of {number_samples}")
+            single_sample = self.create_sample_param(sample_name, samples)
+            caput('XF:16IDC-ES{HPLC}SAMPLE_NAME', sample_name)
+            caput('XF:16IDC-ES{HPLC}SDK_Connection' , 1)
+            #caput('XF:16IDC-ES{HPLC}HPLC:TAKE_CTRL' , 0) possibly causing agilent software to crash?
+            
+            single_sample = json.dumps(self.sample_params)
+            caput('XF:16IDC-ES{HPLC}RunParameters' , single_sample)
+
+            valve_pos = sample_info["md"]["Valve Position"]
+            print(f"Switching valve to position {valve_pos} for sample {sample_name}...")
+            VV.switch_10port_valve(pos=valve_pos, valve=VICI_ID.Valve_10_port,
+                                   valve_ID=VICI_ID.Valve_10_port.valve_ID, get_ret=False)
+
+            print(f"Collecting data for {sample_name}...")
+            acq_time_sec = sample_info["acq time"] * 60
+            nframes = int(acq_time_sec / exp)
+            self.collect_hplc(sample_name, exp=exp, nframes=nframes, post_run=post_run, 
+                              md={'HPLC': sample_info['md']})  
+            uid = db[-1].start['uid']
+            #send_to_packing_queue(uid, "HPLC")
+            pack_h5_with_lock(uid, dest_dir=proc_path, attach_uv_file=False)
+            pil.use_sub_directory()
         while run_number <= len(samples.items()):
             for sample_name, sample_info in samples.items():
                 number_samples = len(samples.items())
-                print(f"Number of samples to run is: {number_samples}")
-                print(f"Starting SEC for sample number {run_number} of {number_samples}")
-                single_sample = self.create_sample_param(sample_name, samples)
-                caput('XF:16IDC-ES{HPLC}SAMPLE_NAME', sample_name)
-                caput('XF:16IDC-ES{HPLC}HPLC:SNUV', sample_name)
-                caput('XF:16IDC-ES{HPLC}SDK_Connection' , 1)
-                #caput('XF:16IDC-ES{HPLC}HPLC:TAKE_CTRL' , 0)
-                single_sample = json.dumps(self.sample_params)
-                caput('XF:16IDC-ES{HPLC}RunParameters' , single_sample)
-                valve_pos = sample_info["md"]["Valve Position"]
-                print(f"Switching valve to position {valve_pos} for sample {sample_name}...")
-                VV.switch_10port_valve(pos=valve_pos, valve=VICI_ID.Valve_10_port,
-                                       valve_ID=VICI_ID.Valve_10_port.valve_ID, get_ret=False)
-        
-                print(f"Collecting data for {sample_name}...")
-                acq_time_sec = sample_info["acq time"] * 60
-                nframes = int(acq_time_sec / exp)
-                self.collect_hplc(sample_name, exp=exp, nframes=nframes, post_run=post_run, md={'HPLC': sample_info['md']}, get_uv=True)   
-        
-                uid = db[-1].start['uid']
-                send_to_packing_queue(uid, "HPLC")
-                if get_uv:
-                    try:
-                        sleep(120)
-                        t = threading.Thread(target=self._copy_and_verify, args=(sample_name,),
-                                             daemon=True)
-                        t.start()
+                
 
-                    except Exception as e:
-                        msg = f"[Run {current_run}] failed to start thread: {e}"
-                        print(msg)
-                        caput('XF:16IDC-ES{HPLC}ERROR', str(e))
-                        caput('XF:16IDC-ES{HPLC}LAST_REASON', 'thread_start_failed')
-                        caput('XF:16IDC-ES{HPLC}OUTPUT', msg)
-                    
-                    """
+                
+                
+                #VV.send_valve_cmd(cmd='GOB', valve=VICI_ID.Detector, valve_ID=4)
+        
+                
+        
+
+                if old_uv_proc:
                     max_attempts = 3
                     cutoff = 3*60
                     attempt = 0
                     while True:
                         attempt += 1
                         try:
-                            t = threading.Thread(target=self._copy_and_verify, args=(sample_name,),
-                                             daemon=True)
+                            t = threading.Thread(target=self._copy_with_scp, args=(sample_name,),
+                                                 daemon=True)
                             t.start()
-                            if t == 1:
-                                print("File copied!")
-                            else:
-                                if attempt >= max_attempts:
-                                    print("failure of uv after 3 attempts")
-                                    return False
+                            h5_attach_hplc(sample_name)
+                            if attempt >= max_attempts:
+                                print("failure of uv file copying after 3 attempts")
+                                return False
                         
                         except Exception as e:
-                            msg = f"[Run {current_run}] failed to start thread: {e}"
+                            msg = f"[Run {attempt}] failed to start thread: {e}"
                             print(msg)
-                            caput('XF:16IDC-ES{HPLC}ERROR', str(e))
-                            caput('XF:16IDC-ES{HPLC}LAST_REASON', 'thread_start_failed')
-                            caput('XF:16IDC-ES{HPLC}OUTPUT', msg)
                         
-                        """
+            run_number += 1
+            if generate_report:
+                gen_SEC_report(f"{sample_name}.h5")
                         
-                run_number += 1
     
-            pil.use_sub_directory()
+            #pil.use_sub_directory()
             #caput('XF:16IDC-ES{HPLC}SDK_Connection' , 2) #Disconnect from SDK each time.  Seems to get stuck if you dont
             #run_number += 1
         print(f'Sequence collection finished for batch {batchID} from {spreadsheet_fn}')

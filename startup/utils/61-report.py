@@ -46,8 +46,8 @@ detector_list = [bpm,em1, em2,em0]
 lix_report = fast_shutter_decorator()(record_pos_and_det)
 
 
-def generate_report(pdf_file="report_sep.pdf"):
-    RE(lix_report(motor_list,detector_list,md={'record':'cycle_2025_3'}))
+def generate_report(pdf_file="report.pdf"):
+    RE(lix_report(motor_list,detector_list,md={'record':'cycle_2026_1'}))
     uids = list_scans(plan_name="record_pos_and_det")
     uida = uids[-10:]
     ht = []
@@ -102,8 +102,8 @@ def generate_report(pdf_file="report_sep.pdf"):
     
     plt.figure(figsize=(10,4))
     plt.plot(range(10), bpm_vals, marker='o')
-    plt.title("bpm_int_mean vs Block Index")
-    plt.xlabel("Block Index (0-9)")
+    plt.title("bpm_int_mean")
+    plt.xlabel("last 10 Historical data")
     plt.ylabel("bpm_int_mean")
     plt.grid(True)
     plt.tight_layout()
