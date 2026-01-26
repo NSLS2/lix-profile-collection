@@ -77,7 +77,7 @@ def scnSF_intensity_evaluation(
 ) -> list[dict]:
 
     run = c[uid]
-    images = run[f"primary/{scnSF.name}_image"].read()
+    images = run[f"primary/{scnSF.cam.name}_image"].read()
     suggestion_ids = [suggestion["_id"] for suggestion in run.metadata["start"]["blop_suggestions"]]
     results = []
 
@@ -114,6 +114,8 @@ def align_crl(rep=32, x_range=0.6, y_range=0.6, det=em1):
     pos_y10 = crl.y1.position
     pos_y20 = crl.y2.position
 
+    # crl.x1 4.4
+    # crl.x2 7.6
     dofs_x = [
         RangeDOF(
             actuator=crl.x1,
@@ -140,7 +142,7 @@ def align_crl(rep=32, x_range=0.6, y_range=0.6, det=em1):
         ),
     ]
 
-    if det.name == "scnSF":
+    if det.name == "camSF":
         objective_name = "beam_intensity"
         evaluation_function = scnSF_intensity_evaluation
     else:
