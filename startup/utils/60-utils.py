@@ -84,7 +84,7 @@ def scnSF_intensity_evaluation(
     for idx, sid in enumerate(suggestion_ids):
         beam_intensity = intensity_metric(images[idx].squeeze(), threshold_factor=threshold_factor, edge_crop=edge_crop)
         results.append({
-            "beam_intensity": beam_intensity,
+            "beam_intensity": beam_intensity / 1e6,
             "_id": sid
         })
 
