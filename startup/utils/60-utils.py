@@ -42,7 +42,7 @@ def intensity_metric(image, background=None, threshold_factor=0.1, edge_crop=0):
         gray = image.copy()
 
     # crop the image to remove noise around the edges
-    gray = gray[150:450, 750:1200]
+    gray = gray[200:500, 800:1100]
 
     # Crop edges to remove artifacts
     if edge_crop > 0:
