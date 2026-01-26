@@ -274,6 +274,71 @@ def align_crl2(rep=32, x_range=0.6, y_range=0.6, det=em1, optim_steps=10):
 
     return agent_1, agent_2
 
+def align_crl3(rep=32, x_range=0.6, y_range=0.6, det=em1, optim_steps=10):
+
+    pos_x10 = crl.x1.position
+    pos_x20 = crl.x2.position
+    pos_y10 = crl.y1.position
+    pos_y20 = crl.y2.position
+
+    # crl.x1 4.4
+    # crl.x2 7.6
+    dofs_1 = [
+        RangeDOF(
+            actuator=crl.x1,
+            bounds=(pos_x10-x_range/2, pos_x10+x_range/2),
+            parameter_type="float",
+        ),
+        RangeDOF(
+            actuator=crl.y1,
+            bounds=(pos_y10-y_range/2, pos_y10+y_range/2),
+            parameter_type="float",
+        ),
+        RangeDOF(
+            actuator=crl.x2,
+            bounds=(pos_x20-x_range/2, pos_x20+x_range/2),
+            parameter_type="float",
+        ),
+        RangeDOF(
+            actuator=crl.y2,
+            bounds=(pos_y20-y_range/2, pos_y20+y_range/2),
+            parameter_type="float",
+        ),
+    ]
+
+    if det.name == "camSF":
+        objective_name = "beam_intensity"
+        evaluation_function = scnSF_intensity_evaluation
+    else:
+        objective_name = f"{det.name}_sum_all_mean_value"
+        evaluation_function = bpm_intensity_evaluation
+
+    objectives = [
+        Objective(name=objective_name, minimize=False),
+    ]
+
+    dets = [det]
+
+    agent_1 = Agent(dofs=dofs_1, objectives=objectives, sensors=dets, evaluation_function=evaluation_function)
+    
+    agent_1.ax_client.configure_generation_strategy(
+        initialization_budget=rep,
+        initialize_with_center=False,
+    )
+
+    RE(fast_shutter_wrapper(agent_1.optimize(iterations=1, n_points=rep))) #, iterations=4))) 
+    if optim_steps > 1:
+        RE(fast_shutter_wrapper(agent_1.optimize(iterations=optim_steps)))
+    #agent_x.plot_objective(crl.x1.name, crl.x2.name, objective_name)
+    best_parameterization = agent_1.ax_client.get_best_parameterization()[0]
+    print(f"best parameterization for x: {best_parameterization}")
+    crl.x1.move(best_parameterization['crl_x1']) # ['crl_x1'][0]
+    crl.y1.move(best_parameterization['crl_y1']) # [0]
+    crl.x2.move(best_parameterization['crl_x2']) # [0]
+    crl.y2.move(best_parameterization['crl_y2']) # [0]
+
+    return agent_1
+
 
 def get_cnts():
     RE(ct([em1,em2,bpm], num=1))
