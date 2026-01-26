@@ -179,6 +179,8 @@ def align_crl(rep=32, x_range=0.6, y_range=0.6, det=em1):
     crl.y1.move(best_parameterization['crl_y1']) # [0]
     crl.y2.move(best_parameterization['crl_y2']) # [0]
 
+    return agent_x, agent_y
+
 
 def get_cnts():
     RE(ct([em1,em2,bpm], num=1))
