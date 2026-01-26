@@ -272,7 +272,7 @@ def align_crl2(rep=32, x_range=0.6, y_range=0.6, det=em1, optim_steps=10):
     crl.x2.move(best_parameterization['crl_x2']) # [0]
     crl.y2.move(best_parameterization['crl_y2']) # [0]
 
-    return agent_x, agent_y
+    return agent_1, agent_2
 
 
 def get_cnts():
