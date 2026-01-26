@@ -77,7 +77,7 @@ def scnSF_intensity_evaluation(
 ) -> list[dict]:
 
     run = c[uid]
-    images = run[f"primary/{scnSF.cam.name}_image"].read()
+    images = run[f"primary/data/{scnSF.cam.name}_image"].read()
     suggestion_ids = [suggestion["_id"] for suggestion in run.metadata["start"]["blop_suggestions"]]
     results = []
 
@@ -93,7 +93,7 @@ def scnSF_intensity_evaluation(
 
 def bpm_intensity_evaluation(uid: str, suggestions: list[dict], det=em1) -> list[dict]:
     run = c[uid]
-    em1_sum_all_mean_value = run[f"primary/{det.name}_sum_all_mean_value"].read()
+    em1_sum_all_mean_value = run[f"primary/data/{det.name}_sum_all_mean_value"].read()
     suggestion_ids = [suggestion["_id"] for suggestion in run.metadata["start"]["blop_suggestions"]]
     results = []
 
@@ -129,6 +129,8 @@ def align_crl(rep=32, x_range=0.6, y_range=0.6, det=em1):
         ),
     ]
 
+    # crl.y1 8.22
+    # crl.y2 -18.11
     dofs_y = [
         RangeDOF(
             actuator=crl.y1,
