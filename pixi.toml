@@ -35,6 +35,7 @@ pvxslibs = "*"
 bluesky-tiled-plugins = "*"
 blop = { git = "https://github.com/NSLS-II/blop.git", rev = "main" }
 lixtools = { git = "https://github.com/thopkins32/lixtools.git", rev = "main" }
+py4xs = { git = "https://github.com/NSLS-II-LIX/py4xs.git", rev = "master" }
 pymoo = "!=0.6.1.6"
 
 
