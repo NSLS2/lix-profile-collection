@@ -107,7 +107,7 @@ def bpm_intensity_evaluation(uid: str, suggestions: list[dict], det=em1) -> list
     return results
 
 
-def align_crl(rep=32, x_range=0.6, y_range=0.6, det=em1):
+def align_crl(rep=32, x_range=0.6, y_range=0.6, det=em1, optim_steps=10):
 
     pos_x10 = crl.x1.position
     pos_x20 = crl.x2.position
@@ -170,6 +170,8 @@ def align_crl(rep=32, x_range=0.6, y_range=0.6, det=em1):
     )
 
     RE(fast_shutter_wrapper(agent_x.optimize(iterations=1, n_points=rep))) #, iterations=4))) 
+    if optim_steps > 1:
+        RE(fast_shutter_wrapper(agent_x.optimize(iterations=optim_steps)))
     #agent_x.plot_objective(crl.x1.name, crl.x2.name, objective_name)
     best_parameterization = agent_x.ax_client.get_best_parameterization()[0]
     print(f"best parameterization for x: {best_parameterization}")
@@ -177,6 +179,8 @@ def align_crl(rep=32, x_range=0.6, y_range=0.6, det=em1):
     crl.x2.move(best_parameterization['crl_x2']) # [0]
 
     RE(fast_shutter_wrapper(agent_y.optimize(iterations=1, n_points=rep))) #, iterations=4))) 
+    if optim_steps > 1:
+        RE(fast_shutter_wrapper(agent_y.optimize(iterations=optim_steps)))
     #agent_y.plot_objective(crl.y1.name, crl.y2.name, objective_name)
     best_parameterization = agent_y.ax_client.get_best_parameterization()[0]
     print(f"best parameterization for y: {best_parameterization}")
