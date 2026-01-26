@@ -33,7 +33,7 @@ mon0 = "bpm_int_mean"
 c = tiled.client.from_profile('lix')
 
 
-def intensity_metric(image, background=None, threshold_factor=0.1, edge_crop=0):
+def intensity_metric(image, background=None, threshold_factor=0.4, edge_crop=0):
     # Convert to grayscale
     image = image.squeeze()
     if len(image.shape) == 3 and image.shape[0] == 3:
@@ -75,7 +75,7 @@ def intensity_metric(image, background=None, threshold_factor=0.1, edge_crop=0):
 def scnSF_intensity_evaluation(
     uid: str,
     suggestions: list[dict],
-    threshold_factor: float = 0.1,
+    threshold_factor: float = 0.4,
     edge_crop: int = 0,
 ) -> list[dict]:
 
