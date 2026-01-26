@@ -4,7 +4,7 @@ import time
 import pylab as plt
 from pathlib import Path
 import redis
-from py4xs.utils import get_bin_ranges_from_grid
+#from py4xs.utils import get_bin_ranges_from_grid
 from ophyd import Device
 from ophyd.areadetector import EpicsSignalWithRBV
 
