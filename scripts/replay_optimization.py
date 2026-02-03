@@ -249,11 +249,16 @@ class ReplayVisualizer(CallbackBase):
                 self.record_video = False
             else:
                 print(f"Video recording enabled: {video_filename} (fps={fps})")
-                # We'll initialize the writer in start() method
+                # Switch to Agg backend for flicker-free video recording
+                plt.switch_backend('Agg')
+                print("  Using Agg backend for video recording")
         
         # Create figure with grid: intensity plot, image, and single row of 2 motor pair plots
-        self.fig = plt.figure(figsize=(16, 12))
-        gs = self.fig.add_gridspec(3, 2, hspace=0.4, wspace=0.4)
+        # Tighter layout for PowerPoint embedding - less horizontal stretch
+        self.fig = plt.figure(figsize=(12, 10))
+        # Main gridspec: only 2 rows (intensity plot + image plots), no unused row
+        gs = self.fig.add_gridspec(2, 2, hspace=0.15, wspace=0.1, 
+                                    left=0.05, right=0.98, top=0.95, bottom=0.30)
         
         # Top row: intensity plot (spans 2 columns)
         self.ax1 = self.fig.add_subplot(gs[0, :])
@@ -281,7 +286,8 @@ class ReplayVisualizer(CallbackBase):
         
         # Bottom row: single row of 2 plots for motor pair scatter plots
         # Only show (x1,x2) and (y1,y2) pairs
-        gs_bottom = self.fig.add_gridspec(1, 2, left=0.1, right=0.95, bottom=0.05, top=0.25, hspace=0.3, wspace=0.4)
+        # Positioned with small gap below the image plots
+        gs_bottom = self.fig.add_gridspec(1, 2, left=0.05, right=0.98, bottom=0.05, top=0.27, hspace=0.1, wspace=0.1)
         self.ax_pairs = {
             ('x1', 'x2'): self.fig.add_subplot(gs_bottom[0, 0]),
             ('y1', 'y2'): self.fig.add_subplot(gs_bottom[0, 1]),
@@ -302,13 +308,20 @@ class ReplayVisualizer(CallbackBase):
             'crl_y2': 'y2'
         }
         
-        plt.tight_layout()
-        plt.ion()
-        plt.show(block=False)
+        # Use subplots_adjust for precise control with adequate padding
+        plt.subplots_adjust(left=0.05, right=0.98, top=0.95, bottom=0.05, hspace=0.15, wspace=0.1)
         
-        # Force initial draw
-        self.fig.canvas.draw()
-        self.fig.canvas.flush_events()
+        # Only enable interactive mode when NOT recording video
+        # Interactive mode causes flickering during video capture
+        if not self.record_video:
+            plt.ion()
+            plt.show(block=False)
+            self.fig.canvas.draw()
+            self.fig.canvas.flush_events()
+        else:
+            # For video recording, use non-interactive mode
+            plt.ioff()
+            self.fig.canvas.draw()
         
         if self.debug:
             print(f"[DEBUG] ReplayVisualizer initialized for detector '{detector_name}'")
@@ -631,20 +644,18 @@ class ReplayVisualizer(CallbackBase):
                                 ax.set_xlim(x_min - x_margin, x_max + x_margin)
                                 ax.set_ylim(y_min - y_margin, y_max + y_margin)
             
-            # Force redraw - use draw() for immediate update
+            # Force redraw and capture frame
             try:
                 self.fig.canvas.draw()
-                self.fig.canvas.flush_events()
-                
-                # Capture frame for video if recording
+                # Capture frame immediately after draw, before flush_events
+                # flush_events can trigger redraws causing flicker in video
                 if self.record_video and self.video_writer is not None:
                     self.video_writer.grab_frame()
+                else:
+                    self.fig.canvas.flush_events()
             except Exception as e:
                 if self.debug:
                     print(f"[DEBUG]   Canvas draw error: {e}")
-                # Fallback to draw_idle
-                self.fig.canvas.draw_idle()
-                self.fig.canvas.flush_events()
         else:
             if self.debug:
                 print(f"[DEBUG]   Image key '{image_key}' not found in event data")
