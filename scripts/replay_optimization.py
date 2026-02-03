@@ -24,6 +24,15 @@ try:
 except ImportError:
     HAS_VIDEO = False
 
+# GP model imports for visualization
+try:
+    from sklearn.gaussian_process import GaussianProcessRegressor
+    from sklearn.gaussian_process.kernels import RBF, ConstantKernel, WhiteKernel
+    HAS_GP = True
+except ImportError:
+    HAS_GP = False
+    print("Warning: scikit-learn not available. GP visualization disabled.")
+
 
 lix_client = from_uri("https://tiled.nsls2.bnl.gov/")["lix"]["raw"]
 
@@ -250,8 +259,8 @@ class ReplayVisualizer(CallbackBase):
             else:
                 print(f"Video recording enabled: {video_filename} (fps={fps})")
                 # Switch to Agg backend for flicker-free video recording
-                plt.switch_backend('Agg')
-                print("  Using Agg backend for video recording")
+                # plt.switch_backend('Agg')
+                # print("  Using Agg backend for video recording")
         
         # Create figure with grid: intensity plot, image, and single row of 2 motor pair plots
         # Tighter layout for PowerPoint embedding - less horizontal stretch
@@ -286,8 +295,8 @@ class ReplayVisualizer(CallbackBase):
         
         # Bottom row: single row of 2 plots for motor pair scatter plots
         # Only show (x1,x2) and (y1,y2) pairs
-        # Positioned with small gap below the image plots
-        gs_bottom = self.fig.add_gridspec(1, 2, left=0.05, right=0.98, bottom=0.05, top=0.27, hspace=0.1, wspace=0.1)
+        # Positioned with gap below the image plots (top=0.24 to avoid title/axis overlap)
+        gs_bottom = self.fig.add_gridspec(1, 2, left=0.05, right=0.98, bottom=0.05, top=0.24, hspace=0.1, wspace=0.1)
         self.ax_pairs = {
             ('x1', 'x2'): self.fig.add_subplot(gs_bottom[0, 0]),
             ('y1', 'y2'): self.fig.add_subplot(gs_bottom[0, 1]),
@@ -295,7 +304,7 @@ class ReplayVisualizer(CallbackBase):
         
         # Track motor positions and scatter plots
         self.motor_positions = {'x1': [], 'x2': [], 'y1': [], 'y2': []}
-        self.motor_pair_data = {}  # (motor1, motor2) -> (x_data, y_data)
+        self.motor_pair_data = {}  # (motor1, motor2) -> (x_data, y_data, intensity_data)
         self.scatter_plots = {}  # (motor1, motor2) -> scatter plot object
         self.current_run_motors_controlled = set()  # Track which motors are active in current run
         self.last_motor_positions = {}  # Track last positions to detect which motors are actually changing
@@ -307,6 +316,13 @@ class ReplayVisualizer(CallbackBase):
             'crl_y1': 'y1',
             'crl_y2': 'y2'
         }
+        
+        # GP model configuration and storage
+        self.gp_models = {}  # (motor1, motor2) -> fitted GP model
+        self.gp_contourf = {}  # (motor1, motor2) -> filled contour plot object
+        self.gp_contour_lines = {}  # (motor1, motor2) -> contour line objects
+        self.gp_update_interval = 3  # Refit GP every N events
+        self.min_points_for_gp = 6  # Minimum data points before fitting GP
         
         # Use subplots_adjust for precise control with adequate padding
         plt.subplots_adjust(left=0.05, right=0.98, top=0.95, bottom=0.05, hspace=0.15, wspace=0.1)
@@ -328,6 +344,156 @@ class ReplayVisualizer(CallbackBase):
             print(f"[DEBUG]   Figure created: {self.fig}")
             print(f"[DEBUG]   Main axes: {self.ax1}, {self.ax2}")
             print(f"[DEBUG]   Motor pair axes: {list(self.ax_pairs.keys())}")
+    
+    def _fit_gp(self, pair_key, x_data, y_data, intensity_data):
+        """
+        Fit a 2D Gaussian Process model to motor positions and intensity.
+        
+        Parameters
+        ----------
+        pair_key : tuple
+            (motor1, motor2) tuple identifying the motor pair
+        x_data : list
+            Motor 1 positions
+        y_data : list
+            Motor 2 positions
+        intensity_data : array
+            Intensity values corresponding to positions
+        
+        Returns
+        -------
+        GaussianProcessRegressor or None
+            Fitted GP model, or None if fitting fails
+        """
+        if not HAS_GP:
+            return None
+        
+        if len(x_data) < self.min_points_for_gp:
+            return None
+        
+        try:
+            # Prepare training data (intensity_data is already aligned with x_data, y_data)
+            X_train = np.column_stack([x_data, y_data])
+            y_train = np.array(intensity_data)
+            
+            # Define kernel: RBF with automatic length scale + constant + noise
+            kernel = ConstantKernel(1.0, (1e-3, 1e3)) * RBF(length_scale=[0.1, 0.1], length_scale_bounds=(1e-3, 1e1)) + WhiteKernel(noise_level=1e-5, noise_level_bounds=(1e-10, 1e1))
+            
+            # Fit GP with normalization for numerical stability
+            gp = GaussianProcessRegressor(
+                kernel=kernel,
+                n_restarts_optimizer=2,
+                normalize_y=True,
+                alpha=1e-6  # Small regularization for numerical stability
+            )
+            gp.fit(X_train, y_train)
+            
+            self.gp_models[pair_key] = gp
+            
+            if self.debug:
+                print(f"[DEBUG] GP fitted for {pair_key} with {len(x_data)} points")
+            
+            return gp
+            
+        except Exception as e:
+            if self.debug:
+                print(f"[DEBUG] GP fit failed for {pair_key}: {e}")
+            return None
+    
+    def _plot_gp_surface(self, pair_key, ax, gp_model, x_data, y_data, intensity_data):
+        """
+        Plot the GP prediction surface with filled contours and contour lines.
+        
+        Parameters
+        ----------
+        pair_key : tuple
+            (motor1, motor2) tuple identifying the motor pair
+        ax : matplotlib.axes.Axes
+            Axes to plot on
+        gp_model : GaussianProcessRegressor
+            Fitted GP model
+        x_data : list
+            Motor 1 positions
+        y_data : list
+            Motor 2 positions
+        intensity_data : array
+            Intensity values
+        """
+        if gp_model is None or len(x_data) < self.min_points_for_gp:
+            return
+        
+        try:
+            # Create prediction grid with 10% padding
+            x_min, x_max = min(x_data), max(x_data)
+            y_min, y_max = min(y_data), max(y_data)
+            x_range = x_max - x_min if x_max > x_min else 0.1
+            y_range = y_max - y_min if y_max > y_min else 0.1
+            x_pad = x_range * 0.1
+            y_pad = y_range * 0.1
+            
+            x_grid = np.linspace(x_min - x_pad, x_max + x_pad, 40)
+            y_grid = np.linspace(y_min - y_pad, y_max + y_pad, 40)
+            X_grid, Y_grid = np.meshgrid(x_grid, y_grid)
+            X_pred = np.column_stack([X_grid.ravel(), Y_grid.ravel()])
+            
+            # Predict mean (no need for std since we removed uncertainty viz)
+            y_pred = gp_model.predict(X_pred, return_std=False)
+            Z_pred = y_pred.reshape(X_grid.shape)
+            
+            # Remove old contours if they exist (compatible with newer matplotlib)
+            if pair_key in self.gp_contourf and self.gp_contourf[pair_key] is not None:
+                try:
+                    # Try newer matplotlib API first (3.8+)
+                    self.gp_contourf[pair_key].remove()
+                except (AttributeError, ValueError):
+                    # Fall back to older API
+                    try:
+                        for coll in self.gp_contourf[pair_key].collections:
+                            coll.remove()
+                    except (AttributeError, ValueError):
+                        pass
+            
+            if pair_key in self.gp_contour_lines and self.gp_contour_lines[pair_key] is not None:
+                try:
+                    # Try newer matplotlib API first (3.8+)
+                    self.gp_contour_lines[pair_key].remove()
+                except (AttributeError, ValueError):
+                    # Fall back to older API
+                    try:
+                        for coll in self.gp_contour_lines[pair_key].collections:
+                            coll.remove()
+                    except (AttributeError, ValueError):
+                        pass
+                # Remove clabels if any
+                for text in ax.texts[:]:
+                    try:
+                        text.remove()
+                    except ValueError:
+                        pass
+            
+            # Plot filled contours (zorder=0, behind everything)
+            # Use fixed colorbar limits matching scatter plots: 9500-70000
+            levels = np.linspace(9500, 70000, 20)
+            contourf = ax.contourf(X_grid, Y_grid, Z_pred, levels=levels, cmap='viridis', 
+                                   alpha=0.4, zorder=0, extend='both')
+            self.gp_contourf[pair_key] = contourf
+            
+            # Plot contour lines (zorder=2)
+            contour_lines = ax.contour(X_grid, Y_grid, Z_pred, levels=levels[::4], 
+                                        colors='white', linewidths=0.5, alpha=0.7, zorder=2)
+            # Add labels to contour lines
+            ax.clabel(contour_lines, inline=True, fontsize=6, fmt='%.0f')
+            self.gp_contour_lines[pair_key] = contour_lines
+            
+            if self.debug:
+                print(f"[DEBUG] GP surface plotted for {pair_key}")
+                print(f"[DEBUG]   Prediction range: [{Z_pred.min():.0f}, {Z_pred.max():.0f}]")
+                
+        except Exception as e:
+            if self.debug:
+                print(f"[DEBUG] GP surface plot failed for {pair_key}: {e}")
+                import traceback
+                traceback.print_exc()
     
     def start(self, doc):
         """Initialize on run start."""
@@ -383,8 +549,39 @@ class ReplayVisualizer(CallbackBase):
         for ax in self.ax_pairs.values():
             ax.clear()
         for scatter in self.scatter_plots.values():
-            scatter.remove()
+            try:
+                scatter.remove()
+            except ValueError:
+                pass
         self.scatter_plots.clear()
+        
+        # Clear GP-related state
+        self.gp_models.clear()
+        
+        # Remove GP contour visualizations (compatible with newer matplotlib)
+        for contourf in self.gp_contourf.values():
+            if contourf is not None:
+                try:
+                    contourf.remove()
+                except (AttributeError, ValueError):
+                    try:
+                        for coll in contourf.collections:
+                            coll.remove()
+                    except (AttributeError, ValueError):
+                        pass
+        self.gp_contourf.clear()
+        
+        for contour_lines in self.gp_contour_lines.values():
+            if contour_lines is not None:
+                try:
+                    contour_lines.remove()
+                except (AttributeError, ValueError):
+                    try:
+                        for coll in contour_lines.collections:
+                            coll.remove()
+                    except (AttributeError, ValueError):
+                        pass
+        self.gp_contour_lines.clear()
         
         # Force redraw
         self.fig.canvas.draw()
@@ -456,20 +653,17 @@ class ReplayVisualizer(CallbackBase):
             
             if self.im_processed is None:
                 # Create initial processed image display
+                # Fixed colorbar limits for Processed Image (Row 2 Col 2): min=0, max=90
                 self.im_processed = self.ax_placeholder.imshow(processed_image_display, cmap='hot', aspect='auto', 
-                                                              interpolation='nearest')
+                                                              interpolation='nearest', vmin=0, vmax=90)
                 self.ax_placeholder.set_xlim(-0.5, processed_image_display.shape[1] - 0.5)
                 self.ax_placeholder.set_ylim(processed_image_display.shape[0] - 0.5, -0.5)  # Flip y-axis
                 self.fig.colorbar(self.im_processed, ax=self.ax_placeholder, label='Intensity')
             else:
                 # Update processed image
                 self.im_processed.set_data(processed_image_display)
-                # Update color limits using percentile-based scaling
-                proc_min = np.percentile(processed_image_display, 1)
-                proc_max = np.percentile(processed_image_display, 99)
-                if proc_max <= proc_min:
-                    proc_min, proc_max = processed_image_display.min(), processed_image_display.max()
-                self.im_processed.set_clim(vmin=proc_min, vmax=proc_max)
+                # Fixed colorbar limits for Processed Image (Row 2 Col 2): min=0, max=90
+                self.im_processed.set_clim(vmin=0, vmax=90)
             
             # Extract motor positions from event data (do this before image processing)
             current_motor_positions = {}
@@ -511,13 +705,9 @@ class ReplayVisualizer(CallbackBase):
                         # Take first channel if still 3D
                         image = image[0] if image.shape[0] < image.shape[1] else image[:, :, 0]
                 
-                # Use percentile-based scaling for better contrast (ignore outliers)
-                # This focuses on the main signal range and makes the beam more visible
-                img_min = np.percentile(image, 1)  # 1st percentile to ignore dark noise
-                img_max = np.percentile(image, 99)  # 99th percentile to ignore hot pixels
-                if img_max <= img_min:
-                    # Fallback to min/max if percentiles are too close
-                    img_min, img_max = image.min(), image.max()
+                # Fixed colorbar limits for Detector Image (Row 2 Col 1)
+                img_min = 0
+                img_max = 30
                 
                 self.im = self.ax2.imshow(image, cmap='turbo', aspect='auto', interpolation='nearest', 
                                          vmin=img_min, vmax=img_max)
@@ -534,14 +724,8 @@ class ReplayVisualizer(CallbackBase):
                         image = image[0] if image.shape[0] < image.shape[1] else image[:, :, 0]
                 
                 self.im.set_data(image)
-                # Update color limits using percentile-based scaling for better contrast
-                # This focuses on the main signal range and makes the beam more visible
-                img_min = np.percentile(image, 1)  # 1st percentile to ignore dark noise
-                img_max = np.percentile(image, 99)  # 99th percentile to ignore hot pixels
-                if img_max <= img_min:
-                    # Fallback to min/max if percentiles are too close
-                    img_min, img_max = image.min(), image.max()
-                self.im.set_clim(vmin=img_min, vmax=img_max)
+                # Fixed colorbar limits for Detector Image (Row 2 Col 1)
+                self.im.set_clim(vmin=0, vmax=30)
             
             # Update scatter plots for motor pairs (use motor positions extracted above)
             # Only plot pairs where BOTH motors were actually controlled in the current run
@@ -563,7 +747,7 @@ class ReplayVisualizer(CallbackBase):
                         
                         # Use canonical ordering (alphabetical)
                         if pair not in self.motor_pair_data and pair_reversed not in self.motor_pair_data:
-                            self.motor_pair_data[pair] = ([], [])
+                            self.motor_pair_data[pair] = ([], [], [])  # (x_data, y_data, intensity_data)
                         
                         # Get the canonical pair key
                         pair_key = pair if pair in self.motor_pair_data else pair_reversed
@@ -581,19 +765,21 @@ class ReplayVisualizer(CallbackBase):
                             if abs(new_x - last_x) < 1e-6 and abs(new_y - last_y) < 1e-6:
                                 should_add_point = False
                         
-                        # Add data point only if it's new
+                        # Add data point only if it's new (including the corresponding intensity)
                         if should_add_point:
+                            current_intensity = intensity_millions  # Use the intensity from this event
                             if pair_key == pair:
                                 self.motor_pair_data[pair_key][0].append(current_motor_positions[motor1])
                                 self.motor_pair_data[pair_key][1].append(current_motor_positions[motor2])
                             else:
                                 self.motor_pair_data[pair_key][0].append(current_motor_positions[motor2])
                                 self.motor_pair_data[pair_key][1].append(current_motor_positions[motor1])
+                            self.motor_pair_data[pair_key][2].append(current_intensity)
                         
                         # Update or create scatter plot
                         if pair_key in self.ax_pairs:
                             ax = self.ax_pairs[pair_key]
-                            x_data, y_data = self.motor_pair_data[pair_key]
+                            x_data, y_data, point_intensities = self.motor_pair_data[pair_key]
                             
                             if self.debug and len(x_data) % 10 == 0:
                                 print(f"[DEBUG]   Updating scatter plot {pair_key}: {len(x_data)} points")
@@ -609,20 +795,20 @@ class ReplayVisualizer(CallbackBase):
                                 # Update existing scatter plot
                                 scatter = self.scatter_plots[pair_key]
                                 scatter.set_offsets(np.column_stack([x_data, y_data]))
-                                # Update colors based on intensity if available
-                                if len(intensity_array) >= len(x_data):
-                                    scatter.set_array(intensity_array[-len(x_data):])
-                                    scatter.set_clim(vmin=intensity_array[-len(x_data):].min(), 
-                                                    vmax=intensity_array[-len(x_data):].max())
+                                # Update colors using stored intensity values (properly aligned with positions)
+                                # Fixed colorbar limits for scatter plots (Row 3): min=9500, max=70000
+                                if len(point_intensities) == len(x_data):
+                                    scatter.set_array(np.array(point_intensities))
+                                    scatter.set_clim(vmin=9500, vmax=70000)
                             else:
                                 # Create new scatter plot
-                                if len(intensity_array) >= len(x_data):
-                                    colors = intensity_array[-len(x_data):]
-                                    scatter = ax.scatter(x_data, y_data, c=colors, cmap='viridis', 
-                                                         s=20, alpha=0.6, edgecolors='black', linewidths=0.5)
+                                # Fixed colorbar limits for scatter plots (Row 3): min=9500, max=70000
+                                if len(point_intensities) == len(x_data) and len(x_data) > 0:
+                                    scatter = ax.scatter(x_data, y_data, c=point_intensities, cmap='viridis', 
+                                                         s=20, alpha=0.6, edgecolors='black', linewidths=0.5,
+                                                         vmin=9500, vmax=70000)
                                     # Add colorbar (only once)
-                                    if len(x_data) > 0:
-                                        plt.colorbar(scatter, ax=ax, label='Intensity')
+                                    plt.colorbar(scatter, ax=ax, label='Intensity')
                                 else:
                                     scatter = ax.scatter(x_data, y_data, c='blue', 
                                                          s=20, alpha=0.6, edgecolors='black', linewidths=0.5)
@@ -643,15 +829,36 @@ class ReplayVisualizer(CallbackBase):
                                 y_margin = y_range * 0.05 if y_range > 0 else abs(y_min) * 0.05 if y_min != 0 else 0.1
                                 ax.set_xlim(x_min - x_margin, x_max + x_margin)
                                 ax.set_ylim(y_min - y_margin, y_max + y_margin)
+                            
+                            # Update GP model periodically
+                            if HAS_GP and len(x_data) >= self.min_points_for_gp:
+                                if len(self.step_data) % self.gp_update_interval == 0:
+                                    # Use properly aligned intensity data for GP fitting
+                                    gp_model = self._fit_gp(pair_key, x_data, y_data, point_intensities)
+                                    if gp_model is not None:
+                                        self._plot_gp_surface(pair_key, ax, gp_model, x_data, y_data, point_intensities)
+                                    
+                                    # Update scatter plot zorder to be above GP surface
+                                    if pair_key in self.scatter_plots:
+                                        self.scatter_plots[pair_key].set_zorder(3)
             
             # Force redraw and capture frame
             try:
-                self.fig.canvas.draw()
-                # Capture frame immediately after draw, before flush_events
-                # flush_events can trigger redraws causing flicker in video
                 if self.record_video and self.video_writer is not None:
+                    # For video recording, ensure full render before capture
+                    # 1. Draw all artists to the canvas
+                    self.fig.canvas.draw()
+                    # 2. Force the renderer to complete all pending operations
+                    #    This ensures complex elements like contours are fully rendered
+                    _ = self.fig.canvas.get_renderer()
+                    # 3. Process any pending events
+                    self.fig.canvas.flush_events()
+                    # 4. Small delay to ensure render pipeline completes
+                    ttime.sleep(0.02)
+                    # 5. Now grab the fully rendered frame
                     self.video_writer.grab_frame()
                 else:
+                    self.fig.canvas.draw()
                     self.fig.canvas.flush_events()
             except Exception as e:
                 if self.debug:
