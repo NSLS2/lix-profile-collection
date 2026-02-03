@@ -13,17 +13,45 @@ from ophyd.sim import NullStatus
 from bluesky.callbacks.core import CallbackBase
 import bluesky.plan_stubs as bps
 from bluesky.plan_stubs import open_run, close_run, trigger_and_read
+import bluesky.preprocessors as bpp
 from tiled.client import from_uri, from_profile
 from tiled.server import SimpleTiledServer
 import cv2
+from datetime import datetime
+try:
+    from matplotlib.animation import FFMpegWriter
+    HAS_VIDEO = True
+except ImportError:
+    HAS_VIDEO = False
 
 
 lix_client = from_uri("https://tiled.nsls2.bnl.gov/")["lix"]["raw"]
 
 # Import intensity_metric from 60-utils
 # We'll copy it here to avoid import issues
-def intensity_metric(image, background=None, threshold_factor=0.4, edge_crop=0):
-    """Calculate beam intensity from image."""
+def process_image_for_metric(image, background=None, threshold_factor=0.4, edge_crop=0, return_processed=False):
+    """
+    Process image for intensity metric calculation.
+    
+    Parameters
+    ----------
+    image : ndarray
+        Input image
+    background : ndarray, optional
+        Background image to subtract
+    threshold_factor : float
+        Threshold factor (0-1) for intensity thresholding
+    edge_crop : int
+        Number of pixels to crop from edges
+    return_processed : bool
+        If True, return (intensity, processed_image), else just intensity
+    
+    Returns
+    -------
+    float or tuple
+        If return_processed=False: total intensity
+        If return_processed=True: (total_intensity, processed_image)
+    """
     # Convert to grayscale
     image = image.squeeze()
     if len(image.shape) == 3 and image.shape[0] == 3:
@@ -32,7 +60,7 @@ def intensity_metric(image, background=None, threshold_factor=0.4, edge_crop=0):
         gray = image.copy()
 
     # crop the image to remove noise around the edges
-    gray = gray[200:500, 800:1100]
+    gray = gray[200:500, 600:1000]
 
     # Crop edges to remove artifacts
     if edge_crop > 0:
@@ -50,6 +78,8 @@ def intensity_metric(image, background=None, threshold_factor=0.4, edge_crop=0):
     corrected = cv2.GaussianBlur(corrected, (5, 5), 0)
     max_intensity = np.max(corrected)
     if max_intensity == 0:
+        if return_processed:
+            return float('inf'), corrected
         return float('inf')
         
     thresh_value = threshold_factor * max_intensity
@@ -58,7 +88,14 @@ def intensity_metric(image, background=None, threshold_factor=0.4, edge_crop=0):
     # Total integrated intensity
     total_intensity = np.sum(thresh)
     
+    if return_processed:
+        return total_intensity, thresh
     return total_intensity
+
+
+def intensity_metric(image, background=None, threshold_factor=0.4, edge_crop=0):
+    """Calculate beam intensity from image."""
+    return process_image_for_metric(image, background, threshold_factor, edge_crop, return_processed=False)
 
 
 class ReplayMotor(Device):
@@ -119,6 +156,12 @@ class ReplayMotor(Device):
         if self._current_idx < len(self.positions) - 1:
             self._current_idx += 1
             self._position.put(self.positions[self._current_idx])
+    
+    def reset(self):
+        """Reset to initial position."""
+        self._current_idx = 0
+        if len(self.positions) > 0:
+            self._position.put(self.positions[0])
 
 
 class ReplayDetector(Device):
@@ -173,18 +216,47 @@ class ReplayDetector(Device):
             self._current_idx += 1
             if self.debug:
                 print(f"[DEBUG] {self.name}.advance() -> idx={self._current_idx}")
+    
+    def reset(self):
+        """Reset to initial image."""
+        self._current_idx = 0
+        if self.debug:
+            print(f"[DEBUG] {self.name}.reset() -> idx=0")
 
 
 class ReplayVisualizer(CallbackBase):
     """Visualization callback for replay."""
     
-    def __init__(self, detector_name="camSF", debug=False):
+    def __init__(self, detector_name="camSF", debug=False, record_video=False, video_filename=None, fps=10):
         super().__init__()
         self.detector_name = detector_name
         self.debug = debug
-        self.fig, (self.ax1, self.ax2) = plt.subplots(2, 1, figsize=(10, 8))
+        self.record_video = record_video
+        self.fps = fps
         
-        # Top plot: objective metric
+        # Generate video filename if not provided
+        if record_video and video_filename is None:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            video_filename = f"replay_optimization_{timestamp}.mp4"
+        self.video_filename = video_filename
+        
+        # Initialize video writer if recording
+        self.video_writer = None
+        if record_video:
+            if not HAS_VIDEO:
+                print("Warning: matplotlib.animation.FFMpegWriter not available. Video recording disabled.")
+                print("  Install ffmpeg to enable video recording.")
+                self.record_video = False
+            else:
+                print(f"Video recording enabled: {video_filename} (fps={fps})")
+                # We'll initialize the writer in start() method
+        
+        # Create figure with grid: intensity plot, image, and single row of 2 motor pair plots
+        self.fig = plt.figure(figsize=(16, 12))
+        gs = self.fig.add_gridspec(3, 2, hspace=0.4, wspace=0.4)
+        
+        # Top row: intensity plot (spans 2 columns)
+        self.ax1 = self.fig.add_subplot(gs[0, :])
         self.ax1.set_xlabel("Step")
         self.ax1.set_ylabel("Beam Intensity (×10⁶)")
         self.ax1.set_title("Objective Metric")
@@ -193,11 +265,42 @@ class ReplayVisualizer(CallbackBase):
         self.step_data = []
         self.line, = self.ax1.plot([], [], 'b-o', markersize=4)
         
-        # Bottom plot: detector image
+        # Middle left: detector image
+        self.ax2 = self.fig.add_subplot(gs[1, 0])
         self.ax2.set_title("Detector Image")
         self.ax2.set_xlabel("X (pixels)")
         self.ax2.set_ylabel("Y (pixels)")
         self.im = None
+        
+        # Middle right: processed image (cropped, blurred, thresholded)
+        self.ax_placeholder = self.fig.add_subplot(gs[1, 1])
+        self.ax_placeholder.set_title("Processed Image")
+        self.ax_placeholder.set_xlabel("X (pixels)")
+        self.ax_placeholder.set_ylabel("Y (pixels)")
+        self.im_processed = None
+        
+        # Bottom row: single row of 2 plots for motor pair scatter plots
+        # Only show (x1,x2) and (y1,y2) pairs
+        gs_bottom = self.fig.add_gridspec(1, 2, left=0.1, right=0.95, bottom=0.05, top=0.25, hspace=0.3, wspace=0.4)
+        self.ax_pairs = {
+            ('x1', 'x2'): self.fig.add_subplot(gs_bottom[0, 0]),
+            ('y1', 'y2'): self.fig.add_subplot(gs_bottom[0, 1]),
+        }
+        
+        # Track motor positions and scatter plots
+        self.motor_positions = {'x1': [], 'x2': [], 'y1': [], 'y2': []}
+        self.motor_pair_data = {}  # (motor1, motor2) -> (x_data, y_data)
+        self.scatter_plots = {}  # (motor1, motor2) -> scatter plot object
+        self.current_run_motors_controlled = set()  # Track which motors are active in current run
+        self.last_motor_positions = {}  # Track last positions to detect which motors are actually changing
+        
+        # Motor name mapping
+        self.motor_map = {
+            'crl_x1': 'x1',
+            'crl_x2': 'x2',
+            'crl_y1': 'y1',
+            'crl_y2': 'y2'
+        }
         
         plt.tight_layout()
         plt.ion()
@@ -210,7 +313,8 @@ class ReplayVisualizer(CallbackBase):
         if self.debug:
             print(f"[DEBUG] ReplayVisualizer initialized for detector '{detector_name}'")
             print(f"[DEBUG]   Figure created: {self.fig}")
-            print(f"[DEBUG]   Axes: {self.ax1}, {self.ax2}")
+            print(f"[DEBUG]   Main axes: {self.ax1}, {self.ax2}")
+            print(f"[DEBUG]   Motor pair axes: {list(self.ax_pairs.keys())}")
     
     def start(self, doc):
         """Initialize on run start."""
@@ -218,6 +322,20 @@ class ReplayVisualizer(CallbackBase):
             print(f"[DEBUG] ReplayVisualizer.start() called")
             print(f"[DEBUG]   Run UID: {doc.get('uid', 'N/A')}")
             print(f"[DEBUG]   Detectors: {doc.get('detectors', [])}")
+        
+        # Reset motor tracking
+        self.current_run_motors_controlled = set()
+        self.last_motor_positions = {}
+        
+        # Initialize video writer if recording
+        if self.record_video and HAS_VIDEO and self.video_writer is None:
+            self.video_writer = FFMpegWriter(fps=self.fps, 
+                                            metadata=dict(artist='ReplayOptimization', 
+                                                         title='Optimization Replay'))
+            self.video_writer.setup(self.fig, self.video_filename, dpi=100)
+            if self.debug:
+                print(f"[DEBUG] Video writer initialized: {self.video_filename}")
+        
         self.intensity_data = []
         self.step_data = []
         self.line.set_data([], [])
@@ -236,6 +354,24 @@ class ReplayVisualizer(CallbackBase):
         self.ax2.set_xlabel("X (pixels)")
         self.ax2.set_ylabel("Y (pixels)")
         self.im = None
+        
+        # Clear processed image plot
+        self.ax_placeholder.clear()
+        self.ax_placeholder.set_title("Processed Image")
+        self.ax_placeholder.set_xlabel("X (pixels)")
+        self.ax_placeholder.set_ylabel("Y (pixels)")
+        self.im_processed = None
+        
+        # Clear motor data
+        self.motor_positions = {'x1': [], 'x2': [], 'y1': [], 'y2': []}
+        self.motor_pair_data = {}
+        
+        # Clear scatter plots
+        for ax in self.ax_pairs.values():
+            ax.clear()
+        for scatter in self.scatter_plots.values():
+            scatter.remove()
+        self.scatter_plots.clear()
         
         # Force redraw
         self.fig.canvas.draw()
@@ -277,12 +413,16 @@ class ReplayVisualizer(CallbackBase):
             if self.debug:
                 print(f"[DEBUG]   Final image shape: {image.shape}, dtype={image.dtype}")
             
-            # Calculate intensity metric
-            intensity = intensity_metric(image.transpose(1, 0))
+            # Calculate intensity metric and get processed image
+            # Use the exact same image for both metric calculation and visualization
+            # Process the image in its original orientation (no transpose needed)
+            intensity, processed_image = process_image_for_metric(image, return_processed=True)
             intensity_millions = intensity
             
             if self.debug:
                 print(f"[DEBUG]   Calculated intensity: {intensity_millions:.2f} (×10⁶)")
+                print(f"[DEBUG]   Original image shape: {image.shape}")
+                print(f"[DEBUG]   Processed image shape: {processed_image.shape}")
             
             # Update intensity plot
             step_num = doc.get('seq_num', len(self.step_data))
@@ -297,6 +437,56 @@ class ReplayVisualizer(CallbackBase):
             self.ax1.relim()
             self.ax1.autoscale_view()
             
+            # Update processed image display in placeholder
+            # Display the EXACT processed image that was used for the metric calculation
+            processed_image_display = processed_image
+            
+            if self.im_processed is None:
+                # Create initial processed image display
+                self.im_processed = self.ax_placeholder.imshow(processed_image_display, cmap='hot', aspect='auto', 
+                                                              interpolation='nearest')
+                self.ax_placeholder.set_xlim(-0.5, processed_image_display.shape[1] - 0.5)
+                self.ax_placeholder.set_ylim(processed_image_display.shape[0] - 0.5, -0.5)  # Flip y-axis
+                self.fig.colorbar(self.im_processed, ax=self.ax_placeholder, label='Intensity')
+            else:
+                # Update processed image
+                self.im_processed.set_data(processed_image_display)
+                # Update color limits using percentile-based scaling
+                proc_min = np.percentile(processed_image_display, 1)
+                proc_max = np.percentile(processed_image_display, 99)
+                if proc_max <= proc_min:
+                    proc_min, proc_max = processed_image_display.min(), processed_image_display.max()
+                self.im_processed.set_clim(vmin=proc_min, vmax=proc_max)
+            
+            # Extract motor positions from event data (do this before image processing)
+            current_motor_positions = {}
+            for motor_key, motor_short in self.motor_map.items():
+                motor_field = f"{motor_key}_position"
+                if motor_field in data:
+                    motor_data = data[motor_field]
+                    if isinstance(motor_data, dict):
+                        pos = motor_data.get('value', motor_data)
+                    else:
+                        pos = motor_data
+                    try:
+                        pos_value = float(pos)
+                        current_motor_positions[motor_short] = pos_value
+                        self.motor_positions[motor_short].append(pos_value)
+                        
+                        # Detect which motors are actually changing (indicating they're being controlled)
+                        if motor_short in self.last_motor_positions:
+                            if abs(pos_value - self.last_motor_positions[motor_short]) > 1e-4:
+                                # Motor position changed, it's being controlled
+                                self.current_run_motors_controlled.add(motor_short)
+                        else:
+                            # First time seeing this motor, assume it's controlled if it has a value
+                            self.current_run_motors_controlled.add(motor_short)
+                        
+                        self.last_motor_positions[motor_short] = pos_value
+                    except (ValueError, TypeError):
+                        if self.debug:
+                            print(f"[DEBUG]   Could not convert motor {motor_key} position: {pos}")
+            
             # Update image display
             if self.im is None:
                 if self.debug:
@@ -308,7 +498,16 @@ class ReplayVisualizer(CallbackBase):
                         # Take first channel if still 3D
                         image = image[0] if image.shape[0] < image.shape[1] else image[:, :, 0]
                 
-                self.im = self.ax2.imshow(image, cmap='gray', aspect='auto', interpolation='nearest')
+                # Use percentile-based scaling for better contrast (ignore outliers)
+                # This focuses on the main signal range and makes the beam more visible
+                img_min = np.percentile(image, 1)  # 1st percentile to ignore dark noise
+                img_max = np.percentile(image, 99)  # 99th percentile to ignore hot pixels
+                if img_max <= img_min:
+                    # Fallback to min/max if percentiles are too close
+                    img_min, img_max = image.min(), image.max()
+                
+                self.im = self.ax2.imshow(image, cmap='turbo', aspect='auto', interpolation='nearest', 
+                                         vmin=img_min, vmax=img_max)
                 self.ax2.set_xlim(-0.5, image.shape[1] - 0.5)
                 self.ax2.set_ylim(image.shape[0] - 0.5, -0.5)  # Flip y-axis for image coordinates
                 self.fig.colorbar(self.im, ax=self.ax2)
@@ -322,15 +521,124 @@ class ReplayVisualizer(CallbackBase):
                         image = image[0] if image.shape[0] < image.shape[1] else image[:, :, 0]
                 
                 self.im.set_data(image)
-                # Update color limits for better visualization
-                img_min, img_max = image.min(), image.max()
-                if img_max > img_min:
-                    self.im.set_clim(vmin=img_min, vmax=img_max)
+                # Update color limits using percentile-based scaling for better contrast
+                # This focuses on the main signal range and makes the beam more visible
+                img_min = np.percentile(image, 1)  # 1st percentile to ignore dark noise
+                img_max = np.percentile(image, 99)  # 99th percentile to ignore hot pixels
+                if img_max <= img_min:
+                    # Fallback to min/max if percentiles are too close
+                    img_min, img_max = image.min(), image.max()
+                self.im.set_clim(vmin=img_min, vmax=img_max)
+            
+            # Update scatter plots for motor pairs (use motor positions extracted above)
+            # Only plot pairs where BOTH motors were actually controlled in the current run
+            if len(current_motor_positions) >= 2 and len(self.current_run_motors_controlled) >= 2:
+                # Get all active motors that were actually controlled in this run
+                active_motors = sorted([m for m in current_motor_positions.keys() 
+                                      if m in self.current_run_motors_controlled])
+                
+                # Create pairs and update scatter plots (only for motors that were both controlled)
+                for i, motor1 in enumerate(active_motors):
+                    for motor2 in active_motors[i+1:]:
+                        # Both motors must be in the controlled set
+                        if motor1 not in self.current_run_motors_controlled or \
+                           motor2 not in self.current_run_motors_controlled:
+                            continue
+                        
+                        pair = (motor1, motor2)
+                        pair_reversed = (motor2, motor1)
+                        
+                        # Use canonical ordering (alphabetical)
+                        if pair not in self.motor_pair_data and pair_reversed not in self.motor_pair_data:
+                            self.motor_pair_data[pair] = ([], [])
+                        
+                        # Get the canonical pair key
+                        pair_key = pair if pair in self.motor_pair_data else pair_reversed
+                        
+                        # Check if this point is different from the last one (avoid duplicates)
+                        should_add_point = True
+                        if pair_key in self.motor_pair_data and len(self.motor_pair_data[pair_key][0]) > 0:
+                            # Check if this is the same as the last point
+                            last_x = self.motor_pair_data[pair_key][0][-1]
+                            last_y = self.motor_pair_data[pair_key][1][-1]
+                            new_x = current_motor_positions[motor1] if pair_key == pair else current_motor_positions[motor2]
+                            new_y = current_motor_positions[motor2] if pair_key == pair else current_motor_positions[motor1]
+                            
+                            # Only add if position changed (with small tolerance for floating point)
+                            if abs(new_x - last_x) < 1e-6 and abs(new_y - last_y) < 1e-6:
+                                should_add_point = False
+                        
+                        # Add data point only if it's new
+                        if should_add_point:
+                            if pair_key == pair:
+                                self.motor_pair_data[pair_key][0].append(current_motor_positions[motor1])
+                                self.motor_pair_data[pair_key][1].append(current_motor_positions[motor2])
+                            else:
+                                self.motor_pair_data[pair_key][0].append(current_motor_positions[motor2])
+                                self.motor_pair_data[pair_key][1].append(current_motor_positions[motor1])
+                        
+                        # Update or create scatter plot
+                        if pair_key in self.ax_pairs:
+                            ax = self.ax_pairs[pair_key]
+                            x_data, y_data = self.motor_pair_data[pair_key]
+                            
+                            if self.debug and len(x_data) % 10 == 0:
+                                print(f"[DEBUG]   Updating scatter plot {pair_key}: {len(x_data)} points")
+                                if len(x_data) > 0:
+                                    print(f"[DEBUG]     x range: [{min(x_data):.3f}, {max(x_data):.3f}]")
+                                    print(f"[DEBUG]     y range: [{min(y_data):.3f}, {max(y_data):.3f}]")
+                            
+                            if len(x_data) == 0:
+                                # Skip if no data yet
+                                continue
+                            
+                            if pair_key in self.scatter_plots:
+                                # Update existing scatter plot
+                                scatter = self.scatter_plots[pair_key]
+                                scatter.set_offsets(np.column_stack([x_data, y_data]))
+                                # Update colors based on intensity if available
+                                if len(intensity_array) >= len(x_data):
+                                    scatter.set_array(intensity_array[-len(x_data):])
+                                    scatter.set_clim(vmin=intensity_array[-len(x_data):].min(), 
+                                                    vmax=intensity_array[-len(x_data):].max())
+                            else:
+                                # Create new scatter plot
+                                if len(intensity_array) >= len(x_data):
+                                    colors = intensity_array[-len(x_data):]
+                                    scatter = ax.scatter(x_data, y_data, c=colors, cmap='viridis', 
+                                                         s=20, alpha=0.6, edgecolors='black', linewidths=0.5)
+                                    # Add colorbar (only once)
+                                    if len(x_data) > 0:
+                                        plt.colorbar(scatter, ax=ax, label='Intensity')
+                                else:
+                                    scatter = ax.scatter(x_data, y_data, c='blue', 
+                                                         s=20, alpha=0.6, edgecolors='black', linewidths=0.5)
+                                self.scatter_plots[pair_key] = scatter
+                                ax.set_xlabel(f"{motor1} position")
+                                ax.set_ylabel(f"{motor2} position")
+                                ax.set_title(f"{motor1} vs {motor2}")
+                                ax.grid(True, alpha=0.3)
+                            
+                            # Update axis limits manually (relim/autoscale doesn't work well with scatter)
+                            if len(x_data) > 0:
+                                x_min, x_max = min(x_data), max(x_data)
+                                y_min, y_max = min(y_data), max(y_data)
+                                # Add small margin
+                                x_range = x_max - x_min
+                                y_range = y_max - y_min
+                                x_margin = x_range * 0.05 if x_range > 0 else abs(x_min) * 0.05 if x_min != 0 else 0.1
+                                y_margin = y_range * 0.05 if y_range > 0 else abs(y_min) * 0.05 if y_min != 0 else 0.1
+                                ax.set_xlim(x_min - x_margin, x_max + x_margin)
+                                ax.set_ylim(y_min - y_margin, y_max + y_margin)
             
             # Force redraw - use draw() for immediate update
             try:
                 self.fig.canvas.draw()
                 self.fig.canvas.flush_events()
+                
+                # Capture frame for video if recording
+                if self.record_video and self.video_writer is not None:
+                    self.video_writer.grab_frame()
             except Exception as e:
                 if self.debug:
                     print(f"[DEBUG]   Canvas draw error: {e}")
@@ -348,6 +656,19 @@ class ReplayVisualizer(CallbackBase):
         if self.debug:
             print(f"[DEBUG] ReplayVisualizer.stop() called")
             print(f"[DEBUG]   Total events processed: {len(self.step_data)}")
+        
+        # Finish video recording
+        if self.record_video and self.video_writer is not None:
+            try:
+                self.video_writer.finish()
+                print(f"Video saved successfully: {self.video_filename}")
+            except Exception as e:
+                print(f"Error finishing video: {e}")
+                import traceback
+                traceback.print_exc()
+            finally:
+                self.video_writer = None
+        
         super().stop(doc)
 
 
@@ -593,7 +914,7 @@ def extract_run_data(uids, tiled_client=None, debug=False):
     return runs_data
 
 
-def create_replay_plan(motors, detector, runs_data, speed_multiplier=1.0, debug=False):
+def create_replay_plan(motors, detector, runs_data, speed_multiplier=1.0, debug=False, visualizer_class=None, visualizer_kwargs=None):
     """
     Create a Bluesky plan that replays the optimization sequence run by run.
     
@@ -609,6 +930,8 @@ def create_replay_plan(motors, detector, runs_data, speed_multiplier=1.0, debug=
         Speed multiplier for replay (1.0 = real-time)
     debug : bool
         Enable debug print statements
+    visualizer_class : class, optional
+        ReplayVisualizer class to instantiate. If None, uses ReplayVisualizer.
     
     Yields
     ------
@@ -627,105 +950,143 @@ def create_replay_plan(motors, detector, runs_data, speed_multiplier=1.0, debug=
         print(f"[DEBUG] create_replay_plan: Creating plan with {len(runs_data)} runs, {total_steps} total steps")
         print(f"[DEBUG]   Speed multiplier: {speed_multiplier}")
     
-    # Open run once at the beginning - this treats all runs as one continuous sequence
-    run_metadata = {
-        'plan_name': 'replay_optimization',
-        'num_runs': len(runs_data),
-        'total_events': total_steps,
-    }
-    yield from open_run(md=run_metadata)
+    # Create a new visualizer instance for this plan execution
+    if visualizer_class is None:
+        visualizer_class = ReplayVisualizer
     
-    if debug:
-        print(f"[DEBUG] Run opened for all {len(runs_data)} runs")
+    # Use provided kwargs or default
+    if visualizer_kwargs is None:
+        visualizer_kwargs = {'detector_name': detector.name, 'debug': debug}
+    else:
+        visualizer_kwargs = dict(visualizer_kwargs)  # Make a copy
+        visualizer_kwargs.setdefault('detector_name', detector.name)
+        visualizer_kwargs.setdefault('debug', debug)
     
-    global_step = 0
+    # Instantiate visualizer with kwargs
+    visualizer = visualizer_class(**visualizer_kwargs)
     
-    for run_idx, run_data in enumerate(runs_data):
+    # Define the inner plan body
+    def inner_plan():
+        # Open run once at the beginning - this treats all runs as one continuous sequence
+        # Collect all unique motors_controlled across all runs for initial metadata
+        all_motors_controlled = set()
+        for run_data in runs_data:
+            all_motors_controlled.update(run_data.get('motors_controlled', []))
+        
+        run_metadata = {
+            'plan_name': 'replay_optimization',
+            'num_runs': len(runs_data),
+            'total_events': total_steps,
+            'all_motors_controlled': list(all_motors_controlled),  # For reference
+        }
+        yield from open_run(md=run_metadata)
+        
         if debug:
-            print(f"[DEBUG] Processing run {run_idx+1}/{len(runs_data)} (UID: {run_data['uid']})")
-            print(f"[DEBUG]   Motors controlled: {run_data['motors_controlled']}")
-            print(f"[DEBUG]   Number of events: {len(run_data['images'])}")
+            print(f"[DEBUG] Run opened for all {len(runs_data)} runs")
         
-        images = run_data['images']
-        timestamps = run_data['timestamps']
-        motor_positions = run_data['motor_positions']
-        motors_controlled = run_data['motors_controlled']
+        # Collect all motors that exist (across all runs) - we need to read all of them
+        # to maintain descriptor consistency
+        all_motors_to_read = [m for m in motors.values() if m is not None]
         
-        # Calculate time deltas for this run
-        if len(timestamps) > 1:
-            time_deltas = np.diff(timestamps, prepend=timestamps[0])
-            time_deltas = time_deltas / speed_multiplier
-        else:
-            time_deltas = np.array([0.5 / speed_multiplier])
+        global_step = 0
         
-        for event_idx in range(len(images)):
-            if debug and (event_idx == 0 or event_idx % 10 == 0 or event_idx == len(images) - 1):
-                print(f"[DEBUG]   Run {run_idx+1}, Event {event_idx+1}/{len(images)} (Global step {global_step+1})")
+        for run_idx, run_data in enumerate(runs_data):
+            if debug:
+                print(f"[DEBUG] Processing run {run_idx+1}/{len(runs_data)} (UID: {run_data['uid']})")
+                print(f"[DEBUG]   Motors controlled: {run_data['motors_controlled']}")
+                print(f"[DEBUG]   Number of events: {len(run_data['images'])}")
             
-            # Set detector index to current global step (images are flattened across all runs)
-            # We need to use the event index within THIS run, not global_step
-            # because each run has its own images array
-            # Actually wait - we've flattened all images, so we should use global_step
-            # But we need to make sure we're indexing correctly
+            images = run_data['images']
+            timestamps = run_data['timestamps']
+            motor_positions = run_data['motor_positions']
+            motors_controlled = run_data['motors_controlled']
             
-            # Calculate the correct index: sum of images from previous runs + current event index
-            images_before_this_run = sum(len(runs_data[i]['images']) for i in range(run_idx))
-            detector_idx = images_before_this_run + event_idx
-            detector._current_idx = detector_idx
-            
-            if debug and (event_idx == 0 or event_idx % 10 == 0):
-                print(f"[DEBUG]     Event idx={event_idx}, Global step={global_step}")
-                print(f"[DEBUG]     Images before this run={images_before_this_run}, detector_idx={detector_idx}")
-                print(f"[DEBUG]     Detector image array length={len(detector.images)}")
-                if detector_idx < len(detector.images):
-                    img = detector.images[detector_idx]
-                    img_hash = hash(img.tobytes()[:1000])  # Hash first 1000 bytes for speed
-                    img_sum = img.sum()
-                    print(f"[DEBUG]     Image at idx {detector_idx}: hash={img_hash}, sum={img_sum:.2e}")
-                else:
-                    print(f"[DEBUG]     WARNING: detector_idx {detector_idx} >= array length {len(detector.images)}")
-            
-            # Build list of motors to move (only those controlled in this run)
-            motors_to_move = []
-            motor_positions_to_set = []
-            
+            # Convert motor keys to short names for this run
+            motors_controlled_short = set()
             for motor_key in motors_controlled:
-                motor_short_name = motor_map[motor_key]
-                if motors[motor_short_name] is not None:
-                    # Advance motor to current step
-                    motors[motor_short_name]._current_idx = global_step
-                    motors_to_move.append(motors[motor_short_name])
-                    motor_positions_to_set.append(motor_positions[motor_key][event_idx])
+                if motor_key in motor_map:
+                    motors_controlled_short.add(motor_map[motor_key])
             
-            # Move only the motors that were controlled in this run
-            if motors_to_move:
-                if debug and (event_idx == 0 or event_idx % 10 == 0):
-                    motor_info = ", ".join([f"{m.name}={pos:.3f}" for m, pos in zip(motors_to_move, motor_positions_to_set)])
-                    print(f"[DEBUG]     Moving motors: {motor_info}")
+            # Calculate time deltas for this run
+            if len(timestamps) > 1:
+                time_deltas = np.diff(timestamps, prepend=timestamps[0])
+                time_deltas = time_deltas / speed_multiplier
+            else:
+                time_deltas = np.array([0.5 / speed_multiplier])
+            
+            for event_idx in range(len(images)):
+                if debug and (event_idx == 0 or event_idx % 10 == 0 or event_idx == len(images) - 1):
+                    print(f"[DEBUG]   Run {run_idx+1}, Event {event_idx+1}/{len(images)} (Global step {global_step+1})")
                 
-                # Use bps.mv with variable arguments
-                yield from bps.mv(*[item for pair in zip(motors_to_move, motor_positions_to_set) for item in pair])
-            
-            # Build list of all devices to read (motors that were moved + detector)
-            devices_to_read = [detector]
-            
-            # Trigger and read all devices together - this emits an event document
-            yield from trigger_and_read(devices_to_read)
-            
-            # Sleep to maintain timing
-            if event_idx < len(time_deltas):
-                sleep_time = max(0.01, time_deltas[event_idx])
+                # Set detector index to current global step (images are flattened across all runs)
+                # We need to use the event index within THIS run, not global_step
+                # because each run has its own images array
+                # Actually wait - we've flattened all images, so we should use global_step
+                # But we need to make sure we're indexing correctly
+                
+                # Calculate the correct index: sum of images from previous runs + current event index
+                images_before_this_run = sum(len(runs_data[i]['images']) for i in range(run_idx))
+                detector_idx = images_before_this_run + event_idx
+                detector._current_idx = detector_idx
+                
                 if debug and (event_idx == 0 or event_idx % 10 == 0):
-                    print(f"[DEBUG]     Sleeping for {sleep_time:.3f}s")
-                yield from bps.sleep(sleep_time)
-            
-            global_step += 1
+                    print(f"[DEBUG]     Event idx={event_idx}, Global step={global_step}")
+                    print(f"[DEBUG]     Images before this run={images_before_this_run}, detector_idx={detector_idx}")
+                    print(f"[DEBUG]     Detector image array length={len(detector.images)}")
+                    if detector_idx < len(detector.images):
+                        img = detector.images[detector_idx]
+                        img_hash = hash(img.tobytes()[:1000])  # Hash first 1000 bytes for speed
+                        img_sum = img.sum()
+                        print(f"[DEBUG]     Image at idx {detector_idx}: hash={img_hash}, sum={img_sum:.2e}")
+                    else:
+                        print(f"[DEBUG]     WARNING: detector_idx {detector_idx} >= array length {len(detector.images)}")
+                
+                # Build list of motors to move (only those controlled in this run)
+                motors_to_move = []
+                motor_positions_to_set = []
+                
+                for motor_key in motors_controlled:
+                    motor_short_name = motor_map[motor_key]
+                    if motors[motor_short_name] is not None:
+                        # Advance motor to current step
+                        motors[motor_short_name]._current_idx = global_step
+                        motors_to_move.append(motors[motor_short_name])
+                        motor_positions_to_set.append(motor_positions[motor_key][event_idx])
+                
+                # Move only the motors that were controlled in this run
+                if motors_to_move:
+                    if debug and (event_idx == 0 or event_idx % 10 == 0):
+                        motor_info = ", ".join([f"{m.name}={pos:.3f}" for m, pos in zip(motors_to_move, motor_positions_to_set)])
+                        print(f"[DEBUG]     Moving motors: {motor_info}")
+                    
+                    # Use bps.mv with variable arguments
+                    yield from bps.mv(*[item for pair in zip(motors_to_move, motor_positions_to_set) for item in pair])
+                
+                # Build list of all devices to read
+                # IMPORTANT: Always read all motors (not just moved ones) to maintain descriptor consistency
+                # Bluesky requires that all events read the same devices that were declared in the descriptor
+                devices_to_read = all_motors_to_read + [detector]
+                
+                # Trigger and read all devices together - this emits an event document
+                yield from trigger_and_read(devices_to_read)
+                
+                # Sleep to maintain timing
+                if event_idx < len(time_deltas):
+                    sleep_time = max(0.01, time_deltas[event_idx])
+                    if debug and (event_idx == 0 or event_idx % 10 == 0):
+                        print(f"[DEBUG]     Sleeping for {sleep_time:.3f}s")
+                    yield from bps.sleep(sleep_time)
+                
+                global_step += 1
+        
+        # Close run once at the very end
+        yield from close_run()
+        
+        if debug:
+            print(f"[DEBUG] Run closed - plan execution complete!")
     
-    # Close run once at the very end
-    yield from close_run()
-    
-    if debug:
-        print(f"[DEBUG] Run closed - plan execution complete!")
+    # Wrap the plan with subs_wrapper to subscribe the visualizer only for this plan
+    return bpp.subs_wrapper(inner_plan(), visualizer)
 
 
 def replay_optimization_runs(uids, speed_multiplier=1.0, tiled_client=None, RE=None, debug=False):
@@ -748,7 +1109,14 @@ def replay_optimization_runs(uids, speed_multiplier=1.0, tiled_client=None, RE=N
     Returns
     -------
     tuple
-        (motors dict, detector, visualizer, plan) for inspection
+        (motors dict, detector, plan, make_plan) where:
+        - motors: dict of ReplayMotor instances
+        - detector: ReplayDetector instance
+        - plan: initial plan generator (can be used once)
+        - make_plan: callable function that creates a new plan each time it's called.
+                     Each plan creates a new visualizer instance automatically.
+                     Usage: RE(make_plan()) or RE(make_plan(speed_mult=2.0))
+                     After reloading the file, RE(make_plan()) will use the updated visualizer class.
     """
     if tiled_client is None:
         tiled_client = lix_client
@@ -804,31 +1172,77 @@ def replay_optimization_runs(uids, speed_multiplier=1.0, tiled_client=None, RE=N
     # Create mock detector with all images
     detector = ReplayDetector('camSF', np.array(all_images), np.array(all_timestamps), debug=debug)
     
-    # Create visualizer
-    print("Setting up visualization...")
-    visualizer = ReplayVisualizer('camSF', debug=debug)
+    # Create a reusable plan factory function
+    # The visualizer will be created fresh each time make_plan() is called
+    def make_plan(speed_mult=None, visualizer_class=None, record_video=False, video_filename=None, fps=10):
+        """
+        Create a new replay plan. Resets all devices to initial state and creates a new visualizer.
+        
+        Parameters
+        ----------
+        speed_mult : float, optional
+            Speed multiplier for this replay. If None, uses the original speed_multiplier.
+        visualizer_class : class, optional
+            ReplayVisualizer class to use. If None, uses ReplayVisualizer from current module.
+        record_video : bool, optional
+            If True, record the visualization to a video file. Default: False
+        video_filename : str, optional
+            Filename for the video. If None, auto-generates with timestamp.
+        fps : int, optional
+            Frames per second for the video. Default: 10
+        
+        Returns
+        -------
+        generator
+            A new Bluesky plan generator that can be executed with RE(plan)
+            The visualizer is automatically subscribed for this plan execution only.
+        """
+        # Reset all devices to initial state
+        for motor in motors.values():
+            if motor is not None:
+                motor.reset()
+        detector.reset()
+        
+        # Use provided speed_mult or original
+        current_speed = speed_mult if speed_mult is not None else speed_multiplier
+        
+        # Use provided visualizer_class or default to ReplayVisualizer
+        if visualizer_class is None:
+            visualizer_class = ReplayVisualizer
+        
+        if debug:
+            print(f"[DEBUG] Creating new plan with speed_multiplier={current_speed}")
+            print(f"[DEBUG] Using visualizer class: {visualizer_class.__name__}")
+            if record_video:
+                print(f"[DEBUG] Video recording enabled: {video_filename}")
+        
+        # Pass video recording parameters to visualizer
+        visualizer_kwargs = {
+            'record_video': record_video,
+            'video_filename': video_filename,
+            'fps': fps,
+            'detector_name': detector.name,
+            'debug': debug
+        }
+        
+        return create_replay_plan(motors, detector, runs_data, current_speed, 
+                                 debug=debug, visualizer_class=visualizer_class,
+                                 visualizer_kwargs=visualizer_kwargs)
     
-    # Create replay plan
+    # Create initial plan for backward compatibility
     print("Creating replay plan...")
-    plan = create_replay_plan(motors, detector, runs_data, speed_multiplier, debug=debug)
+    plan = make_plan()
     
-    # Subscribe visualizer to RunEngine if provided
-    if RE is not None:
-        RE.subscribe(visualizer)
-        print("Visualizer subscribed to RunEngine.")
-        print("Execute with: RE(plan)")
-    else:
-        print("Ready to replay. Subscribe visualizer and execute:")
-        print("  RE.subscribe(visualizer)")
-        print("  RE(plan)")
+    print("Ready to replay. Execute with: RE(plan)")
+    print("To replay again, use: RE(make_plan()) or RE(make_plan(speed_mult=2.0))")
+    print("After reloading the file, use: RE(make_plan()) to get updated visualizer/metric")
     
     if debug:
         print(f"[DEBUG] replay_optimization_runs complete!")
         print(f"[DEBUG]   Motors: {list(motors.keys())}")
         print(f"[DEBUG]   Detector: {detector.name}")
-        print(f"[DEBUG]   Visualizer: {visualizer.detector_name}")
     
-    return motors, detector, visualizer, plan
+    return motors, detector, plan, make_plan
 
 
 def check_duplicate_images(uids, tiled_client=None, debug=False):
@@ -970,8 +1384,13 @@ if __name__ == "__main__":
     print("=" * 50)
     print("\nUsage:")
     print("  from replay_optimization import replay_optimization_runs")
-    print("  motors, detector, visualizer, plan = replay_optimization_runs(['uid1', 'uid2', ...])")
-    print("  RE(plan)")
+    print("  motors, detector, plan, make_plan = replay_optimization_runs(['uid1', 'uid2', ...])")
+    print("  RE(plan)  # First replay (visualizer auto-subscribed)")
+    print("  RE(make_plan())  # Replay again (no need to re-query Tiled!)")
+    print("  RE(make_plan(speed_mult=2.0))  # Replay at 2x speed")
+    print("\nAfter modifying intensity_metric or visualizer settings:")
+    print("  %run -i scripts/replay_optimization.py  # Reload file")
+    print("  RE(make_plan())  # Uses updated visualizer/metric automatically")
     print("\nOr in IPython:")
     print("  %run replay_optimization.py")
     print("  # Then call replay_optimization_runs with your UIDs")
