@@ -262,14 +262,14 @@ class ReplayVisualizer(CallbackBase):
                 # plt.switch_backend('Agg')
                 # print("  Using Agg backend for video recording")
         
-        # Create figure with grid: intensity plot, image, and single row of 2 motor pair plots
-        # Tighter layout for PowerPoint embedding - less horizontal stretch
+        # Create figure with grid: intensity plot, images, and scatter plots
+        # Single gridspec with 3 rows: first row compressed to 75% height, bottom two rows equal
         self.fig = plt.figure(figsize=(12, 10))
-        # Main gridspec: only 2 rows (intensity plot + image plots), no unused row
-        gs = self.fig.add_gridspec(2, 2, hspace=0.15, wspace=0.1, 
-                                    left=0.05, right=0.98, top=0.95, bottom=0.30)
+        gs = self.fig.add_gridspec(3, 2, hspace=0.3, wspace=0.2, 
+                                    left=0.08, right=0.98, top=0.97, bottom=0.05,
+                                    height_ratios=(0.35, 1.0, 1.0))
         
-        # Top row: intensity plot (spans 2 columns)
+        # Row 0: intensity plot (spans 2 columns)
         self.ax1 = self.fig.add_subplot(gs[0, :])
         self.ax1.set_xlabel("Step")
         self.ax1.set_ylabel("Beam Intensity (×10⁶)")
@@ -279,27 +279,26 @@ class ReplayVisualizer(CallbackBase):
         self.step_data = []
         self.line, = self.ax1.plot([], [], 'b-o', markersize=4)
         
-        # Middle left: detector image
+        # Row 1: detector images
+        # Left: raw detector image
         self.ax2 = self.fig.add_subplot(gs[1, 0])
-        self.ax2.set_title("Detector Image")
+        self.ax2.set_title("Detector Image (Raw Measurement)")
         self.ax2.set_xlabel("X (pixels)")
         self.ax2.set_ylabel("Y (pixels)")
         self.im = None
         
-        # Middle right: processed image (cropped, blurred, thresholded)
+        # Right: processed image (cropped, blurred, thresholded)
         self.ax_placeholder = self.fig.add_subplot(gs[1, 1])
-        self.ax_placeholder.set_title("Processed Image")
+        self.ax_placeholder.set_title("Processed Image (Used for Optimization)")
         self.ax_placeholder.set_xlabel("X (pixels)")
         self.ax_placeholder.set_ylabel("Y (pixels)")
         self.im_processed = None
         
-        # Bottom row: single row of 2 plots for motor pair scatter plots
+        # Row 2: motor pair scatter plots with GP surfaces
         # Only show (x1,x2) and (y1,y2) pairs
-        # Positioned with gap below the image plots (top=0.24 to avoid title/axis overlap)
-        gs_bottom = self.fig.add_gridspec(1, 2, left=0.05, right=0.98, bottom=0.05, top=0.24, hspace=0.1, wspace=0.1)
         self.ax_pairs = {
-            ('x1', 'x2'): self.fig.add_subplot(gs_bottom[0, 0]),
-            ('y1', 'y2'): self.fig.add_subplot(gs_bottom[0, 1]),
+            ('x1', 'x2'): self.fig.add_subplot(gs[2, 0]),
+            ('y1', 'y2'): self.fig.add_subplot(gs[2, 1]),
         }
         
         # Track motor positions and scatter plots
@@ -324,7 +323,8 @@ class ReplayVisualizer(CallbackBase):
         self.gp_update_interval = 3  # Refit GP every N events
         self.min_points_for_gp = 6  # Minimum data points before fitting GP
         
-        # Use subplots_adjust for precise control with adequate padding
+        # Note: Layout is controlled by gridspec above; subplots_adjust may be redundant
+        # but kept for compatibility
         plt.subplots_adjust(left=0.05, right=0.98, top=0.95, bottom=0.05, hspace=0.15, wspace=0.1)
         
         # Only enable interactive mode when NOT recording video
@@ -529,14 +529,14 @@ class ReplayVisualizer(CallbackBase):
         
         # Clear image plot
         self.ax2.clear()
-        self.ax2.set_title("Detector Image")
+        self.ax2.set_title("Detector Image (Raw Measurement)")
         self.ax2.set_xlabel("X (pixels)")
         self.ax2.set_ylabel("Y (pixels)")
         self.im = None
         
         # Clear processed image plot
         self.ax_placeholder.clear()
-        self.ax_placeholder.set_title("Processed Image")
+        self.ax_placeholder.set_title("Processed Image (Used for Optimization)")
         self.ax_placeholder.set_xlabel("X (pixels)")
         self.ax_placeholder.set_ylabel("Y (pixels)")
         self.im_processed = None
