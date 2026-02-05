@@ -25,7 +25,7 @@ except:
 # might need to first run rbt.resetSoftIO()
 ready_for_robot([],[],init=True)
 
-SS_Z_POS_MEASURE = 7
+SS_Z_POS_MEASURE = 4.5
 
 try:
     print("camES2 defined:", camES2)

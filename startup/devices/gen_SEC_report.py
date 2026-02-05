@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 global proc_path
 
-def gen_SEC_report(fn, exp_fn, atsas_path=""):
+def gen_SEC_report(fn, exp_fn, atsas_path="", attach_uv=True):
     """Create an HTML report summarizing static solution scattering data in the specified h5 file."""
     dn = os.path.dirname(fn) or "."
     dn = os.path.abspath(dn)

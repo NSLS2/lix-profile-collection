@@ -18,7 +18,7 @@ global proc_path
 ADF_location = PureWindowsPath(r"C:/CDSProjects/HPLC/")
 windows_ip  = "xf16id@10.66.123.226"
 
-       
+
 def open_purge_pump(channel=None, flowrate=3, ID=2):
     """
     This will be used to prime the buffers in the Agilent Pump only.  A purge of the superloop up to column will be a second valve 
@@ -37,7 +37,7 @@ def open_purge_pump(channel=None, flowrate=3, ID=2):
         #do something in SDK to set flow
         
     return status
-    
+
 def get_UV_data(sample_name):
     
      """This will fetch the 280 UV data from the working directory and is used by h5_attach_hplc"""
@@ -90,7 +90,7 @@ def h5_attach_hplc(fn_h5, grp_name=None):
 
 
 class SEC_SAXSCollection(object):
-    experiment_type = ["X-ray_UV","MALS_RID", "X-ray_Regen"]
+    experiment_type = ["X-ray_UV","X-ray_only","X-ray_UV_MALS_RID", "X-ray_Regen","UV_MALS_RID_only"]
     column_type = ["Superdex", "dSEC2", "Superose_6"]
     buffer_position = [1,2,3,4,5,6]
     if proposal_id is None or run_id is None:
@@ -216,22 +216,22 @@ class SEC_SAXSCollection(object):
     
     
     
-    def build_exp_df(self, dd, batchID, mals_inj_vol=None):
+    def build_exp_df(self, dd, batchID, uv_inj_vol=None):
         df=pd.DataFrame.from_dict(dd, orient='columns')
         df = df.loc[df["batchID"]==batchID].copy()
         num_cols = ["Volume", "buffer_position"]
         df[num_cols] = df[num_cols].apply(pd.to_numeric, errors="raise")
         df["Data file"] = "<S>"
         df["Sample Type"] = "Sample"
-        conditional_df = ~df["Exp_Type"].isin(["X-ray_UV", "X-ray_Regen"])
-        mals_rows = df.loc[conditional_df].copy()
-        if not mals_rows.empty:
-            mals_rows["Sample Name"] = mals_rows["Sample Name"] + '_mals'
-            if mals_inj_vol == None:
-                mals_inj_vol = 20
-            mals_rows["Volume"] = mals_inj_vol
-            mals_rows["Acq. method"] = mals_rows["Acq. method"].str.replace(r"\.amx$", "_UV.amx", regex=True)
-        exp_df = pd.concat([df, mals_rows], ignore_index = True)
+        conditional_df = ~df["Exp_Type"].isin(["X-ray_only", "X-ray_Regen"])
+        uv_rows = df.loc[conditional_df].copy()
+        if not uv_rows.empty:
+            uv_rows["Sample Name"] = uv_rows["Sample Name"] + '_UV'
+            if uv_inj_vol == None:
+                uv_inj_vol = 20
+            uv_rows["Volume"] = uv_inj_vol
+            uv_rows["Acq. method"] = uv_rows["Acq. method"].str.replace(r"\.amx$", "_UV.amx", regex=True)
+        exp_df = pd.concat([df, uv_rows], ignore_index = True)
         return exp_df
 
     def hplc_dict_from_df(self, exp_df):
@@ -265,7 +265,7 @@ class SEC_SAXSCollection(object):
         
         
         
-    def CreateAgilentSeqFile(self, spreadsheet_fn, batchID, sheet_name='Samples', mals_inj_vol = None): 
+    def CreateAgilentSeqFile(self, spreadsheet_fn, batchID, sheet_name='Samples', uv_inj_vol = None): 
         """
     Creates the agilent sequence file from the spreadsheet. User input is batchID, sample_name and method for hplc. The other columns are necessary for generating the proper formatted sequence file
     """
@@ -280,7 +280,7 @@ class SEC_SAXSCollection(object):
             print("need to login first ...")
             login()
   
-        exp_df = self.build_exp_df(dd, batchID, mals_inj_vol)
+        exp_df = self.build_exp_df(dd, batchID, uv_inj_vol)
         samples, valve_position, experiment_type = self.hplc_dict_from_df(exp_df)
         sequence_path = "/nsls2/data4/lix/legacy/HPLC/Agilent/"
         out_csv = f"{sequence_path}sequence_table.csv"
@@ -303,11 +303,79 @@ class SEC_SAXSCollection(object):
                 subprocess.run(cmd)
                 print("Sequence_table sucessfully sent")
         except Exception as e:
-            msg = f"SCP has failed with exception {e}!"
-            print(msg)
+            print("SCP transfer has failed for!")
         
 
         return samples, valve_position, experiment_type
+    
+    '''
+    ##Old method
+    def CreateAgilentSeqFile(self, spreadsheet_fn, batchID, sheet_name='Samples'): 
+        """
+    Creates the agilent sequence file from the spreadsheet. User input is batchID, sample_name and method for hplc. The other columns are necessary for generating the proper formatted sequence file
+    """
+        strFields=["Vial", "Sample Name", "Sample Type", "Acq. method", "Proc. method", "Data file", "Buffer", "Valve Position"]
+        numFields=["Volume"]
+        dd=parseSpreadsheet(spreadsheet_fn, sheet_name=sheet_name, return_dataframe=False)
+        print(f"this is {dd}")
+        autofillSpreadsheet(dd, fields=["batchID"])
+        print(dd['batchID'].keys())
+        print(dd['batchID'].values())
+        print(dd['Valve Position'].values())
+    
+        if proposal_id is None or run_id is None:
+            print("need to login first ...")
+            login()
+    
+        ridx=[i for i in dd['batchID'].keys() if dd['batchID'][i]==batchID]
+        print(f"{ridx} this is ridx")
+
+    
+        samples = {}
+        dfile = f"<S>" 
+        dd["Data file"] = {}
+        dd["Sample Type"] = {}
+        valve_position = {}
+        
+        for i in ridx:
+            for f in numFields:
+                if not (isinstance(dd[f][i], int or isintance(dd[f][i], float))):
+                    raise Exception(f"not a numeric value for {f}: {dd[f][i].values()}, replace with number")
+            valve_position[i] = dd["Valve Position"][i]
+            print(valve_position)
+            sn = dd['Sample Name'][i]
+            samples[sn] = {"acq time": dd['Run Time'][i], 
+                           "valve_position":valve_position[i],
+                           "md": {"Column type": dd['Column type'][i],
+                                  "Injection Volume (ul)": dd['Volume'][i],
+                                  "Flow Rate (ml_min)": dd['Flow Rate'][i],
+                                  "Sample buffer":dd['Buffer'][i],
+                                  "Valve Position":valve_position[i],
+                                 "Acq Method": dd['Acq. method'][i],
+                                 "Vial" : dd['Vial'][i]}
+                          }
+            dd["Data file"][i] = dfile
+            dd["Valve Position"][i]
+            dd["Sample Type"][i] = "Sample"
+        sequence_path="/nsls2/data4/lix/legacy/HPLC/Agilent/"
+        df=pd.DataFrame.from_dict(dd, orient='columns')
+        df[df['batchID']==batchID].to_csv(f"{sequence_path}sequence_table.csv", index=False, encoding="ASCII",
+                        columns=["Vial", "Sample Name", "Sample Type", "Volume", "Inj/Vial", "Acq. method", "Proc. method", "Data file" ])
+        source_file = f"{sequence_path}"+'sequence_table.csv'
+        destination_loc = "xf16id@10.66.123.226:C:/CDSProjects/HPLC/"
+        try:
+                ssh_key = str(pathlib.Path.home())+"/.ssh/id_rsa.pub"
+                if not os.path.isfile(ssh_key):
+                    raise Exception(f"{ssh_key} does not exist!")
+                cmd = ["scp", "/nsls2/data4/lix/legacy/HPLC/Agilent/sequence_table.csv", destination_loc] ##hardcoded path for sequence file
+                #print(cmd)
+                subprocess.run(cmd)
+                print("Sequence_table sucessfully sent")
+        except Exception as e:
+            print("SCP transfer has failed for!")
+
+        return samples, valve_position 
+        '''
         
         
     
@@ -396,20 +464,20 @@ class SEC_SAXSCollection(object):
     def verify_method_valve(self, method, current_valve_position):
         if method not in self.experiment_type:
             raise ValueError(f"Selected method {method} not in acceptable methods list! Choose {experiment_type}")
-        elif method == "X-ray_UV":
+        elif method == "X-ray_only":
             if self.column_locations != current_valve_position:
-                self.column_locations = "col_pos2"
+                self.column_locations = "col_pos1"
             else:
                 print(f" {self.column_position}")
         return True
     def detector_selection(self, position):
-        if position == "X-ray_UV":
+        if position == "X-ray":
             VV.send_valve_cmd(cmd="GOB", valve=VICI_ID.Detector, valve_ID = 4)
-        if position == "MALS":
+        if position == "UV":
             VV.send_valve_cmd(cmd="GOA", valve=VICI_ID.Detector, valve_ID = 4)
-    def run_MALS_collection(self, method, sample_name):
-        self.detector_selection(position="MALS")
-        print("Switching to MALS detectors")
+    def run_UV_collection(self, method, sample_name):
+        self.detector_selection(position="UV")
+        print("Switching to UV detectors")
         caput('XF:16IDC-ES{HPLC}HPLC_status' ,0)
         caput('XF:16IDC-ES{HPLC}HPLC_status' ,1)
         caput('XF:16IDC-ES{HPLC}SAMPLE_NAME' ,sample_name)
@@ -429,7 +497,7 @@ class SEC_SAXSCollection(object):
                 
             caput('XF:16IDC-ES{HPLC}START_RUN', 1)
             caput('XF:16IDC-ES{HPLC}START_RUN', 0)
-        print("Running MALS data collection")  
+        print("Running UV data collection")  
         time.sleep(acq_time_sec)     
         return {"status":state}
   
@@ -443,7 +511,7 @@ class SEC_SAXSCollection(object):
         _md.update(md or {})
         change_sample(sample_name)
         pil.use_sub_directory(sample_name)
-        #sol.select_flow_cell('middle')
+        sol.select_flow_cell('middle')
         pil.set_trigger_mode(PilatusTriggerMode.ext_multi)
         #pil.set_num_images(nframes)  ##old way
         set_num_images(dets=[pil],n_triggers=nframes)
@@ -478,16 +546,13 @@ class SEC_SAXSCollection(object):
             sleep(0.2)
 
         #sol.ready_for_hplc.set(0)
-        #start_monitor([em1,em2], rate=4)
-        #sd.monitor = []
-        #sd.monitors.append([em1.sum_all.mean_value, em2.sum_all.mean_value])
-        #flowmeters=[sol.saxs_sec_flow,sol.uv_sec_flow]
-        RE(monitor_during_wrapper(ct([pil, ext_trig], num=nframes, md=_md), [em1.ts.SumAll, em2.ts.SumAll,]))
+        start_monitor([em1,em2], rate=4)
+        RE(monitor_during_wrapper(ct([pil, ext_trig], num=nframes, md=_md), [em1.ts.SumAll, em2.ts.SumAll]))
         sd.monitors = []
         pil.use_sub_directory()
         change_sample()
     
-    def run_hplc_from_spreadsheet(self, spreadsheet_fn, batchID, sheet_name='Samples', exp=2, flowrate = 0.30, post_run=60, generate_report=True, mals_inj_vol=20, copy_with_scp=True):
+    def run_hplc_from_spreadsheet(self, spreadsheet_fn, batchID, sheet_name='Samples', exp=2, flowrate = 0.35, post_run=60, generate_report=True, uv_inj_vol=20, old_uv_proc=False):
         
         """
         Runs HPLC experiments based on data from a spreadsheet.
@@ -501,8 +566,7 @@ class SEC_SAXSCollection(object):
     
         sequence_name = '/nsls2/data/lix/legacy/HPLC/Agilent/sequence_table.csv'
         samples, valve_position, experiment_type = self.CreateAgilentSeqFile(spreadsheet_fn, batchID, 
-                                                                             sheet_name=sheet_name, mals_inj_vol=mals_inj_vol)
-        uv_dest_path = f'{proc_path}'
+                                                                             sheet_name=sheet_name, uv_inj_vol=uv_inj_vol)
    
     
         
@@ -524,7 +588,7 @@ class SEC_SAXSCollection(object):
             single_sample = json.dumps(self.sample_params)
             caput('XF:16IDC-ES{HPLC}RunParameters' , single_sample)
 
-            valve_pos = sample_info["md"]["Valve Position"]##should be changed to slot position
+            valve_pos = sample_info["md"]["Valve Position"]
             print(f"Switching valve to position {valve_pos} for sample {sample_name}...")
             VV.switch_10port_valve(pos=valve_pos, valve=VICI_ID.Valve_10_port,
                                    valve_ID=VICI_ID.Valve_10_port.valve_ID, get_ret=False)
@@ -536,42 +600,48 @@ class SEC_SAXSCollection(object):
                               md={'HPLC': sample_info['md']})  
             uid = db[-1].start['uid']
             #send_to_packing_queue(uid, "HPLC")
-            pack_h5_with_lock(uid, dest_dir=proc_path, attach_uv_file=False) #handling uv attachment separately as it might take time to process on windows machine
+            pack_h5_with_lock(uid, dest_dir=proc_path, attach_uv_file=False)
             pil.use_sub_directory()
-            if generate_report:
-                gen_SEC_report(f'{sample_name}.h5', "exp.h5")
-            else:
-                print("No report requested")
-        
         while run_number <= len(samples.items()):
             for sample_name, sample_info in samples.items():
                 number_samples = len(samples.items())
+                
+
+                
+                
+                #VV.send_valve_cmd(cmd='GOB', valve=VICI_ID.Detector, valve_ID=4)
         
-###copy with scp is temporary until UV data is processed into IOC.  Will do processing with windows/Agilent software that will populate IOC with spectrum, but how to move data for safe keeping? Do we need originals?
-                if copy_with_scp:
+                
+        
+
+                if old_uv_proc:
                     max_attempts = 3
-                    with ThreadPoolExecutor(max_workers=1) as executor:
-                        for attempt in range(1, max_attempts + 1):
-                            try:
-                                print(f"Attempt {attempt}: Fetching UV data")
-                                future = executor.submit(self._copy_with_scp, sample_name)
-                                ret = future.result(timeout=3 * 60)
-                                if ret[0] == 0:
-                                    h5_attach_hplc(sample_name)
-                                    return True
-                                else:
-                                    print(f"Attempt {attempt} failed: scp returned {ret}")
-                            except TimeoutError:
-                                print(f"Attempl {attempt} timed out!")
-                            except Exception as e:
-                                print(f"Attempt {attempt} raised exception {e} !")
-                    print("failure of copying uv files after 3 attempts")
-                    return False
+                    cutoff = 3*60
+                    attempt = 0
+                    while True:
+                        attempt += 1
+                        try:
+                            t = threading.Thread(target=self._copy_with_scp, args=(sample_name,),
+                                                 daemon=True)
+                            t.start()
+                            h5_attach_hplc(sample_name)
+                            if attempt >= max_attempts:
+                                print("failure of uv file copying after 3 attempts")
+                                return False
+                        
+                        except Exception as e:
+                            msg = f"[Run {attempt}] failed to start thread: {e}"
+                            print(msg)
                         
             run_number += 1
-            
+            if generate_report:
+                gen_SEC_report(f"{sample_name}.h5")
+                        
+    
+            #pil.use_sub_directory()
+            #caput('XF:16IDC-ES{HPLC}SDK_Connection' , 2) #Disconnect from SDK each time.  Seems to get stuck if you dont
+            #run_number += 1
         print(f'Sequence collection finished for batch {batchID} from {spreadsheet_fn}')
-
 
 '''  
 

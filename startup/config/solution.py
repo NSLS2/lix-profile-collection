@@ -17,8 +17,8 @@ camqr = setup_cam('camBHutch')
 sol = SolutionScatteringExperimentalModule(camName="camIR")
 sol.cam.cam.acquire_time.put(0.001)
 sol.cam.cam.gain.put(5)
-sol.cam.setup_watch("upstream", "stats4.total", 1e6, base_value=1.1e6)#7.1,8.6 came out 5.5
-sol.cam.setup_watch("downstream", "stats4.total", 1e6, base_value=1.15e6)#6.1,7.7 came out 4.4
+sol.cam.setup_watch("upstream", "stats4.total", 0.2e6, base_value=1.1e6)#7.1,8.6 came out 5.5
+sol.cam.setup_watch("downstream", "stats4.total", 0.2e6, base_value=1.15e6)#6.1,7.7 came out 4.4
 
 #cell 2 ES2
 '''
@@ -40,7 +40,7 @@ sol.vol_sample_headroom = 5
 sol.drain_duration = 2
 sol.wash_duration = 0.4
 sol.default_wash_repeats = 2
-sol.default_dry_time = 40
+sol.default_dry_time = 25
 sol.delay_before_release = 4
 sol.ctrl.water_pump_spd.put(1)
 sol.default_piston_pos = 90
@@ -54,7 +54,7 @@ sol.vol_tube_to_cell = {'upstream':89,'downstream':93}
 # u -80 d -80
 # u 150, d 145
 
-sol.flowcell_pos = {'bottom': [-8.85, 0, 11.51], #[-7.53, 0, 5.8] #cell 2 position
+sol.flowcell_pos = {'bottom': [-8.85, 0, 11.685], #[-7.53, 0, 5.8] #cell 2 position
                     'top':    [-8.85, 0, 6.5], #[-7.53, 0, 0.8] #cell 2 position
                     'middle': [40.3, 0, 9.25],#39.75, 0,1.56
                     'scint': [ 16.01, 0, 4.35],
