@@ -118,8 +118,8 @@ class SolutionScatteringExperimentalModule():
     hplc_injected = EpicsSignalRO('XF:16IDC-ES:Sol{ctrl}HPLCin1')
     hplc_done = EpicsSignalRO('XF:16IDC-ES:Sol{ctrl}HPLCin2')
     hplc_bypass = EpicsSignal('XF:16IDC-ES:Sol{ctrl}HPLC_bypass')
-    saxs_sec_flow = EpicsSignalRO('XF:16IDC-HPLC:{ES-Flow_SAXS}:flow')
-    uv_sec_flow = EpicsSignalRO('XF:16IDC-HPLC:{ES-Flow_UV}:flow')
+    saxs_sec_flow = EpicsSignalRO('XF:16IDC-HPLC:{ES-Flow_SAXS}:flow', name = 'saxs_flow')
+    uv_sec_flow = EpicsSignalRO('XF:16IDC-HPLC:{ES-Flow_UV}:flow', name = 'uv_flow')
     # the needles are designated 1 (upstream) and 2
     # the flow cells are designated 1 (bottom), 2 and 3
     # needle 1 is connected to the bottom flowcell, needle 2 connected to the top, HPLC middle

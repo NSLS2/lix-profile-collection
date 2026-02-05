@@ -28,6 +28,11 @@ except Exception as e:
 scan_park_xc = 100
 ready_for_robot([], [], init=True)
 
+df = Device(name="diffuser")
+df.x = EpicsMotor("XF:16IDC-ES{diffuser}X", name="df_x")
+df.r = EpicsMotor("XF:16IDC-ES{diffuser}rot", name="df_r")
+
+
 def rbt_scanning(state):
     if state == "park":
         ready_for_robot(motors=[ss.x, ss.y, ss.xc, ss.sx, ss.sz], positions=[0, 0.5, scan_park_xc,0,0])

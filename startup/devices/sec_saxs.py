@@ -443,7 +443,7 @@ class SEC_SAXSCollection(object):
         _md.update(md or {})
         change_sample(sample_name)
         pil.use_sub_directory(sample_name)
-        sol.select_flow_cell('middle')
+        #sol.select_flow_cell('middle')
         pil.set_trigger_mode(PilatusTriggerMode.ext_multi)
         #pil.set_num_images(nframes)  ##old way
         set_num_images(dets=[pil],n_triggers=nframes)
@@ -478,8 +478,11 @@ class SEC_SAXSCollection(object):
             sleep(0.2)
 
         #sol.ready_for_hplc.set(0)
-        start_monitor([em1,em2], rate=4)
-        RE(monitor_during_wrapper(ct([pil, ext_trig], num=nframes, md=_md), [em1.ts.SumAll, em2.ts.SumAll]))
+        #start_monitor([em1,em2], rate=4)
+        #sd.monitor = []
+        #sd.monitors.append([em1.sum_all.mean_value, em2.sum_all.mean_value])
+        #flowmeters=[sol.saxs_sec_flow,sol.uv_sec_flow]
+        RE(monitor_during_wrapper(ct([pil, ext_trig], num=nframes, md=_md), [em1.ts.SumAll, em2.ts.SumAll,]))
         sd.monitors = []
         pil.use_sub_directory()
         change_sample()
@@ -546,7 +549,7 @@ class SEC_SAXSCollection(object):
         
 ###copy with scp is temporary until UV data is processed into IOC.  Will do processing with windows/Agilent software that will populate IOC with spectrum, but how to move data for safe keeping? Do we need originals?
                 if copy_with_scp:
-                    max_attempts = 4
+                    max_attempts = 3
                     with ThreadPoolExecutor(max_workers=1) as executor:
                         for attempt in range(1, max_attempts + 1):
                             try:
@@ -562,7 +565,7 @@ class SEC_SAXSCollection(object):
                                 print(f"Attempl {attempt} timed out!")
                             except Exception as e:
                                 print(f"Attempt {attempt} raised exception {e} !")
-                    print("failure of copying uv files after 4 attempts")
+                    print("failure of copying uv files after 3 attempts")
                     return False
                         
             run_number += 1
