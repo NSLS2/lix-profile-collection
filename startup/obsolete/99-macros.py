@@ -1,6 +1,6 @@
 from time import sleep
 from cycler import cycler
-# from . import utils
+from . import utils
 import operator
 from epics import caget,caput
 from PIL import Image

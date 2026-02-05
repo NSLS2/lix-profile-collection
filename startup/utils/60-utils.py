@@ -117,8 +117,6 @@ def align_crl(rep=32, x_range=0.6, y_range=0.6, det=em1, optim_steps=10):
     pos_y10 = crl.y1.position
     pos_y20 = crl.y2.position
 
-    # crl.x1 4.4
-    # crl.x2 7.6
     dofs_x = [
         RangeDOF(
             actuator=crl.x1,
@@ -132,8 +130,6 @@ def align_crl(rep=32, x_range=0.6, y_range=0.6, det=em1, optim_steps=10):
         ),
     ]
 
-    # crl.y1 8.22
-    # crl.y2 -18.11
     dofs_y = [
         RangeDOF(
             actuator=crl.y1,
@@ -172,23 +168,17 @@ def align_crl(rep=32, x_range=0.6, y_range=0.6, det=em1, optim_steps=10):
         initialize_with_center=False,
     )
 
-    #RE(fast_shutter_wrapper(agent_x.optimize(iterations=1, n_points=rep))) #, iterations=4))) 
-    RE(agent_x.optimize(iterations=1, n_points=rep)) #, iterations=4))) 
+    RE(fast_shutter_wrapper(agent_x.optimize(iterations=1, n_points=rep))) #, iterations=4))) 
     if optim_steps > 1:
-        #RE(fast_shutter_wrapper(agent_x.optimize(iterations=optim_steps)))
-        RE(agent_x.optimize(iterations=optim_steps))
-    #agent_x.plot_objective(crl.x1.name, crl.x2.name, objective_name)
+        RE(fast_shutter_wrapper(agent_x.optimize(iterations=optim_steps)))
     best_parameterization = agent_x.ax_client.get_best_parameterization()[0]
     print(f"best parameterization for x: {best_parameterization}")
     crl.x1.move(best_parameterization['crl_x1']) # ['crl_x1'][0]
     crl.x2.move(best_parameterization['crl_x2']) # [0]
 
-    #RE(fast_shutter_wrapper(agent_y.optimize(iterations=1, n_points=rep))) #, iterations=4))) 
-    RE(agent_y.optimize(iterations=1, n_points=rep)) #, iterations=4))) 
+    RE(fast_shutter_wrapper(agent_y.optimize(iterations=1, n_points=rep))) #, iterations=4))) 
     if optim_steps > 1:
-        #RE(fast_shutter_wrapper(agent_y.optimize(iterations=optim_steps)))
-        RE(agent_y.optimize(iterations=optim_steps))
-    #agent_y.plot_objective(crl.y1.name, crl.y2.name, objective_name)
+        RE(fast_shutter_wrapper(agent_y.optimize(iterations=optim_steps)))
     best_parameterization = agent_y.ax_client.get_best_parameterization()[0]
     print(f"best parameterization for y: {best_parameterization}")
     crl.y1.move(best_parameterization['crl_y1']) # [0]
@@ -203,8 +193,6 @@ def align_crl2(rep=32, x_range=0.6, y_range=0.6, det=em1, optim_steps=10):
     pos_y10 = crl.y1.position
     pos_y20 = crl.y2.position
 
-    # crl.x1 4.4
-    # crl.x2 7.6
     dofs_1 = [
         RangeDOF(
             actuator=crl.x1,
@@ -218,8 +206,6 @@ def align_crl2(rep=32, x_range=0.6, y_range=0.6, det=em1, optim_steps=10):
         ),
     ]
 
-    # crl.y1 8.22
-    # crl.y2 -18.11
     dofs_2 = [
         RangeDOF(
             actuator=crl.x2,
@@ -258,23 +244,17 @@ def align_crl2(rep=32, x_range=0.6, y_range=0.6, det=em1, optim_steps=10):
         initialize_with_center=False,
     )
 
-    #RE(fast_shutter_wrapper(agent_1.optimize(iterations=1, n_points=rep))) #, iterations=4))) 
-    RE(agent_1.optimize(iterations=1, n_points=rep)) #, iterations=4))) 
+    RE(fast_shutter_wrapper(agent_1.optimize(iterations=1, n_points=rep))) #, iterations=4))) 
     if optim_steps > 1:
-        #RE(fast_shutter_wrapper(agent_1.optimize(iterations=optim_steps)))
-        RE(agent_1.optimize(iterations=optim_steps))
-    #agent_x.plot_objective(crl.x1.name, crl.x2.name, objective_name)
+        RE(fast_shutter_wrapper(agent_1.optimize(iterations=optim_steps)))
     best_parameterization = agent_1.ax_client.get_best_parameterization()[0]
     print(f"best parameterization for x: {best_parameterization}")
     crl.x1.move(best_parameterization['crl_x1']) # ['crl_x1'][0]
     crl.y1.move(best_parameterization['crl_y1']) # [0]
 
-    #RE(fast_shutter_wrapper(agent_2.optimize(iterations=1, n_points=rep))) #, iterations=4))) 
-    RE(agent_2.optimize(iterations=1, n_points=rep)) #, iterations=4))) 
+    RE(fast_shutter_wrapper(agent_2.optimize(iterations=1, n_points=rep))) #, iterations=4))) 
     if optim_steps > 1:
-        #RE(fast_shutter_wrapper(agent_2.optimize(iterations=optim_steps)))
-        RE(agent_2.optimize(iterations=optim_steps))
-    #agent_y.plot_objective(crl.y1.name, crl.y2.name, objective_name)
+        RE(fast_shutter_wrapper(agent_2.optimize(iterations=optim_steps)))
     best_parameterization = agent_2.ax_client.get_best_parameterization()[0]
     print(f"best parameterization for y: {best_parameterization}")
     crl.x2.move(best_parameterization['crl_x2']) # [0]
@@ -289,8 +269,6 @@ def align_crl3(rep=32, x_range=0.6, y_range=0.6, det=em1, optim_steps=10):
     pos_y10 = crl.y1.position
     pos_y20 = crl.y2.position
 
-    # crl.x1 4.4
-    # crl.x2 7.6
     dofs_1 = [
         RangeDOF(
             actuator=crl.x1,
@@ -337,7 +315,6 @@ def align_crl3(rep=32, x_range=0.6, y_range=0.6, det=em1, optim_steps=10):
     RE(fast_shutter_wrapper(agent_1.optimize(iterations=1, n_points=rep))) #, iterations=4))) 
     if optim_steps > 1:
         RE(fast_shutter_wrapper(agent_1.optimize(iterations=optim_steps)))
-    #agent_x.plot_objective(crl.x1.name, crl.x2.name, objective_name)
     best_parameterization = agent_1.ax_client.get_best_parameterization()[0]
     print(f"best parameterization for x: {best_parameterization}")
     crl.x1.move(best_parameterization['crl_x1']) # ['crl_x1'][0]
