@@ -298,7 +298,7 @@ class CodecPlugin(PluginBase):
     _suffix_re = r"Codec\d:"
     _plugin_type = "NDPluginCodec" 
 
-"""
+r"""
 @register_plugin
 class PvaPlugin(PluginBase):
     _default_suffix = "Pva1:"

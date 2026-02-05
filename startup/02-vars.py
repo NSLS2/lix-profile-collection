@@ -25,7 +25,3 @@ procdir_prefix = "pass-"
 
 bl_comm_proposal = "317919"
 
-import sys
-shared_path = "/nsls2/software/mx/lix/pylibs"
-sys.path = [shared_path]+sys.path
-

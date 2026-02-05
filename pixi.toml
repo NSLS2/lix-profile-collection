@@ -1,0 +1,72 @@
+[workspace]
+channels = ["conda-forge"]
+name = "lix-profile-collection"
+platforms = ["linux-64"]
+version = "2025.3.1"
+
+[system-requirements]
+libc = "2.17"
+
+[feature.profile.dependencies]
+bluesky-base = "*"
+bluesky-queueserver = "*"
+matplotlib-base= "*"
+networkx = "*"
+nslsii = "==0.11.1"
+numpy = "*"
+ophyd = ">=1.11.0"
+pyepics = "*"
+python = ">=3.11,<3.13"
+semver = "*"
+tiled-client = "*"
+pyzbar = "*"
+hdf5-external-filter-plugins = "*"
+blosc-hdf5-plugin = "*"
+databroker = "*"
+epicscorelibs = "*"
+ophyd-async = "*"
+fabio = ">=2025.10.0,<2026"
+tomopy = ">=1.15.3,<2"
+reportlab = ">=4.4.5,<5"
+
+
+[feature.profile.pypi-dependencies]
+pvxslibs = "*"
+bluesky-tiled-plugins = "*"
+blop = { git = "https://github.com/NSLS-II/blop.git", rev = "main" }
+lixtools = { git = "https://github.com/thopkins32/lixtools.git", rev = "main" }
+py4xs = { git = "https://github.com/NSLS-II-LIX/py4xs.git", rev = "master" }
+pymoo = "!=0.6.1.6"
+
+
+[feature.qs.dependencies]
+bluesky-queueserver = "*"
+bluesky-httpserver = "*"
+
+[feature.qs.tasks]
+# This section needs some development work to understand the best way to
+# thread the required configuration through both the task and files checked into
+# the profile.  These will interact with the ansible roles for pushing out the
+# systemd units
+qs-backend = "start-re-manager --profile-dir=."
+qs-server = "uvicorn --host localhost --port 60610 bluesky_httpserver.server:app"
+
+
+[feature.terminal.dependencies]
+ipython = ">=9.5.0"
+pyside6 = "*"
+numpy = ">2"
+
+
+[feature.terminal.tasks]
+start = "unset SESSION_MANAGER PYTHONPATH && MPLBACKEND=qtagg ipython --profile-dir=."
+pvs = "ipython --profile-dir=. -c 'get_pv_types(); exit()'"
+
+[feature.test.dependencies]
+pytest = "*"
+ipython = ">=9.5.0"
+
+[environments]
+terminal = {features=["profile", "terminal"], solve-group="profile"}
+qs = {features=["profile", "qs"], solve-group="profile"}
+test = {features=["profile", "test"], solve-group="profile"}

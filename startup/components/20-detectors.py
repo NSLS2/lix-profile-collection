@@ -12,7 +12,8 @@ from ophyd.areadetector.plugins import PvaPlugin
 from ophyd.areadetector.trigger_mixins import SingleTrigger
 
 from ophyd.areadetector.filestore_mixins import (FileStoreTIFFIterativeWrite,
-                                                 FileStoreHDF5IterativeWrite)
+                                                 FileStoreHDF5IterativeWrite,
+                                                 new_short_uid)
 from ophyd import Component as Cpt
 import imageio,time
 
@@ -21,7 +22,7 @@ class TIFFPluginWithFileStore(TIFFPlugin, FileStoreTIFFIterativeWrite):
     def make_filename(self):
         global current_sample
         fname, read_path, write_path = super().make_filename()
-        fname = self.parent.name + "_" + current_sample
+        fname = self.parent.name + "_" + current_sample + new_short_uid()
         return fname, read_path, write_path
 
     def stage(self):
@@ -308,6 +309,8 @@ def setup_cam(name):
     cam.stats4.read_attrs = ['total', 'centroid']
     cam.stats1.centroid.read_attrs=['x','y']
     cam.stats1.profile_average.read_attrs=['x','y']
+    cam.stats1.kind = "hinted"
+    cam.stats1.total.kind = "hinted"
     cam.roi1.read_attrs = ['min_xyz', 'size']
     cam.tiff.read_attrs = [] # we dont need anything other than the image
     #cam.over.read_attrs = [] # we dont need anything from overlay

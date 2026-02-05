@@ -9,10 +9,10 @@ state_removed = 1
 class Transfocator(Device):
     #za = Cpt(EpicsMotor,'-Ax:Z}Mtr')
     z = Cpt(EpicsMotor,'-Ax:Z}Mtr')
-    x1 = Cpt(EpicsMotor,'-Ax:UX}Mtr')
-    y1 = Cpt(EpicsMotor,'-Ax:UY}Mtr')
-    x2 = Cpt(EpicsMotor,'-Ax:DX}Mtr')
-    y2 = Cpt(EpicsMotor,'-Ax:DY}Mtr')
+    x1 = Cpt(EpicsMotor,'-Ax:UX}Mtr', settle_time=0.5)
+    y1 = Cpt(EpicsMotor,'-Ax:UY}Mtr', settle_time=0.5)
+    x2 = Cpt(EpicsMotor,'-Ax:DX}Mtr', settle_time=0.5)
+    y2 = Cpt(EpicsMotor,'-Ax:DY}Mtr', settle_time=0.5)
     busy = Cpt(EpicsSignalRO, "}busy")
     saved_states = {}
     current_state = None
