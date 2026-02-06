@@ -34,8 +34,10 @@ reportlab = ">=4.4.5,<5"
 pvxslibs = "*"
 bluesky-tiled-plugins = "*"
 blop = { git = "https://github.com/NSLS-II/blop.git", rev = "main" }
-lixtools = { git = "https://github.com/thopkins32/lixtools.git", rev = "main" }
-py4xs = { git = "https://github.com/NSLS-II-LIX/py4xs.git", rev = "master" }
+#lixtools = { git = "https://github.com/thopkins32/lixtools.git", rev = "main" }
+#py4xs = { git = "https://github.com/NSLS-II-LIX/py4xs.git", rev = "master" }
+py4xs = { path = "/nsls2/software/mx/lix/py4xs" }
+lixtools = { path = "/nsls2/software/mx/lix/lixtools" }
 pymoo = "!=0.6.1.6"
 
 
