@@ -100,7 +100,9 @@ def login(uname = None, pID = None, rID = None, debug=True, test_only=False):
         run_cmd(["setfacl", "-R", "-m", f"g:{dgrp}:rwX,d:g:{dgrp}:rwX", proc_path])
         makedirs(proc_path+"processed/")
         makedirs(proc_path+"img/")
-  
+
+    os.chdir(proc_path)
+    
     # if exp.h5 does not exist in proc_path, copy it from somewhere else
     # either the current directory, or from the proc_path of the last scan
     if not os.path.isfile(f"{proc_path}/exp.h5"):

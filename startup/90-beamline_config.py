@@ -45,6 +45,7 @@ if BSconfig in ["solution", "scanning", "generic", "vacuum"]:
 
     reload_macros("utils/60-utils.py")
     reload_macros("utils/61-report.py")
+    reload_macros("utils/70-blop.py")
     reload_macros("utils/90-settings.py")
 
     reload_macros("components/21-metadata.py")
@@ -73,4 +74,4 @@ elif BSconfig=="vacuum":
     ESVacSys = define_vac_system(vacuum_sample_env=True)
     ESVacSys.acceptablePumpPressure = 0.02
 
-
+os.chdir(f"/nsls2/data/lix/legacy/{current_cycle}")
