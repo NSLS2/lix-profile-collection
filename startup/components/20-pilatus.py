@@ -172,6 +172,7 @@ class LiXDetectors(Device):
     reset_file_number = True
     _num_images = 1
     _num_repeats = 1
+    _num_captures = 1
     active_detectors = []
     trig_wait = 1.
     acq_time = 1.
