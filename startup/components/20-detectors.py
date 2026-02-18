@@ -22,7 +22,7 @@ class TIFFPluginWithFileStore(TIFFPlugin, FileStoreTIFFIterativeWrite):
     def make_filename(self):
         global current_sample
         fname, read_path, write_path = super().make_filename()
-        fname = self.parent.name + "_" + current_sample + new_short_uid()
+        fname = f"{self.parent.name}_{current_sample}_{short_uid()}"
         return fname, read_path, write_path
 
     def stage(self):
@@ -30,9 +30,7 @@ class TIFFPluginWithFileStore(TIFFPlugin, FileStoreTIFFIterativeWrite):
         rpath = f"{get_IOC_datapath(self.parent.name)}/{current_sample}"
         self.write_path_template = rpath
         self.create_directory.put(-6)  # create up to 6 levels: ioc, cycle, pid, rid, ???, ??
-        fnum = self.file_number.get()
         super().stage()    # this apparently reset the file number
-        self.file_number.set(fnum).wait()
 
 class StandardProsilica(ProsilicaDetector, SingleTrigger):  
     # cam is defined in ProsilicaDetector
