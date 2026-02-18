@@ -7,6 +7,7 @@ from ophyd import EpicsSignal, EpicsMotor, EpicsSignalRO, Device, Component
 from ophyd.positioner import PositionerBase
 from ophyd.utils.epics_pvs import data_type, data_shape
 from ophyd.status import wait as status_wait
+from ophyd.utils import LimitError
 
 import epics
 import bluesky.preprocessors as bpp
@@ -152,6 +153,9 @@ class XPSController():
             raise Exception(f"{motorName} is not a valid motor.")
         mot = XPSmotor(self, motorName, OphydName, egu, direction=direction)
         self.motors[motorName]["ophyd"] = mot
+        _,ret = self.xps.PositionerUserTravelLimitsGet(self.sID, motorName)
+        ret = ret.split(',')
+        mot.limits = (float(ret[0]), float(ret[1]))
         return mot
     
     #def reboot(self):
@@ -173,6 +177,15 @@ class XPSmotor(PositionerBase):
         self._position = None
         self.setpoint = None
         self.user_offset_dir = Signal(parent=self, name="motor dir", value=direction)
+        self._limits = [0., 0.]
+        
+    @property
+    def limits(self):
+        return self._limits
+        
+    @limits.setter
+    def limits(self, var):
+        self._limits = var
         
     def wait_for_stop(self, poll_time=0.1, tol=0.001):
         if self.debug:
@@ -188,6 +201,9 @@ class XPSmotor(PositionerBase):
     def move(self, position, wait=True, **kwargs): #moved_cb=None, timeout=None, 
         if self.debug:
             print(f"{self.name}: moving to {position} ...")
+
+        self.check_value(position)
+            
         self._started_moving = False
         self.set_point = position*self._dir
         self._status = super().move(self.set_point, **kwargs)
@@ -204,7 +220,14 @@ class XPSmotor(PositionerBase):
             raise
 
         return self._status
-        
+
+    def check_value(self, pos):
+        """Check that the position is within the soft limits"""
+        low_limit, high_limit = self.limits
+
+        if low_limit < high_limit and not (low_limit <= pos <= high_limit):
+            raise LimitError(f"position={pos} not within limits {self.limits}")
+            
     @property
     def position(self):
         if self.debug:
