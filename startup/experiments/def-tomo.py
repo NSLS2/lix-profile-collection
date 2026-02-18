@@ -25,7 +25,12 @@ except:
 # might need to first run rbt.resetSoftIO()
 ready_for_robot([],[],init=True)
 
-SS_Z_POS_MEASURE = 4.5
+SS_Z_POS_MEASURE = 5.5          # based on focus of camES1, leave enough room for sample 
+SS_XC_POS_MEASURE = -1.58       # beam on rotation axis of ss.ry
+SS_XC_POS_PARK = 63             # for interaction with robot and sample alignment
+SS_Y_POS_PARK = 5
+SS_Z_POS_PARK = 6
+SDD_Y_OUT_POS = 410             # SDD at the park position (close to the top of the stage)
 
 try:
     print("camES2 defined:", camES2)
@@ -39,21 +44,21 @@ camES2.ext_trig = True
 def move_sample(pos=None, use_XSP3=False, use_robot=True):
     if pos=="park":
         # must move the SDD out of the way first
-        sdd_y.move(415)
+        sdd_y.move(SDD_Y_OUT_POS)
         if use_robot:
             #ready_for_robot([ss.xc, ss.sx, ss.sz, ss.x, ss.y, ss.z, ss.ry, sdd_y],
-            #                [63,    0,     0,     0,    0,    6,   -90,  410])
+            #                [SS_XC_POS_PARK,    0,     0,     0,    0,    SS_Z_POS_PARK,   -90,  SDD_Y_OUT_POS])
             ready_for_robot([ss.xc, ss.tx, ss.tz, ss.sx, ss.sz, ss.x, ss.y, ss.z, ss.ry, sdd_y],
-                            [63,    0,     0,     0,     0,     0,    5,    6,   -90,  410])
+                            [SS_XC_POS_PARK, 0, 0, 0, 0, 0, SS_Y_POS_PARK, SS_Z_POS_PARK, -90, SDD_Y_OUT_POS])
         else:
-            ss.xc.move(63)
+            ss.xc.move(SS_XC_POS_PARK)
             ss.ry.move(-90)
-            ss.z.move(6)
+            ss.z.move(SS_Z_POS_PARK)
     else:
         if use_robot:
             rbt.goHome()    # robot must be out of the way for SDD to come down 
         ss.z.move(SS_Z_POS_MEASURE)  # 7.5
-        ss.xc.move(0)
+        ss.xc.move(SS_XC_POS_MEASURE)
         if use_XSP3:
             sdd_y.move(0)
 
@@ -118,14 +123,16 @@ def collect_large_map(sname, x1, x2, y1, y2, step_size_x=0.1, step_size_y=0.1,
     update_metadata()
     pil.use_sub_directory(sname)    
 
-    Nseg = int(Nx0*Ny0/10000)+1    
+    Nseg = int(Nx0*Ny0/10000)+1
     if Nx0>Ny0:
         fast_axis = 'x'
-        dN = int(Ny0/Nseg)
+        dN = int(Ny0/Nseg)+1
     else:
         fast_axis = 'y'
-        dN = int(Nx0/Nseg)
-        
+        dN = int(Nx0/Nseg)+1
+    print(f"Nx0={Nx0}, Ny0={Ny0}, Nseg={Nseg}")
+    print(f"fast axis: {fast_axis}, dN={dN}")
+    
     for i in range(Nseg):
         print(f"{sname}-{i:02d}:  ", end="")
         change_sample(f"{sname}-{i:02d}", exception=False)
@@ -150,9 +157,13 @@ def collect_large_map(sname, x1, x2, y1, y2, step_size_x=0.1, step_size_y=0.1,
             x2s = x1s+(Nx-1)*step_size_x
             y1s = y1
             y2s = y2  
+
+        if Nx<=0 or Ny<=0:
+            break
             
         ss.x.move(x1s)
         ss.y.move(y1s)
+        
         try:
             camES1.saveImg(f"img/{current_sample}_ES1.png")
             time.sleep(0.5)
@@ -169,17 +180,18 @@ def collect_large_map(sname, x1, x2, y1, y2, step_size_x=0.1, step_size_y=0.1,
             setSignal(pauseFlag, 0)
             if k=='Q':
                 raise Exception("terminated by user")
-    
+           
         print("running raster: ", x1s, x2s, Nx, y1s, y2s, Ny, fast_axis)
+        
         if fast_axis=="x":
             RE(raster(exp_time, ss.x, x1s, x2s, Nx, ss.y, y1s, y2s, Ny, 
                       detectors=detectors, md=_md))
         else:
             RE(raster(exp_time, ss.y, y1s, y2s, Ny, ss.x, x1s, x2s, Nx, 
                       detectors=detectors, md=_md))
-            
         print('raster completed.')
         send_to_packing_queue(db[-1].start['uid'], "flyscan")
+            
 
 
 def collect_map(sname, x1, x2, y1, y2, step_size_x=0.1, step_size_y=0.1, fast_axis="y",
