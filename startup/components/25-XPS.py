@@ -30,6 +30,11 @@ class PositioningStack():
     # Newport pusher
     z = EpicsMotor('XF:16IDC-ES:Scan{Ax:Z}Mtr', name='ss_z')
 
+    def __init__(self, *args, **kwargs):
+        caput('XF:16IDC-ES:Scan{Ax:Z}Mtr.LLM', 0.5)
+        caput('XF:16IDC-ES:Scan{Ax:Z}Mtr.HLM', 11.5)
+        super().__init__(*args, **kwargs)
+
 class PositioningStackNonMicroscope(PositioningStack):
     """ 
         NOTE: if USR50 is used as Ry, , the zero position must be set correctly so that Rx is 

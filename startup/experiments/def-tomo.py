@@ -25,8 +25,8 @@ except:
 # might need to first run rbt.resetSoftIO()
 ready_for_robot([],[],init=True)
 
-SS_Z_POS_MEASURE = 5.5          # based on focus of camES1, leave enough room for sample 
-SS_XC_POS_MEASURE = -1.58       # beam on rotation axis of ss.ry
+SS_Z_POS_MEASURE = 6.0          # based on focus of camES1, leave enough room for sample 
+SS_XC_POS_MEASURE = -1.05       # beam on rotation axis of ss.ry
 SS_XC_POS_PARK = 63             # for interaction with robot and sample alignment
 SS_Y_POS_PARK = 5
 SS_Z_POS_PARK = 6

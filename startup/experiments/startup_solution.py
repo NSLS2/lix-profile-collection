@@ -18,7 +18,6 @@ ss.x = xps.def_motor("scan.X", "ss_x", direction=-1)
 ss.y = xps.def_motor("scan.Y", "ss_y")
 xps_traj = XPStraj(xps, "scan")
 
-
 #sol = SolutionScatteringExperimentalModule(camName="camES2")
 sol = SolutionScatteringExperimentalModule(camName="camIR")
 
