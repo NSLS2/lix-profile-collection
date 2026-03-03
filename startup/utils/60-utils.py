@@ -125,7 +125,7 @@ def scan_for_ctr(ax, scan_range=0.3, npts=31, opposite_dir=False,
     else:
         print("done ...")
         
-def align_crl0(mon="em2_sum_all_mean_value"):
+def align_crl0(mon="em2_sum_all_mean_value", scan_range=0.5):
     # this could be placed with the current CRL state
     #if "alignment" not in crl.saved_states.keys():
     #    crl.saved_states["alignment"] = [0, 0, 0, 0, 1, 1, 1, 1, 0]
@@ -136,10 +136,10 @@ def align_crl0(mon="em2_sum_all_mean_value"):
         print(f"intensity on the BPM {data[mon0]} is below the threshold {THRESH_BPM_I0}, aborting ...")
         raise Exception()
 
-    scan_for_ctr("x", 0.4, 31, opposite_dir=False, mon=mon)
-    scan_for_ctr("x", 0.4, 21, opposite_dir=True, mon=mon)
-    scan_for_ctr("y", 0.4, 31, opposite_dir=False, mon=mon)
-    scan_for_ctr("y", 0.4, 21, opposite_dir=True, mon=mon)
+    scan_for_ctr("x", scan_range, 31, opposite_dir=False, mon=mon)
+    scan_for_ctr("x", scan_range, 21, opposite_dir=True, mon=mon)
+    scan_for_ctr("y", scan_range, 31, opposite_dir=False, mon=mon)
+    scan_for_ctr("y", scan_range, 21, opposite_dir=True, mon=mon)
 
 ref_beam_intensity = {"em1": 4200000, "em2": 160000}
 beam_intensity_history = {"em1": [], "em2": [], "timestamp": []}    

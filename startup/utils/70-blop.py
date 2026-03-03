@@ -61,14 +61,14 @@ def scnSF_intensity_evaluation(
     return results
 
 
-def bpm_intensity_evaluation(uid: str, suggestions: list[dict], det=em1) -> list[dict]:
+def bpm_intensity_evaluation(uid: str, suggestions: list[dict], det=em2) -> list[dict]:
     run = c[uid]
-    em1_sum_all_mean_value = run[f"primary/data/{det.name}_sum_all_mean_value"].read()
+    em_sum_all_mean_value = run[f"primary/data/{det.name}_sum_all_mean_value"].read()
     suggestion_ids = [suggestion["_id"] for suggestion in run.metadata["start"]["blop_suggestions"]]
     results = []
 
     for idx, sid in enumerate(suggestion_ids):
-        beam_intensity = em1_sum_all_mean_value[idx]
+        beam_intensity = em_sum_all_mean_value[idx]
         results.append({
             "beam_intensity": beam_intensity,
             "_id": sid
@@ -77,7 +77,7 @@ def bpm_intensity_evaluation(uid: str, suggestions: list[dict], det=em1) -> list
     return results
 
 
-def align_crl(rep=32, x_range=0.6, y_range=0.6, det=em1, optim_steps=10):
+def align_crl(rep=32, x_range=0.6, y_range=0.6, det=em2, optim_steps=10):
 
     pos_x10 = crl.x1.position
     pos_x20 = crl.x2.position
@@ -115,7 +115,7 @@ def align_crl(rep=32, x_range=0.6, y_range=0.6, det=em1, optim_steps=10):
         evaluation_function = scnSF_intensity_evaluation
     else:
         objective_name = f"{det.name}_sum_all_mean_value"
-        evaluation_function = bpm_intensity_evaluation
+        evaluation_function = bpm_intensity_evaluation    # how to pass det to this function??
 
     objectives = [
         Objective(name=objective_name, minimize=False),
@@ -153,7 +153,7 @@ def align_crl(rep=32, x_range=0.6, y_range=0.6, det=em1, optim_steps=10):
 
     return agent_x, agent_y
 
-def align_crl2(rep=32, x_range=0.6, y_range=0.6, det=em1, optim_steps=10):
+def align_crl2(rep=32, x_range=0.6, y_range=0.6, det=em2, optim_steps=10):
 
     pos_x10 = crl.x1.position
     pos_x20 = crl.x2.position
@@ -229,7 +229,7 @@ def align_crl2(rep=32, x_range=0.6, y_range=0.6, det=em1, optim_steps=10):
 
     return agent_1, agent_2
 
-def align_crl3(rep=32, x_range=0.6, y_range=0.6, det=em1, optim_steps=10):
+def align_crl3(rep=32, x_range=0.6, y_range=0.6, det=em2, optim_steps=10):
 
     pos_x10 = crl.x1.position
     pos_x20 = crl.x2.position
