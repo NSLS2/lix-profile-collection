@@ -39,7 +39,7 @@ blop = { git = "https://github.com/NSLS-II/blop.git", rev = "main" }
 py4xs = { path = "/nsls2/software/mx/lix/py4xs" }
 lixtools = { path = "/nsls2/software/mx/lix/lixtools" }
 pymoo = "!=0.6.1.6"
-
+qmicroscope = "*"
 
 [feature.qs.dependencies]
 bluesky-queueserver = "*"
