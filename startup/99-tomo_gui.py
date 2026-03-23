@@ -4,8 +4,9 @@ from typing import Callable, Optional
 import bluesky.plan_stubs as bps
 from bluesky.run_engine import RunEngine
 from bluesky.utils import RunEngineInterrupted, install_qt_kicker
-from matplotlib.backends.backend_qt5 import _create_qApp
-from matplotlib.backends.qt_compat import QtCore, QtWidgets
+# from matplotlib.backends.backend_qt5 import _create_qApp
+# from matplotlib.backends.qt_compat import QtCore, QtWidgets
+from qtpy import QtCore, QtWidgets
 from qmicroscope.microscope import Microscope
 from qmicroscope.plugins import CrossHairPlugin
 
@@ -381,8 +382,10 @@ class TOMOGUI:
         self.window.close()
 
 
-_create_qApp()
-
+# _create_qApp()
+qapp = QtWidgets.QApplication.instance()
+if qapp is None:
+    qapp = QtWidgets.QApplication([])
 try:
     tomo_gui.close()
 except NameError:

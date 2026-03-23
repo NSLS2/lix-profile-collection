@@ -28,7 +28,7 @@ ophyd-async = "*"
 fabio = ">=2025.10.0,<2026"
 tomopy = ">=1.15.3,<2"
 reportlab = ">=4.4.5,<5"
-
+qtpy = "*"
 
 [feature.profile.pypi-dependencies]
 pvxslibs = "*"
