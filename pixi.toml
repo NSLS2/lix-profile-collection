@@ -28,7 +28,7 @@ ophyd-async = "*"
 fabio = ">=2025.10.0,<2026"
 tomopy = ">=1.15.3,<2"
 reportlab = ">=4.4.5,<5"
-
+qtpy = "*"
 
 [feature.profile.pypi-dependencies]
 pvxslibs = "*"
@@ -37,7 +37,7 @@ blop = { git = "https://github.com/NSLS-II/blop.git", rev = "main" }
 lixtools = { git = "https://github.com/NSLS-II-LIX/lixtools.git", rev = "main" }
 py4xs = { git = "https://github.com/NSLS-II-LIX/py4xs.git", rev = "master" }
 pymoo = "!=0.6.1.6"
-
+qmicroscope = "*"
 
 [feature.qs.dependencies]
 bluesky-queueserver = "*"
