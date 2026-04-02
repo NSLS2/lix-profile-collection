@@ -7,6 +7,9 @@ import redis
 from py4xs.utils import get_bin_ranges_from_grid
 from ophyd import Device
 from ophyd.areadetector import EpicsSignalWithRBV
+import tiled
+
+c = tiled.client.from_profile('lix')
 
 last_scan_uid = None
 last_scan_id = None
