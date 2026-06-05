@@ -3,12 +3,16 @@ environments:
   default:
     channels:
     - url: https://conda.anaconda.org/conda-forge/
+    options:
+      pypi-prerelease-mode: if-necessary-or-explicit
     packages: {}
   qs:
     channels:
     - url: https://conda.anaconda.org/conda-forge/
     indexes:
     - https://pypi.org/simple
+    options:
+      pypi-prerelease-mode: if-necessary-or-explicit
     packages:
       linux-64:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-7_kmp_llvm.conda
@@ -424,7 +428,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/opentelemetry-proto-1.39.1-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/opentelemetry-sdk-1.39.1-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/opentelemetry-semantic-conventions-0.60b1-pyhd8ed1ab_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/ophyd-1.11.0-pyhd8ed1ab_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/ophyd-1.11.2-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/ophyd-async-0.15-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/orc-2.2.2-h19cb568_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/orjson-3.11.5-py312h94568fe_0.conda
@@ -647,6 +651,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/78/42/caf65e9a0576a3abadc537e2f831701ba9081f21317fb3be87d64451587a/jaxtyping-0.3.7-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/7b/91/984aca2ec129e2757d1e4e3c81c3fcda9d0f85b74670a094cc443d9ee949/joblib-1.5.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/ed/c7/8a27fd8e182c611d4bf0aa9f0ea9046a7c843901d0f06c8cdcb599840a38/linear_operator-0.6-py3-none-any.whl
+      - pypi: git+https://github.com/NSLS-II-LIX/lixtools.git?rev=main#f716152b8fcc00f18a4d01b927242746b9e4304a
       - pypi: https://files.pythonhosted.org/packages/59/1b/6ef961f543593969d25b2afe57a3564200280528caa9bd1082eecdd7b3bc/markdown-3.10.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/43/e3/7d92a15f894aa0c9c4b49b8ee9ac9850d6e63b03c9c32c0367a13ae62209/mpmath-1.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/51/c0/00c9809d8b9346eb238a6bbd5f83e846a4ce4503da94a4c08cb7284c325b/multipledispatch-1.0.0-py3-none-any.whl
@@ -667,6 +672,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/23/cd/066e86230ae37ed0be70aae89aabf03ca8d9f39c8aea0dec8029455b5540/opt_einsum-3.4.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/8a/67/f95b5460f127840310d2187f916cf0023b5875c0717fdf893f71e1325e87/plotly-6.5.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/67/d8/8af47ecca80c365d5ffcdce6fae78ec71921052189c1486ba9dbac7a36f4/pvxslibs-1.3.2-cp312-cp312-manylinux2014_x86_64.whl
+      - pypi: git+https://github.com/NSLS-II-LIX/py4xs.git?rev=master#099fdd71213e152699f4f6ce85a063d07d90e5ad
       - pypi: https://files.pythonhosted.org/packages/cf/9b/27e7e1e858c1f01b78a3de7e137c68905c693f1b81cee9826ff8b6bf6b78/pymoo-0.6.1.5-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/a4/7a/9812cb8be9828ab688203c5ac5f743c60652887f0c00995a6f6f19f912bd/pyre_extensions-0.0.32-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/fc/81/957ae78e6398460a7230b0eb9b8f1cb954c5e913e868e48d89324c68cec7/pyro_api-0.1.2-py3-none-any.whl
@@ -680,13 +686,13 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/06/00/59500052cb1cf8cf5316be93598946bc451f14072c6ff256904428eaf03c/triton-3.2.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/65/f3/107a22063bf27bdccf2024833d3445f4eea42b2e598abfbd46f6a63b6cb0/typing_inspect-0.9.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/8d/96/04e7b441807b26b794da5b11e59ed7f83b2cf8af202bd7eba8ad2fa6046e/wadler_lindig-0.1.7-py3-none-any.whl
-      - pypi: /nsls2/software/mx/lix/lixtools
-      - pypi: /nsls2/software/mx/lix/py4xs
   terminal:
     channels:
     - url: https://conda.anaconda.org/conda-forge/
     indexes:
     - https://pypi.org/simple
+    options:
+      pypi-prerelease-mode: if-necessary-or-explicit
     packages:
       linux-64:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-7_kmp_llvm.conda
@@ -1101,7 +1107,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/opentelemetry-proto-1.39.1-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/opentelemetry-sdk-1.39.1-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/opentelemetry-semantic-conventions-0.60b1-pyhd8ed1ab_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/ophyd-1.11.0-pyhd8ed1ab_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/ophyd-1.11.2-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/ophyd-async-0.15-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/orc-2.2.2-h19cb568_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/orjson-3.11.5-py312h94568fe_0.conda
@@ -1323,6 +1329,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/78/42/caf65e9a0576a3abadc537e2f831701ba9081f21317fb3be87d64451587a/jaxtyping-0.3.7-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/7b/91/984aca2ec129e2757d1e4e3c81c3fcda9d0f85b74670a094cc443d9ee949/joblib-1.5.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/ed/c7/8a27fd8e182c611d4bf0aa9f0ea9046a7c843901d0f06c8cdcb599840a38/linear_operator-0.6-py3-none-any.whl
+      - pypi: git+https://github.com/NSLS-II-LIX/lixtools.git?rev=main#f716152b8fcc00f18a4d01b927242746b9e4304a
       - pypi: https://files.pythonhosted.org/packages/59/1b/6ef961f543593969d25b2afe57a3564200280528caa9bd1082eecdd7b3bc/markdown-3.10.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/43/e3/7d92a15f894aa0c9c4b49b8ee9ac9850d6e63b03c9c32c0367a13ae62209/mpmath-1.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/51/c0/00c9809d8b9346eb238a6bbd5f83e846a4ce4503da94a4c08cb7284c325b/multipledispatch-1.0.0-py3-none-any.whl
@@ -1343,6 +1350,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/23/cd/066e86230ae37ed0be70aae89aabf03ca8d9f39c8aea0dec8029455b5540/opt_einsum-3.4.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/8a/67/f95b5460f127840310d2187f916cf0023b5875c0717fdf893f71e1325e87/plotly-6.5.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/67/d8/8af47ecca80c365d5ffcdce6fae78ec71921052189c1486ba9dbac7a36f4/pvxslibs-1.3.2-cp312-cp312-manylinux2014_x86_64.whl
+      - pypi: git+https://github.com/NSLS-II-LIX/py4xs.git?rev=master#099fdd71213e152699f4f6ce85a063d07d90e5ad
       - pypi: https://files.pythonhosted.org/packages/cf/9b/27e7e1e858c1f01b78a3de7e137c68905c693f1b81cee9826ff8b6bf6b78/pymoo-0.6.1.5-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/a4/7a/9812cb8be9828ab688203c5ac5f743c60652887f0c00995a6f6f19f912bd/pyre_extensions-0.0.32-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/fc/81/957ae78e6398460a7230b0eb9b8f1cb954c5e913e868e48d89324c68cec7/pyro_api-0.1.2-py3-none-any.whl
@@ -1356,13 +1364,13 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/06/00/59500052cb1cf8cf5316be93598946bc451f14072c6ff256904428eaf03c/triton-3.2.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/65/f3/107a22063bf27bdccf2024833d3445f4eea42b2e598abfbd46f6a63b6cb0/typing_inspect-0.9.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/8d/96/04e7b441807b26b794da5b11e59ed7f83b2cf8af202bd7eba8ad2fa6046e/wadler_lindig-0.1.7-py3-none-any.whl
-      - pypi: /nsls2/software/mx/lix/lixtools
-      - pypi: /nsls2/software/mx/lix/py4xs
   test:
     channels:
     - url: https://conda.anaconda.org/conda-forge/
     indexes:
     - https://pypi.org/simple
+    options:
+      pypi-prerelease-mode: if-necessary-or-explicit
     packages:
       linux-64:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-7_kmp_llvm.conda
@@ -1778,7 +1786,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/opentelemetry-proto-1.39.1-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/opentelemetry-sdk-1.39.1-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/opentelemetry-semantic-conventions-0.60b1-pyhd8ed1ab_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/ophyd-1.11.0-pyhd8ed1ab_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/ophyd-1.11.2-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/ophyd-async-0.15-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/orc-2.2.2-h19cb568_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/orjson-3.11.5-py312h94568fe_0.conda
@@ -2002,6 +2010,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/78/42/caf65e9a0576a3abadc537e2f831701ba9081f21317fb3be87d64451587a/jaxtyping-0.3.7-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/7b/91/984aca2ec129e2757d1e4e3c81c3fcda9d0f85b74670a094cc443d9ee949/joblib-1.5.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/ed/c7/8a27fd8e182c611d4bf0aa9f0ea9046a7c843901d0f06c8cdcb599840a38/linear_operator-0.6-py3-none-any.whl
+      - pypi: git+https://github.com/NSLS-II-LIX/lixtools.git?rev=main#f716152b8fcc00f18a4d01b927242746b9e4304a
       - pypi: https://files.pythonhosted.org/packages/59/1b/6ef961f543593969d25b2afe57a3564200280528caa9bd1082eecdd7b3bc/markdown-3.10.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/43/e3/7d92a15f894aa0c9c4b49b8ee9ac9850d6e63b03c9c32c0367a13ae62209/mpmath-1.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/51/c0/00c9809d8b9346eb238a6bbd5f83e846a4ce4503da94a4c08cb7284c325b/multipledispatch-1.0.0-py3-none-any.whl
@@ -2022,6 +2031,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/23/cd/066e86230ae37ed0be70aae89aabf03ca8d9f39c8aea0dec8029455b5540/opt_einsum-3.4.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/8a/67/f95b5460f127840310d2187f916cf0023b5875c0717fdf893f71e1325e87/plotly-6.5.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/67/d8/8af47ecca80c365d5ffcdce6fae78ec71921052189c1486ba9dbac7a36f4/pvxslibs-1.3.2-cp312-cp312-manylinux2014_x86_64.whl
+      - pypi: git+https://github.com/NSLS-II-LIX/py4xs.git?rev=master#099fdd71213e152699f4f6ce85a063d07d90e5ad
       - pypi: https://files.pythonhosted.org/packages/cf/9b/27e7e1e858c1f01b78a3de7e137c68905c693f1b81cee9826ff8b6bf6b78/pymoo-0.6.1.5-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/a4/7a/9812cb8be9828ab688203c5ac5f743c60652887f0c00995a6f6f19f912bd/pyre_extensions-0.0.32-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/fc/81/957ae78e6398460a7230b0eb9b8f1cb954c5e913e868e48d89324c68cec7/pyro_api-0.1.2-py3-none-any.whl
@@ -2035,8 +2045,6 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/06/00/59500052cb1cf8cf5316be93598946bc451f14072c6ff256904428eaf03c/triton-3.2.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/65/f3/107a22063bf27bdccf2024833d3445f4eea42b2e598abfbd46f6a63b6cb0/typing_inspect-0.9.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/8d/96/04e7b441807b26b794da5b11e59ed7f83b2cf8af202bd7eba8ad2fa6046e/wadler_lindig-0.1.7-py3-none-any.whl
-      - pypi: /nsls2/software/mx/lix/lixtools
-      - pypi: /nsls2/software/mx/lix/py4xs
 packages:
 - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-7_kmp_llvm.conda
   build_number: 7
@@ -7422,10 +7430,9 @@ packages:
   - pytest ; extra == 'test'
   - typeguard~=2.13.3 ; extra == 'test'
   requires_python: '>=3.10'
-- pypi: /nsls2/software/mx/lix/lixtools
+- pypi: git+https://github.com/NSLS-II-LIX/lixtools.git?rev=main#f716152b8fcc00f18a4d01b927242746b9e4304a
   name: lixtools
-  version: 2023.6.11.0
-  sha256: 607c82d7a990b34694dd603780b0968463088a407dc4ad7ed42876512738b323
+  version: '2026.4'
   requires_dist:
   - py4xs
   - numpy
@@ -8417,9 +8424,9 @@ packages:
   - pkg:pypi/opentelemetry-semantic-conventions?source=hash-mapping
   size: 118005
   timestamp: 1765560685194
-- conda: https://conda.anaconda.org/conda-forge/noarch/ophyd-1.11.0-pyhd8ed1ab_0.conda
-  sha256: b07d22c631b07342f1a03c090b71266cf03e6b0bc26b2342fbc1f7a33c377402
-  md5: 03903a1e07390a305745b024c61d0d3d
+- conda: https://conda.anaconda.org/conda-forge/noarch/ophyd-1.11.2-pyhd8ed1ab_0.conda
+  sha256: 704251e284e2ed4766442a5c452fe461e48c1745ba199d49b4e6f10bfce50820
+  md5: a28f969b6f7b5af60865bcb87bf77c10
   depends:
   - caproto !=1.2.0
   - networkx >=2.5
@@ -8433,8 +8440,8 @@ packages:
   license_family: BSD
   purls:
   - pkg:pypi/ophyd?source=hash-mapping
-  size: 215652
-  timestamp: 1757003348106
+  size: 217502
+  timestamp: 1780613273481
 - conda: https://conda.anaconda.org/conda-forge/noarch/ophyd-async-0.15-pyhd8ed1ab_0.conda
   sha256: e5611a047219acc062ee00d390323c9c5c149f56cd8d5778ddf1aa1f2ccbc438
   md5: da9dc18803d279edbaee9e2d76a39bd3
@@ -9062,10 +9069,9 @@ packages:
   purls: []
   size: 1154307
   timestamp: 1769911922887
-- pypi: /nsls2/software/mx/lix/py4xs
+- pypi: git+https://github.com/NSLS-II-LIX/py4xs.git?rev=master#099fdd71213e152699f4f6ce85a063d07d90e5ad
   name: py4xs
   version: 2024.5.28.0
-  sha256: b6e17e83538894976412487ee6f6ebf84e2bb45e77406c6c98540bcda1c246d7
   requires_dist:
   - fabio
   - h5py
