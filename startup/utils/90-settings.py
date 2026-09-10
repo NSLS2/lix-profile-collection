@@ -24,7 +24,7 @@ def print_scanid(name, doc):
         pil.update_header(f"uid={doc['uid']}")
         
         # also update header info in Redis
-        with redis.Redis(host=redis_host, port=redis_port, db=0) as r:
+        with redis.Redis(host=redis_host, port=redis_port, db=0, ssl=True, password=redis_pw) as r:
             hdrs = r.get('scan_info')
             if hdrs==None: # no info stored yet
                 hdrs = OrderedDict({})

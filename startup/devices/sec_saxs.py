@@ -5,7 +5,7 @@ print(f"Loading file {__file__}...")
 from time import sleep
 from enum import Enum
 from pathlib import PureWindowsPath, Path
-import yaml, json
+import yaml, json, traceback
 from gen_SEC_report import *
 import threading as th
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
@@ -57,7 +57,7 @@ def h5_attach_hplc(fn_h5, grp_name=None):
         attach the HPLC data to the specified group
         if the group name is not give, attach to the first group in the h5 file
     """
-    fn = fn_h5[:-3]
+    #fn = fn_h5[:-3]
     fn = f"{fn_h5}.h5"
     f = h5py.File(fn, "r+")
     if grp_name == None:
@@ -95,7 +95,7 @@ class SEC_SAXSCollection(object):
     buffer_position = [1,2,3,4,5,6]
     if proposal_id is None or run_id is None:
         print("need to login first ...")
-        login()
+        #login()
     def __init__(self,
                 exp_type = None,
                 col_type = None,
@@ -127,6 +127,14 @@ class SEC_SAXSCollection(object):
         caput('XF:16IDC-ES{HPLC}Result_Name' , self.result_name)
         
         #super().__init__()
+    def set_quat_flow(self, flowrate, high_press_limit):
+        caput("XF:16IDC-ES{HPLC}QUAT_PUMP:PRESSURE_HIGH_LIMIT", high_press_limit)
+        cur_fr=caget("XF:16IDC-ES{HPLC}QUAT_PUMP:FLOWRATE_RBV")
+        print(f"Current flow rate is {cur_fr}")
+        set_fr = caput("XF:16IDC-ES{HPLC}QUAT_PUMP:FLOWRATE", flowrate)
+        print(f"Setting flow rate to {set_fr}")
+        return set_fr
+        
     def _run(self,cmd, timeout=None, capture=True):
         """Run a shell command. Returns (returncode, stdout, stderr)."""
         if isinstance(cmd, list):
@@ -146,14 +154,14 @@ class SEC_SAXSCollection(object):
             return 124, out or "", (err or "") + "\nTIMEOUT"
         return proc.returncode, out or "", err or ""
     
-    def _windows_dir_for_sample(self, sample):
+    def _windows_dir_for_sample(self):
         # Windows path: C:/CDSProjects/HPLC/<sample>/
         sample = caget('XF:16IDC-ES{HPLC}SAMPLE_NAME')
-        sample = sample
-        win_path = str(f'{ADF_location}\{sample}')
+        #sample = sample
+        win_path = str(Path(ADF_location) / sample)
         print(f'windows path for UV_data for sample {sample} is {win_path}')
         return win_path
-    def _linux_dir_for_sample(self, sample):
+    def _linux_dir_for_sample(self):
         uv_dest_dir = str(Path(proc_path))
         return uv_dest_dir
     def _make_remote_manifest(self, win_path):
@@ -201,8 +209,8 @@ class SEC_SAXSCollection(object):
    
     def _copy_with_scp(self, sample):
         #proc_path = caget('XF:16IDC-ES{HPLC}PROC_PATH') PV is too complicated converting bytes strings
-        win_path = self._windows_dir_for_sample(sample)
-        uv_dest_path = self._linux_dir_for_sample(sample)
+        win_path = self._windows_dir_for_sample()
+        uv_dest_path = self._linux_dir_for_sample()
         os.makedirs(uv_dest_path, exist_ok=True)
         src = f"{windows_ip}:{win_path}"
         cmd = ["scp", "-r", src, str(proc_path)]
@@ -238,11 +246,13 @@ class SEC_SAXSCollection(object):
         samples = {}
         valve_position = {}
         experiment_type ={}
+        buffer_position = {}
         
         for row in exp_df.to_dict(orient="records"):
             sn =row["Sample Name"]
             valve_position[sn] = row.get("Valve Position")
             experiment_type[sn] = row.get("Exp_Type")
+            buffer_position[sn] = row.get("buffer_position")
 
             samples[sn] = {
                 "acq time": row.get("Run Time"),
@@ -261,9 +271,30 @@ class SEC_SAXSCollection(object):
                 },
             }
 
-        return samples, valve_position, experiment_type
+        return samples, valve_position, experiment_type, buffer_position
         
         
+    def regenerate_column(self, curr_regen_status=False, regen_buffer_pos=1, regen_flowrate=0.3):
+        """
+        Moves column in position 1 onto the regeneration pump line.  Call this after Checking flow rate and pressure limits using Regen_Pump.py
+        Curr_regen is a check for a column in the regeneration position. This matters since it will move to the Agilent pump during the switch.
+        Process: open column purge, switch buffer valves using APV, switch 10 port valve, flush, close purge valves.  Pressure and flow rates have to be checked on 
+        both the AGilent and regeneration pump side before doing anything.
+        """
+        if curr_regen_status:
+            VV.send_valve_cmd(cmd="GO", valve=3, valve_ID=VV.VICI_ID.Col1_purge)
+            VV.send_valve_cmd(cmd="GO", valve=5, valve_ID=VV.VICI_ID.Col2_purge)
+        else:
+            #VV.send_valve_cmd(cmd="GO", valve=5, valve_ID=VV.VICI_ID.Col2_purge) not installed yet
+            regen_buffer_pos=int(regen_buffer_pos)
+            #APV2.movePosition(regen_buffer_pos) ##this has to be the regen APV valve not setup yet
+            TPR2.setflowrate(flowrate)
+            VV.switch_10_port_valve(pos="A")
+            #flush
+            time.sleep(120)
+            VV.send_valve_cmd(cmd="GO", valve=5, valve_ID=VV.VICI_ID.Col2_purge)
+            print("Column moved from POS1 to POS2 for regeneration")
+        return True
         
     def CreateAgilentSeqFile(self, spreadsheet_fn, batchID, sheet_name='Samples', mals_inj_vol = None): 
         """
@@ -281,7 +312,7 @@ class SEC_SAXSCollection(object):
             login()
   
         exp_df = self.build_exp_df(dd, batchID, mals_inj_vol)
-        samples, valve_position, experiment_type = self.hplc_dict_from_df(exp_df)
+        samples, valve_position, experiment_type, buffer_position = self.hplc_dict_from_df(exp_df)
         sequence_path = "/nsls2/data4/lix/legacy/HPLC/Agilent/"
         out_csv = f"{sequence_path}sequence_table.csv"
 
@@ -307,7 +338,7 @@ class SEC_SAXSCollection(object):
             print(msg)
         
 
-        return samples, valve_position, experiment_type
+        return samples, valve_position, experiment_type, buffer_position 
         
         
     
@@ -435,15 +466,15 @@ class SEC_SAXSCollection(object):
   
     def collect_hplc(self, sample_name, exp, post_run, nframes, md=None):
         ##do not include postrun if running 1 sample
-        TRP.set_flowrate(5) # to clear any bubbles
-        TRP.start_pump()
+        #TRP.set_flowrate(5) # to clear any bubbles
+        #TRP.start_pump()
         time.sleep(5)
-        TRP.stop_pump()
+        #TRP.stop_pump()
         _md = {"experiment": "HPLC"}
         _md.update(md or {})
         change_sample(sample_name)
         pil.use_sub_directory(sample_name)
-        #sol.select_flow_cell('middle')
+        sol.select_flow_cell('middle')
         pil.set_trigger_mode(PilatusTriggerMode.ext_multi)
         #pil.set_num_images(nframes)  ##old way
         set_num_images(dets=[pil],n_triggers=nframes)
@@ -487,6 +518,66 @@ class SEC_SAXSCollection(object):
         pil.use_sub_directory()
         change_sample()
     
+    def wait_for_file_stable(self,file_path, timeout=60, poll=5, stable_checks=2):
+        """
+        This is running on windows IOC since the UV files sit there.  
+        Here, we set GET_UV and watch UV_READY.
+        Wait until a file exists and its size stops changing.
+
+        Returns True when the file appears to be fully written.
+        Returns False on timeout.
+        """
+        path = Path(file_path)
+        start = time.time()
+        last_size = None
+        stable_count = 0
+
+        while time.time() - start < timeout:
+            if path.exists():
+                try:
+                    size = path.stat().st_size
+                except OSError:
+                    size = None
+
+                if size is not None and size > 0:
+                    if size == last_size:
+                        stable_count += 1
+                        if stable_count >= stable_checks:
+                            return True
+                    else:
+                        last_size = size
+                        stable_count = 0
+
+            time.sleep(poll)
+
+        return False
+        
+
+
+    def request_uv_and_wait(self, sample_name, timeout_s=60, poll_s=2):
+        get_uv = "XF:16IDC-ES{HPLC}GET_UV"
+        uv_ready = "XF:16IDC-ES{HPLC}UV_READY"
+        caput(get_uv, 0)
+        caput(uv_ready, 0)
+        time.sleep(0.2)
+
+        caput(get_uv, 1)
+        t0 = time.time()
+        while time.time() - t0 < timeout_s:
+            ready = caget(uv_ready)
+            if int(ready or 0) == 1:
+                break
+            time.sleep(poll_s)
+        else:
+            raise TimeoutError(f"UV_READY did not change for: {sample_name}")
+
+        ret = self._copy_with_scp(sample_name)
+
+    
+        caput(get_uv, 0)
+        caput(uv_ready, 0)
+
+        return ret
     def run_hplc_from_spreadsheet(self, spreadsheet_fn, batchID, sheet_name='Samples', exp=2, flowrate = 0.30, post_run=60, generate_report=True, mals_inj_vol=20, copy_with_scp=True):
         
         """
@@ -500,8 +591,8 @@ class SEC_SAXSCollection(object):
         """
     
         sequence_name = '/nsls2/data/lix/legacy/HPLC/Agilent/sequence_table.csv'
-        samples, valve_position, experiment_type = self.CreateAgilentSeqFile(spreadsheet_fn, batchID, 
-                                                                             sheet_name=sheet_name, mals_inj_vol=mals_inj_vol)
+        samples, valve_position, experiment_type, buffer_position = self.CreateAgilentSeqFile(spreadsheet_fn,
+                                                                                              batchID, sheet_name=sheet_name, mals_inj_vol=mals_inj_vol)
         uv_dest_path = f'{proc_path}'
    
     
@@ -523,7 +614,10 @@ class SEC_SAXSCollection(object):
             
             single_sample = json.dumps(self.sample_params)
             caput('XF:16IDC-ES{HPLC}RunParameters' , single_sample)
-
+            buf_pos=sample_info["md"]["buffer_position"]
+            APV.movePosition(buf_pos)
+            APV_RBV = APV.valveStatus()
+            print(f"Buffer valve is {APV_RBV}")
             valve_pos = sample_info["md"]["Valve Position"]##should be changed to slot position
             print(f"Switching valve to position {valve_pos} for sample {sample_name}...")
             VV.switch_10port_valve(pos=valve_pos, valve=VICI_ID.Valve_10_port,
@@ -538,37 +632,29 @@ class SEC_SAXSCollection(object):
             #send_to_packing_queue(uid, "HPLC")
             pack_h5_with_lock(uid, dest_dir=proc_path, attach_uv_file=False) #handling uv attachment separately as it might take time to process on windows machine
             pil.use_sub_directory()
-            if generate_report:
-                gen_SEC_report(f'{sample_name}.h5', "exp.h5")
+            if copy_with_scp:
+                try:
+                    print("trying to get UV data")
+                    ret = self.request_uv_and_wait(sample_name, timeout_s=100)
+                    print(f"SCP result for {sample_name}: {ret!r}")
+                    print("...attaching UV data")
+                    time.sleep(5)
+                    #h5_attach_hplc({sample_name})
+                except Exception as e:
+                    print(f"SCP failed for {sample_name} : {e}!")
+                    print(traceback.format_exc())
             else:
-                print("No report requested")
-        
-        while run_number <= len(samples.items()):
-            for sample_name, sample_info in samples.items():
-                number_samples = len(samples.items())
-        
-###copy with scp is temporary until UV data is processed into IOC.  Will do processing with windows/Agilent software that will populate IOC with spectrum, but how to move data for safe keeping? Do we need originals?
-                if copy_with_scp:
-                    max_attempts = 3
-                    with ThreadPoolExecutor(max_workers=1) as executor:
-                        for attempt in range(1, max_attempts + 1):
-                            try:
-                                print(f"Attempt {attempt}: Fetching UV data")
-                                future = executor.submit(self._copy_with_scp, sample_name)
-                                ret = future.result(timeout=3 * 60)
-                                if ret[0] == 0:
-                                    h5_attach_hplc(sample_name)
-                                    return True
-                                else:
-                                    print(f"Attempt {attempt} failed: scp returned {ret}")
-                            except TimeoutError:
-                                print(f"Attempl {attempt} timed out!")
-                            except Exception as e:
-                                print(f"Attempt {attempt} raised exception {e} !")
-                    print("failure of copying uv files after 3 attempts")
-                    return False
-                        
-            run_number += 1
+                print("copy_with_scp is disabled ; skipping UV copy step")
+            if generate_report:
+                h5_attach_hplc(f"{sample_name}")
+                try:
+                    gen_SEC_report(f'{sample_name}.h5', "exp.h5")
+                except Exception as e:
+                    print(f"Report Generation failed for {sample_name}")
+                    print(traceback.format_exc())
+                    continue
+            else:
+                print("No report requested")      
             
         print(f'Sequence collection finished for batch {batchID} from {spreadsheet_fn}')
 

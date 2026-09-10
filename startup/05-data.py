@@ -10,6 +10,7 @@ from ophyd.areadetector import EpicsSignalWithRBV
 import tiled
 
 c = tiled.client.from_profile('lix')
+c.context.http_client.headers['tiled-qos'] = 'acquisition'
 
 last_scan_uid = None
 last_scan_id = None
@@ -24,7 +25,7 @@ default_phi_N = 32
 def save_qgrid_config_to_redis(qgrid=default_qgrid, phi_N=default_phi_N):
     q_bins = get_bin_ranges_from_grid(qgrid)
     qgrid_attr = {"q_bins": q_bins, "phi_N": phi_N}
-    with redis.Redis(host=redis_host, port=redis_port, db=0) as r:
+    with redis.Redis(host=redis_host, port=redis_port, db=0, ssl=True, password=redis_pw) as r:
         r.set("qgrid_config", json.dumps(qgrid_attr))
         r.set("qgrid_config_timestamp", time.time())
 
@@ -34,7 +35,7 @@ def save_det_config_to_redis():
     """
     de = h5exp("exp.h5")
     dets_attr = [det.pack_dict() for det in de.detectors]
-    with redis.Redis(host=redis_host, port=redis_port, db=0) as r:
+    with redis.Redis(host=redis_host, port=redis_port, db=0, ssl=True, password=redis_pw) as r:
         r.set("det_config", json.dumps(dets_attr))
         r.set("det_config_timestamp", time.time())
 

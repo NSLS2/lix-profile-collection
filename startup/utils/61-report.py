@@ -46,20 +46,23 @@ detector_list = [bpm,em1, em2,em0]
 lix_report = fast_shutter_decorator()(record_pos_and_det)
 
 
-def generate_report(pdf_file="report.pdf"):
-    RE(lix_report(motor_list,detector_list,md={'record':'cycle_2026_1'}))
+def generate_report(pdf_file="report.pdf",past=10):
+    RE(lix_report(motor_list,detector_list,md={'record':'cycle_2026_2'}))
     uids = list_scans(plan_name="record_pos_and_det")
-    uida = uids[-10:]
+    uida = uids[-past:]
     ht = []
     dt = []
     for i in uida:
         h,d = fetch_scan(uid=i)
+        #print(i)
         ht.append(h)
         dt.append(d)
+        #print('re',i)
     print("data_extracted")
     header = list(dt[0].columns)
     data_rows = []
-    for i in range(10):
+    #print('debug1')
+    for i in range(past):
         block = dt[i]
         row = [block[col].iloc[1] if len(block[col]) > 1 else block[col].iloc[0] for col in header]
         data_rows.append(row)
@@ -72,7 +75,7 @@ def generate_report(pdf_file="report.pdf"):
                             bottomMargin=3*cm)
     
     elements = []
-    
+    #print('debug2')
     chunk_size = len(motor_list+detector_list)
     page_width = landscape(A1)[0] - 4*cm
     for start in range(0, len(header), chunk_size):
@@ -93,15 +96,17 @@ def generate_report(pdf_file="report.pdf"):
         elements.append(table)
         if start + chunk_size < len(header):
             elements.append(PageBreak())
-    
+    #print('debug3')
     bpm_vals = []
-    for i in range(10):
+    for i in range(past):
         block = dt[i]
         val = block['bpm_int_mean'].iloc[1] if len(block['bpm_int_mean']) > 1 else block['bpm_int_mean'].iloc[0]
         bpm_vals.append(val)
     
     plt.figure(figsize=(10,4))
-    plt.plot(range(10), bpm_vals, marker='o')
+    #print('debug4')
+    plt.plot(range(past), bpm_vals, marker='o')
+    #print('debug5')
     plt.title("bpm_int_mean")
     plt.xlabel("last 10 Historical data")
     plt.ylabel("bpm_int_mean")

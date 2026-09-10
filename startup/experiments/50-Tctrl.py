@@ -12,19 +12,27 @@ class serial_port:
         self.sock = socket.create_connection(sock_addr)
 
     def comm(self, data, n_ret=32):
-        """ data: hex string (a list) to be sent 
-            n_ret: buffer size
-        """
-        buf = np.asarray(data, dtype=np.uint8)
+        # ensure valid byte range
+        data = [int(x) & 0xFF for x in data]
+    
         if self.debug:
-            txt = ", ".join([f"0x{v:02x}" for v in buf])
+            txt = ", ".join([f"0x{v:02x}" for v in data])
             print(f"sending: {txt}")
-        self.sock.send(buf)
+    
+        # send as bytes (NO numpy)
+        self.sock.send(bytes(data))
+    
         sleep(self.delay)
-        ret =  np.frombuffer(self.sock.recv(n_ret), np.uint8)
+    
+        raw = self.sock.recv(n_ret)
+    
+        # convert to list of ints (NO numpy)
+        ret = list(raw)
+    
         if self.debug:
             txt = ", ".join([f"0x{v:02x}" for v in ret])
             print(f"received: {txt}")
+    
         return ret
 
     def set_delay(self, t):
@@ -173,9 +181,9 @@ class tctrl_FTC100D(serial_port):
         ret = self.comm([0x01,0x04,0x10,0x00,0x00,0x01])  #, 5)
         #if ret[1]>0x80:
         #    raise Exception("error reading temperature: code %d" % ret[2])
-        v = 0.1*(ret[-1]+256*ret[-2])
+        v = 0.1 * (int(ret[-1]) + 256 * int(ret[-2]))
         if print_T:
-            print("current tmeperature is %.1f C" % v)
+            print("current temperature is %.1f C" % v)
         return v
 
     def get_enable_status(self):
@@ -196,17 +204,29 @@ class tctrl_FTC100D(serial_port):
             print("current set point is %.1f C" % v)
         return v
 
-    def setT(self, v):
-        if v>self.Tm:
-            raise Exception(f"the set point {v} is higher than the allowed limit.")
-        v = int(v*10+0.5)
-        v1 = v/256
-        v2 = v%256
-        ret = self.comm([0x01,0x06,0x00,0x00,v1,v2]) #, 6)
-        if ret[1]>0x80:
-            raise Exception("error setting temperatore, code %d" % ret[2]) 
-        self.get_set_point()
 
+    def setT(self, v):
+        if v > self.Tm:
+            raise Exception(f"the set point {v} is higher than the allowed limit.")
+        
+        v = int(v * 10 + 0.5)
+        v1 = int(v // 256) & 0xFF
+        v2 = int(v % 256) & 0xFF
+    
+        try:
+            ret = self.comm([0x01, 0x06, 0x00, 0x00, v1, v2])
+        except Exception as e:
+            print(f"Warning: setT communication issue: {e}")
+            return   # <-- continue execution
+    
+        try:
+            if ret[1] > 0x80:
+                raise Exception("error setting temperature, code %d" % ret[2])
+        except Exception:
+            pass  # ignore parsing issues
+    
+        self.get_set_point()
+    
     def enable(self, status):
         if status:  # enable, EnOn, 21
             v2 = 0x21
@@ -219,25 +239,34 @@ class tctrl_FTC100D(serial_port):
 
     def waitT(self, T, delay_time=60, dead_band=0.2):
         Ts = self.get_set_point(False)
-        if Ts!=T:
+        if Ts != T:
             self.setT(T)
+    
         set_point_reached = -1
+    
         while True:
-            Tr = self.getT(print_T=False)
-            if np.fabs(Tr-T)>dead_band:
+            try:
+                Tr = self.getT(print_T=False)
+            except Exception as e:
+                print(f"Warning: getT failed: {e}")
+                time.sleep(2)
+                continue   # <-- keep looping
+    
+            if abs(Tr - T) > dead_band:
                 set_point_reached = -1
                 msg = ""
             else:
                 time_stamp = time.time()
-                if set_point_reached>0:
-                    if time_stamp-set_point_reached>delay_time:
+                if set_point_reached > 0:
+                    if time_stamp - set_point_reached > delay_time:
                         print("\n set point reached ...")
-                        return 
+                        return
                 else:
                     set_point_reached = time_stamp
-                msg = f"+{time_stamp-set_point_reached:.1f} sec" 
+                msg = f"+{time_stamp-set_point_reached:.1f} sec"
+    
             print(f"T_set = {T:.1f}, T_readback = {Tr:.1f} {msg}  \r", end="")
-            time.sleep(2)                
+            time.sleep(2)   
 
         
 

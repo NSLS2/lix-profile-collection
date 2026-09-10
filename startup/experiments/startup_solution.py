@@ -273,6 +273,8 @@ def measure_holder(spreadSheet, holderName, sheet_name='Holders', exp_time=0.5, 
         
     pil.use_sub_directory()
     HT_pack_h5(samples=samples, uids=uids)
+    #dt.assign_buffer(sd['buffer']) # check if this works
+    #dt.process(sc_factor='auto', debug='quiet') # check if this works
         
     for nd in sol.needle_dirty_flag.keys():
         if sol.needle_dirty_flag[nd]:
@@ -734,6 +736,7 @@ def mc_measure_holder(spreadSheet, holderName,sheet_name='Holders', exp=1, rep=1
     sol.mc_move_sample(1, cell_type=cell_form)
     if T is None:
         samples = get_samples(spreadSheet, holderName=holderName, sheet_name=sheet_name)
+        #sd = get_sample_dicts(spreadSheet, holderName, use_flowcell=True) # check if this works
     else:
         #ts = get_samples(spreadSheet, holderName)
         ts = get_samples(spreadSheet, holderName=holderName, sheet_name=sheet_name)
@@ -776,7 +779,56 @@ def mc_measure_holder(spreadSheet, holderName,sheet_name='Holders', exp=1, rep=1
 
     pack_h5(uids, fn=holderName)    
     dt = h5xs(holderName+".h5", [dexp.detectors, qgrid], transField='em2_sum_all_mean_value')
-    #dt.load_data(debug='quiet')    
+    #dt.load_data(debug='quiet')
+"""
+    dt.fh5.close()
+    try:
+        sd = get_sample_dicts(spreadSheet, holderName=holderName)
+    except NameError:
+        print("not a holder with samples")
+    else:
+        spfn = spreaSheet
+        sample_hn=holderName
+        T=None ## set T=None for all non temperature measurements
+        if T == None:
+            dt = h5sol_fc(f'{sample_hn}.h5', [de.detectors, de.qgrid])
+        else:
+            out = f"{sample_hn}_T{float(T):.1f}C.h5"
+            suffix = f"_T{float(T):.1f}C"
+            dt = h5sol_fc(out, [de.detectors, de.qgrid])
+        #sd = get_sample_dicts(spfn, holderName=sample_hn)
+        if T == None:
+            if 'emptyHolderName' in sd:
+                print(sd['emptyHolderName'])
+                fne=sd['emptyHolderName']
+                dt.link_file(f'{fne}.h5')
+                dt.assign_empty(sd['empty'])
+                dt.assign_buffer(sd['buffer'])
+            else:
+                dt.assign_empty(sd['empty'])
+                dt.assign_buffer(sd['buffer'])
+            dt.process(rebin_data=True, trigger='ss_y', sc_factor='auto')
+        else:
+            sd_new = {}
+        
+            for group, sub in sd.items():
+                sd_new[group] = {}
+                for k, v in sub.items():
+                    new_k = k if k.endswith(suffix) else f"{k}{suffix}"
+                    new_v = v if v.endswith(suffix) else f"{v}{suffix}"
+                    sd_new[group][new_k] = new_v
+            if 'emptyHolderName' in sd_new:
+                print(sd_new['emptyHolderName'])
+                fne=sd_new['emptyHolderName']
+                dt.link_file(f'{fne}.h5')
+                dt.assign_empty(sd_new['empty'])
+                dt.assign_buffer(sd_new['buffer'])
+            else:
+                dt.assign_empty(sd_new['empty'])
+                dt.assign_buffer(sd_new['buffer'])
+            
+            dt.process(rebin_data=True, trigger='ss_y', sc_factor='auto')
+"""
 
 def mc_auto_measure_samples(spreadSheet, configName, exp=1, rep=1, check_sname=True, 
                       scan=False, y_points=10, yrange=2, x_points=2, xrange=1, offset_y=0, 
@@ -813,14 +865,14 @@ def mc_auto_measure_samples(spreadSheet, configName, exp=1, rep=1, check_sname=T
             mc_measure_holder(spreadSheet, holderName,
                                           exp=exp, rep=rep,
                                           y_points=y_points, yrange=yrange, x_points=x_points, xrange=xrange, offset_y=offset_y, 
-                                          cell_form='flat15',scan=scan)
+                                          cell_form=cell_form,scan=scan)
         else:
             for i in T:
                 print(i)
                 mc_measure_holder(spreadSheet, holderName,
                                           exp=exp, rep=rep,
                                           y_points=y_points, yrange=yrange, x_points=x_points, xrange=xrange,T=i, offset_y=offset_y, 
-                                          cell_form='flat15',scan=scan,delay_time=delay_time)
+                                          cell_form=cell_form,scan=scan,delay_time=delay_time)
 
         #sol.select_tube_pos('park')
         sol.park_sample()
@@ -858,14 +910,15 @@ def rbt_unload_sample(pos):
     else:
         print("invalid config state")
     print("sample mounted")
-"""
+
 try:
     #sol.tctrl = tctrl_FTC100D(("xf16idc-tsvr-sena", 7002))
-    #sol.tctrl = tctrl_FTC100D(("10.66.122.81",4001))
-    sol.tctrl = tctrl_FTC100D(("10.66.122.159",4008))
+    sol.tctrl = tctrl_FTC100D(("10.66.122.81",4001)) # moxa in the solution box
+    sol.storage = tctrl__FTC100D(("10.66.122.77",4002)) # moxa on the rack near newport
+
 except:
     print("cannot connect to sample storage temperature controller")
-"""
+
 
 
 

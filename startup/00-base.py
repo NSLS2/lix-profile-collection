@@ -49,9 +49,17 @@ from bluesky.run_engine import RunEngine
 import nslsii
 import redis
 from redis_json_dict import RedisJSONDict
+from nslsii.utils import open_redis_client
+#uri = "info.lix.nsls2.bnl.gov"
+#new_md = RedisJSONDict(redis.Redis(uri), prefix="")
+redis_client = open_redis_client(
+            redis_ssl=True,
+            redis_url="xf16id1-lix-redis1.nsls2.bnl.gov",
+            redis_db=0,
+        )
+old_md = RedisJSONDict(redis_client=redis_client, prefix='')
 
-uri = "info.lix.nsls2.bnl.gov"
-new_md = RedisJSONDict(redis.Redis(uri), prefix="")
+#print(old_md)
 
 class CustomRunEngine(RunEngine):
     def __call__(self, *args, **kwargs):
@@ -65,8 +73,14 @@ class CustomRunEngine(RunEngine):
         return super().__call__(*args, **kwargs)
 
 RE = CustomRunEngine()
+for key in RE.md.keys():
+    old_md[key] = RE.md[key]
+RE.md=old_md
 
-nslsii.configure_base(get_ipython().user_ns, 'lix', bec=True, pbar=False, publish_documents_with_kafka=True)
+nslsii.configure_base(get_ipython().user_ns, 'lix', bec=True, pbar=False, publish_documents_with_kafka=True,
+        redis_ssl=True,
+        redis_port=6380,
+        redis_url='xf16id1-lix-redis1.nsls2.bnl.gov')
 
 def reload_macros(file):
     ipy = get_ipython()
@@ -165,7 +179,7 @@ def is_ipython():
 #        @staticmethod
 #        def _dump(obj):
 #            "Encode as msgpack using numpy-aware encoder."
-#            # See https://github.com/msgpack/msgpack-python#string-and-binary-type
+#            # See https://githmd = RedisJSONDict(redis_client=redis_client, prefix=prefix)ub.com/msgpack/msgpack-python#string-and-binary-type
 #            # for more on use_bin_type.
 #            return msgpack.packb(
 #                obj,
@@ -193,7 +207,6 @@ def is_ipython():
 ## PersistentDict will create the directory if it does not exist
 #RE.md = PersistentDict(runengine_metadata_dir)
 
-RE.md = new_md
 
 import re
 import warnings

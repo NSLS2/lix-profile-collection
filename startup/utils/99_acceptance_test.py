@@ -4,15 +4,17 @@ def run_acceptance_test(tests=[1,2,3]):
     login(test_only=True)
 
     if 1 in tests:
-        pil.exp_time(0.5)
-        pil.set_num_images(21)
+        #pil.exp_time(0.5)
+        set_exp_time(dets=[pil],exp=0.5)
+        #pil.set_num_images(21)
+        set_num_images(dets=[pil],n_triggers=21)
         change_sample("test1")
-        RE(ct([em1, em2, pil], num=21))
+        RE(ct([em1, em2, pil,ext_trig], num=21))
         pack_h5(db[-1].uid)
 
     if 2 in tests:
         change_sample("test2")
-        RE(dscan([em1, em2, pil], ss.x, -0.5, 0.5, 21))
+        RE(dscan([em1, em2, pil,ext_trig], ss.x, -0.5, 0.5, 21))
         pack_h5(db[-1].uid)
 
     if 3 in tests:

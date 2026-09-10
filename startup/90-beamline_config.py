@@ -56,8 +56,16 @@ if BSconfig in ["solution", "scanning", "generic", "vacuum"]:
 if BSconfig=="solution":
     # EM S, run solution startup
     reload_macros("experiments/25-EM_sol.py")
+    reload_macros("components/25-bfx.py")
     reload_macros("experiments/25-hplc.py")
     reload_macros("experiments/startup_solution.py")
+    reload_macros("devices/APV.py")
+    reload_macros("devices/Regen_Pump.py")
+    reload_macros("devices/Pump_purges.py")
+    reload_macros("devices/VICI_Valves.py")
+    reload_macros("devices/sec_saxs.py")
+    reload_macros("devices/gen_SEC_report.py")
+    reload_macros("experiments/startup_bfx.py")
     ESVacSys = define_vac_system(vacuum_sample_env=False)
 elif BSconfig=="scanning":
     # EM M, run scanning startup

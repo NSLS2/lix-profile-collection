@@ -53,6 +53,11 @@ def move_sample(pos=None, use_XSP3=False, use_robot=True):
         else:
             ss.xc.move(SS_XC_POS_PARK)
             ss.ry.move(-90)
+            ss.x.move(0)
+            ss.tx.move(0)
+            ss.tz.move(0)
+            ss.sx.move(0)
+            ss.sz.move(0)
             ss.z.move(SS_Z_POS_PARK)
     else:
         if use_robot:
@@ -346,7 +351,7 @@ def collect_tomo(sname, x1, x2, step_size=0.1, Nphi=120, Nseg=1, skip=0, dy=0.0,
     phi_list = np.arange(-90, 90., dphi).reshape(-1, Nseg).T
     Nang = Nphi/Nseg
 
-    if Nx*Nang>12000: # limited by XSP3
+    if Nx*(Nang+1)>12000: # limited by XSP3
         raise Exception(f"too many data points: {Nx*Nang}, increase the number of segments ...")
     
     _md = {"experiment": "scanning"}
@@ -555,5 +560,5 @@ def align_sample(roi=[0, -50, 130, 450], ang_scale=1.3, lin_scale=42., keep_orie
     #img = camES2.snapshot()
     #x3,y3,w3,h3 = get_contour(img, roi=roi, ax=ax, rotate=False)
     #RE(mov(ss.sx, ss.sx.position+(x3+w3/2-cx)/lin_scale))
-    visual_move(ss.sx, cx, roi=roi, lin_scale=-lin_scale)    # sign based on observed behavior
+    visual_move(ss.sx, cx, roi=roi, lin_scale=lin_scale)    # sign based on observed behavior
 

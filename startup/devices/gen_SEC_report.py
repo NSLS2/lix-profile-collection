@@ -68,7 +68,9 @@ def gen_SEC_report(fn, exp_fn, atsas_path="", attach_uv=True):
         f'"{py}" -m jupyter nbconvert "{fn1}" '
         f'--to notebook '
         f'--ExecutePreprocessor.enabled=True '
-        f'--ExecutePreprocessor.timeout=600 '
+        f'--ExecutePreprocessor.kernel_name=python3 '
+        f'--ExecutePreprocessor.startup_timeout=100 '
+        f'--ExecutePreprocessor.timeout=100 '
         f'--output "{os.path.basename(executed_ipynb)}" '
         f'--output-dir "{tmp_dir}"'
     )

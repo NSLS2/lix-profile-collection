@@ -316,7 +316,7 @@ class SolutionScatteringExperimentalModule():
             #ss.x.move(0)
             #ss.y.move(0.5) # ss.y position is 0 for fixed cell.
             #ss.xc.move(self.xc_park_fixed)  # fixed cell park position for robot
-            ready_for_robot(motors=[ss.x, ss.y, ss.xc], positions=[0,7, self.xc_park_fixed]) 
+            ready_for_robot(motors=[ss.x, ss.y, ss.xc], positions=[0,3, self.xc_park_fixed]) 
             print('xc moved outboard for sample holder exchange')
         else:
             raise Exception(f"don't know how to park_sample() for config={config}")

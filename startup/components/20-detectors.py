@@ -333,7 +333,7 @@ class Screen(Device):
 
     def insert(self):
         if self.name == "scnMono":
-            self.y.move(-23)
+            self.y.move(-30)
         elif self.name == "scnKB":
             self.y.move(85)
         elif self.name == "scnSS":

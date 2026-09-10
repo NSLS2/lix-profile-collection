@@ -18,6 +18,7 @@ class VICI_ID(Enum):
     Valve_10_port = (TCP_IP , 4003, 1)
     Agilent_purge = (TCP_IP, 4004, 2)
     Col1_purge = (TCP_IP , 4005, 3)
+    Col2_purge = (TCP_IP , 4006, 5)
     Detector = (TCP_IP , 4007, 4)
     
     def __init__(self, address, port, valve_ID):

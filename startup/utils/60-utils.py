@@ -29,6 +29,7 @@ THRESH_EM1_I0 = 0.1e6   # optimal should be >1.5e6
 mon0 = "bpm_int_mean"
 
 #c = tiled.client.from_profile('lix')
+#c.context.http_client.headers['tiled-qos'] = 'acquisition'
 
 def make_video_from_tiled(uid, det_name="camES2", fps=3, figsize=(4,4), **kwargs):
     """ assume the data is under f"primary/data/{det_name}"

@@ -37,21 +37,21 @@ def close_purge_pump(valve=VICI_ID.Agilent_purge, valve_ID=2, get_ret=False):
     print(f"Purge pump closed with Valve {valve_ID}.")
     VV.check_valve_pos(valve=valve, valve_ID=2)
 
-def purge_superloop_open(valve=VICI_ID.Col1_purge,flowrate=2, valve_ID=3,get_ret=False):
+def purge_superloop_open(valve=VICI_ID.Col1_purge,flowrate=1, valve_ID=3,get_ret=False):
     print("Check pressure limits and do not exceed 2mL/min")
     if flowrate > 2:
         raise Exception("Agilent Superloop flowrate exceeded")
     else:
         #VV.send_valve_cmd(cmd="CP", ID=3)
         VV.send_valve_cmd(cmd="GO", valve=valve, valve_ID=3, get_ret=get_ret)
-        VV.check_valve_pos(ID=3)
+        VV.check_valve_pos(valve=valve,valve_ID=3)
     print("Purging superloop")
 
 def purge_superloop_close(valve=VICI_ID.Col1_purge, valve_ID=3, get_ret=False):
     print("Check pressure limits and set flowrate in agilent software to 0.35mL/min")
     #VV.send_valve_cmd(cmd="CP", ID=3)
-    VV.send_valve_cmd(cmd="GO", ID=3, get_ret=get_ret)
-    VV.check_valve_pos(ID=3)
+    VV.send_valve_cmd(cmd="GO", valve_ID=3, valve=VICI_ID.Col1_purge, get_ret=get_ret)
+    VV.check_valve_pos(valve_ID=3,valve=VICI_ID.Col1_purge)
     print("Purging superloop completed")
 
 
@@ -59,23 +59,26 @@ def purge_method(pos=1):
     '''
     Buffer position must be between 1-6
     '''
-    input("Please ensure you selected the correct buffer line! Then hit enter:")
+    input("Please ensure you selected the correct buffer line and ensure that the pressure limits are correct! Then hit enter:")
     ##check pump pressure here before proceeding
     ##check pump flowrate
     print(caget('XF:16IDC-ES{HPLC}QUAT_PUMP:FLOWRATE_RBV'))
     ##set pump flow rate low
-    open_purge_pump()
+    open_pump_purge_valve(valve=VICI_ID.Agilent_purge, valve_ID=2, get_ret=False)
     ##check pressure here and perform a try loop
     ##if pressure is OK then set flowrate 2mL/min
     #input("Set Agilent pump to 1mL/min, then hit enter:")
+    time.sleep(2)
+    caput('XF:16IDC-ES{HPLC}QUAT_PUMP:FLOWRATE' , 2)
     for i in range(180,0,-1):
         print(f"{i} seconds remaining...", end="\r")
         time.sleep(1)
     ##check pressure
     ##set flowrate to 1mL/min
-    input("After purging pump, set flow rate to <2mL/min to purge superloop, then hit enter:")
+    caput('XF:16IDC-ES{HPLC}QUAT_PUMP:FLOWRATE' , 1)
+    #input("After purging pump, set flow rate to <2mL/min to purge superloop, then hit enter:")
     purge_superloop_open()
-    time.sleep(2)
+    time.sleep(5)
     close_purge_pump()
     #time.sleep(20)
     for i in range(120,0,-1):
@@ -83,7 +86,9 @@ def purge_method(pos=1):
         time.sleep(1)
     ##change flowrate
     ##check pressure
-    input("Please adjust flowrate to columntype, then hit enter:")
+    #input("Please adjust flowrate to columntype, then hit enter:")
+    caput('XF:16IDC-ES{HPLC}QUAT_PUMP:FLOWRATE' , 0.3)
+    time.sleep(5)
     purge_superloop_close()
 
 

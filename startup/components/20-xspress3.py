@@ -62,6 +62,7 @@ class LiXXspress(xspress3_class_4ch):
         configuration_attrs=None, read_attrs=None,
         **kwargs, ):
         self._f_key = f_key
+        self.ext_trig = False
 
         if configuration_attrs is None:
             configuration_attrs = [

@@ -14,7 +14,7 @@ matplotlib-base= ">=3.10"
 networkx = ">=3.4.2,<4"
 nslsii = "==0.11.8"
 numpy = "*"
-ophyd = ">=1.11.0"
+ophyd = ">=1.11.2"
 pyepics = "*"
 python = ">=3.12,<3.13"
 semver = ">=3.0.4,<4"
@@ -63,8 +63,13 @@ qs = {features=["profile", "qs"], solve-group="profile"}
 python = ">=3.12.13,<3.15"
 tomopy = ">=1.15.3,<2"
 reportlab = ">=4.5.1,<5"
+pyserial = ">=3.5,<4"
+tabulate = ">=0.10.0,<0.11"
+nbconvert = ">=7.17.1,<8"
+nbformat = ">=5.10.4,<6"
 
 [pypi-dependencies]
 lixtools = { git = "file:///nsls2/software/mx/lix/lixtools" }
 py4xs = { git = "https://github.com/NSLS-II-LIX/py4xs.git" }
+qmicroscope = { git = "https://github.com/NSLS-II/qmicroscope.git" } 
 scikit-learn = ">=1.8.0, <2"
