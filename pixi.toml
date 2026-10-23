@@ -1,16 +1,14 @@
 [workspace]
 channels = ["conda-forge"]
 name = "lix-profile-collection"
-platforms = ["linux-64"]
-version = "2025.3.1"
-
-[system-requirements]
-libc = "2.17"
+platforms = [{ platform = "linux-64", glibc = "2.17" }]
+version = "2026.3.0"
+requires-pixi = ">=0.82.1"
 
 [feature.profile.dependencies]
 bluesky-base = "*"
 bluesky-queueserver = "*"
-matplotlib-base= "*"
+matplotlib-base = "*"
 networkx = "*"
 nslsii = "==0.11.1"
 numpy = "*"
@@ -28,6 +26,9 @@ ophyd-async = "*"
 fabio = ">=2025.10.0,<2026"
 tomopy = ">=1.15.3,<2"
 reportlab = ">=4.4.5,<5"
+ca-certificates = ">=2026.10.19"
+certifi = ">=2026.10.19"
+pip = ">=26.2.2"
 
 
 [feature.profile.pypi-dependencies]
@@ -66,7 +67,15 @@ pvs = "ipython --profile-dir=. -c 'get_pv_types(); exit()'"
 pytest = "*"
 ipython = ">=9.5.0"
 
-[environments]
-terminal = {features=["profile", "terminal"], solve-group="profile"}
-qs = {features=["profile", "qs"], solve-group="profile"}
-test = {features=["profile", "test"], solve-group="profile"}
+[environments.test]
+features = ["profile", "test"]
+solve-group = "profile"
+
+[environments.terminal]
+features = ["profile", "terminal"]
+solve-group = "profile"
+
+[environments.qs]
+features = ["profile", "qs"]
+solve-group = "profile"
+
